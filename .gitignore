@@ -1,0 +1,7 @@
+# Firmware downloads and build outputs are multi-GB and never committed.
+/work/
+/out/
+*.7z
+*.7z.[0-9][0-9][0-9]
+*.img
+*.pac
