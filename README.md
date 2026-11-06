@@ -42,6 +42,15 @@ RetroArch's core info files and the PPSSPP core's assets are refreshed to
 match the new cores. Mupen64Plus FZ (3.0.335) and DraStic (r2.6.0.4a) are
 already the latest public releases.
 
+### Pack-in games
+
+The bundled ROM pack is replaced with one game per platform, each with an
+explicit grant to redistribute it and no third-party characters or names.
+Each game is installed with its license text. See
+[PACK-IN-GAMES.txt](PACK-IN-GAMES.txt) for the games, their licenses, and the
+upstream games that were removed and why; `mods/bundled-roms.txt` is the list
+the build uses.
+
 ## Building
 
 On Linux with `curl`, 7-Zip (`7zz` or `7z`), `xz`, `unzip`, `e2fsck`, `cc`,

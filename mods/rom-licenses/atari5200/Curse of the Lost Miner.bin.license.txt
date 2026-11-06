@@ -1,0 +1,30 @@
+Curse of the Lost Miner (Atari 5200) by BAHA Software (Michael Kalous)
+Source: https://github.com/baktragh/culomin_sources
+Public domain, as stated in culomin5200/main.c:
+
+/* Curse of the lost miner for Atari 5200. 32KB cartridge.
+ * Created by BAKTRA Software in 2015
+ * 
+ * I have placed this work in the Public Domain, thereby relinquishing
+ * all copyrights. Everyone is free to use, modify, republish, sell or give away
+ * this work without prior consent from anybody.
+ * 
+ * History:
+ * Version 1.1
+ * - Fix VBI handler and music
+ * Version 1.0
+ * - Dealt with ATTRACT mode
+ * - Controls temporarily locked when miner lands
+ * - Pause and Reset buttons
+ * - Minor optimizations
+ * 
+ * Release candidate 01
+ * - Adjusted for NTSC
+ * - Sound effects and music
+ * - "Controls cleanup" restricted to the FIRE button 
+ * - Better color palette adjusted for NTSC
+ * 
+ * Prototype 003.
+ * - Fixed keypad controls
+ * - Fixed initialization of POTs.
+ */

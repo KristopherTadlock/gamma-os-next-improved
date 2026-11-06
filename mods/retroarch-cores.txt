@@ -24,6 +24,9 @@ fceumm                 # 4.2 MB  best mapper coverage for odd carts
 D - snes9x                   # 2.9 MB
 bsnes                  # 6.1 MB  cycle-accurate, heavy
 
+# --- Nintendo - Nintendo 64
+mupen64plus_next_gles3   # 6.9 MB  Daijisho uses the M64Plus FZ app by default
+
 # --- Nintendo - Virtual Boy
 D - mednafen_vb              # 0.3 MB
 
