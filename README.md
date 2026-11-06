@@ -23,11 +23,20 @@ Emulators updated to their latest releases (installed on first boot):
 | Flycast | 2.5 | 2.7 |
 | PPSSPP | 1.19.2 | 1.20.4 |
 
-The RetroArch cores are cut down to one per system, which shrinks
-`retroarch.tar.xz` from 336 MB to about 240 MB. Game Boy, Game Boy Color, and
-Game Boy Advance use DoubleCherryGB and gpSP, which emulate the link cable over
-RetroArch netplay on the local network or the internet. Edit
-`mods/retroarch-cores.txt` to change the selection.
+The RetroArch cores are cut down to a curated set (see
+`mods/retroarch-cores.txt`), which shrinks `retroarch.tar.xz` from 336 MB to
+271 MB. Game Boy and Game Boy Advance link-cable play over RetroArch netplay
+(local network or internet) is available through the DoubleCherryGB and gpSP
+cores. Edit `mods/retroarch-cores.txt` to change the selection.
+
+Daijisho's default player for each platform follows the cores marked `D - `
+in that file:
+
+| Platform | Upstream v1.2 | This build |
+|---|---|---|
+| Game Boy, Game Boy Color | Gambatte | SameBoy |
+| Game Boy Advance | gpSP | mGBA |
+| NES | Nestopia | Mesen |
 
 RetroArch's core info files and the PPSSPP core's assets are refreshed to
 match the new cores. Mupen64Plus FZ (3.0.335) and DraStic (r2.6.0.4a) are

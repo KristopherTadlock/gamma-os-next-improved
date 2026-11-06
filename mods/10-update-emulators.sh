@@ -53,7 +53,9 @@ tar -xJpf "$ETC/retroarch.tar.xz" --no-same-owner -C "$work/tree"
 
 fetch "$CORES_URL/.index-extended" "$work/index.txt"
 cores_dir="$work/tree/$RA_DATA/cores"
-mapfile -t wanted < <(sed 's/#.*//' "$(dirname "$0")/retroarch-cores.txt" | awk 'NF {print $1 "_libretro_android.so"}')
+# Lines are "core" or "D - core", where D marks the platform's default core.
+mapfile -t wanted < <(sed 's/#.*//' "$(dirname "$0")/retroarch-cores.txt" |
+  awk 'NF { core = ($1 == "D" && $2 == "-") ? $3 : $1; print core "_libretro_android.so" }')
 for so in "$cores_dir"/*_libretro_android.so; do
   if ! printf '%s\n' "${wanted[@]}" | grep -qxF "$(basename "$so")"; then
     rm "$so"
