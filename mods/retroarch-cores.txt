@@ -1,0 +1,118 @@
+# RetroArch cores to ship: one per system. One core per line; comment a line
+# out to drop it, or uncomment an alternative to add it. Any other core on the
+# libretro buildbot (nightly/android/latest/arm64-v8a) can be added by name.
+# Listed cores are updated to the latest buildbot nightly at build time.
+#
+# Daijisho launches some platforms with a fixed core (noted below); dropping
+# that core breaks the platform until its Daijisho default is changed.
+# Sizes are uncompressed.
+
+
+# --- Nintendo - Game Boy / Color
+DoubleCherryGB           # 1.1 MB  link cable over RetroArch netplay (LAN and internet relay), up to 16 players; Daijisho default is gambatte: change it
+# gambatte               # 4.8 MB  more accurate; network link is direct TCP (LAN, or internet with port forwarding)
+# sameboy                # 0.3 MB  most accurate; link only between two Game Boys in one instance
+
+# --- Nintendo - Game Boy Advance
+gpsp                     # 0.7 MB  link cable and wireless adapter over RetroArch netplay (LAN and internet relay); Daijisho default
+# mgba                   # 3.2 MB  more accurate; no link support in the RetroArch core
+
+# --- Nintendo - NES / Famicom
+nestopia                 # 5.9 MB  Daijisho default
+# mesen                  # 3.8 MB  most accurate, heavier
+# fceumm                 # 4.2 MB  best mapper coverage for odd carts
+
+# --- Nintendo - SNES / Super Famicom
+snes9x                   # 2.9 MB  Daijisho default
+# bsnes                  # 6.1 MB  cycle-accurate, heavy
+# snes9x2010             # 1.9 MB  older, faster Snes9x
+# mesen-s                # 2.9 MB  accurate, also runs GB
+
+# --- Nintendo - Nintendo 64
+mupen64plus_next_gles3   # 6.9 MB  Daijisho uses the M64Plus FZ app
+
+# --- Nintendo - DS
+melondsds                # 6.8 MB  Daijisho uses the DraStic app
+# desmume                # 4.0 MB  slow on ARM
+
+# --- Nintendo - Virtual Boy
+mednafen_vb              # 0.3 MB
+
+# --- Nintendo - Pokemon Mini
+pokemini                 # 0.3 MB
+
+# --- Sega - Master System / Game Gear / Genesis / CD
+genesis_plus_gx          # 12.7 MB  Daijisho default
+
+# --- Sega - 32X
+picodrive                # 1.7 MB  only 32X core
+
+# --- Sega - Saturn
+yabasanshiro             # 1.9 MB
+# mednafen_saturn        # 7.2 MB  too heavy for the T820
+
+# --- Sega - Dreamcast / NAOMI
+flycast                  # 37.9 MB  Daijisho uses the Flycast app
+
+# --- Sony - PlayStation
+pcsx_rearmed             # 1.5 MB  Daijisho default
+# swanstation            # 4.8 MB  better upscaling
+
+# --- Sony - PlayStation Portable
+ppsspp                   # 17.8 MB  Daijisho uses the PPSSPP app
+
+# --- Arcade
+fbneo                    # 65.8 MB  best for CPS1-3, Neo Geo, Cave, Toaplan
+# mamearcade             # 256.9 MB  MAME 0.289 sets, widest coverage, 257 MB
+# mame2003_plus          # 39.5 MB  MAME 0.78 sets, light
+
+# --- SNK - Neo Geo CD
+neocd                    # 2.2 MB
+
+# --- SNK - Neo Geo Pocket / Color
+mednafen_ngp             # 0.5 MB  Daijisho default
+
+# --- NEC - PC Engine / TurboGrafx / CD
+mednafen_pce_fast        # 4.2 MB
+
+# --- Bandai - WonderSwan / Color
+mednafen_wswan           # 1.3 MB
+
+# --- Atari - 2600
+stella                   # 6.1 MB
+
+# --- Atari - 5200
+a5200                    # 0.3 MB
+
+# --- Atari - 7800
+prosystem                # 0.2 MB
+
+# --- Atari - Lynx
+mednafen_lynx            # 0.4 MB
+
+# --- The 3DO Company - 3DO
+opera                    # 0.4 MB
+
+# --- Coleco - ColecoVision
+gearcoleco               # 1.1 MB
+
+# --- Microsoft - MSX
+bluemsx                  # 1.8 MB
+
+# --- Commodore - C64
+vice_x64sc               # 4.1 MB
+
+# --- DOS
+dosbox_pure              # 3.6 MB
+
+# --- Doom
+prboom                   # 1.6 MB  needs game data
+
+# --- Quake
+tyrquake                 # 0.8 MB  needs game data
+
+# --- Wolfenstein 3D
+ecwolf                   # 1.7 MB  needs game data
+
+# --- PICO-8
+fake08                   # 1.7 MB  Daijisho default
