@@ -18,7 +18,14 @@ build, so you can rebuild it yourself.
 scripts/fetch.sh    # download the official release into work/download
 ```
 
-More build steps are coming.
+More build steps are coming. The current tools:
+
+- `scripts/pactool.py` lists, extracts, and replaces images in the Unisoc
+  `.pac` firmware package, and recomputes its CRC.
+- `scripts/lptool.py` lists, extracts, and replaces logical partitions
+  (`system_a`, `vendor_a`, ...) in the raw `super_full.img`.
+- `tools/crc16arc.c` is the CRC-16/ARC helper `pactool.py fixcrc` uses
+  (`cc -O2 -o crc16arc tools/crc16arc.c`).
 
 ## Flashing
 
