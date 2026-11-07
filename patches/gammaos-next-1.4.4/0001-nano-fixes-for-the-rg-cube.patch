@@ -1665,7 +1665,7 @@ index a778ea7da0d..638c4463dd0 100644
  // aspect bucket so the Test Controller / Calibration buttons get the identical glass
  // relight as the console icons (bevelFromRGBA), refracting the live XMB wave. round =
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
-index c6a8e9c9dc1..43339746ac8 100644
+index c6a8e9c9dc1..c5e57faa7b9 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 @@ -795,6 +795,9 @@ bool NanoMenu::themeSettingRowVisible(const char* name) const {
@@ -1745,7 +1745,7 @@ index c6a8e9c9dc1..43339746ac8 100644
  void NanoMenu::buildPs3Cats() {
      mPs3Cats.clear();
      int gameCatRuntimeIdx = -1;
-@@ -1487,29 +1493,42 @@ void NanoMenu::buildPs3Cats() {
+@@ -1487,29 +1493,45 @@ void NanoMenu::buildPs3Cats() {
              it.iconR = it.iconG = it.iconB = 1.0f;
              q.items.push_back(it);
          };
@@ -1793,6 +1793,9 @@ index c6a8e9c9dc1..43339746ac8 100644
 -        qItem("Kill All Apps",       QA_KILL_ALL,      82);
 +        // The Quick Menu opens on its first row, so closing the game is never the row an A press lands on.
 +        qItem("Screen Brightness",   QA_BRIGHTNESS,    73);
++        // The External Display submenu of Settings > Display Settings, the same rows.
++        for (const Ps3DataItem& d : kDisplayCh)
++            if (!strcmp(d.name, "External Display")) q.items.push_back(makeDataItem(&d, "settings/Display Settings/"));
 +        qItem("Performance Mode",    QA_PERFORMANCE,   81);
 +        if (appBehind) qItem("Close Current App", QA_CLOSE_APP, 83);
 +        qLeaf("Wi-Fi",               nullptr,          85, "internet");
@@ -1805,13 +1808,10 @@ index c6a8e9c9dc1..43339746ac8 100644
          // Quick Resume: a top-level toggle with an explanatory subtitle (it.desc,
          // drawn under the active row). The On/Off value is resolved live from
          // mQuickResumeEnabled in resolvePs3ItemValue, so flipping the flag updates
-@@ -1522,7 +1541,22 @@ void NanoMenu::buildPs3Cats() {
+@@ -1522,7 +1544,19 @@ void NanoMenu::buildPs3Cats() {
              it.iconTex = iconTexForIcon(8); it.nmapTex = nmapForIcon(8); it.iconR = it.iconG = it.iconB = 1.0f;
              q.items.push_back(it);
          }
-+        // The External Display submenu of Settings > Display Settings, the same rows.
-+        for (const Ps3DataItem& d : kDisplayCh)
-+            if (!strcmp(d.name, "External Display")) q.items.push_back(makeDataItem(&d, "settings/Display Settings/"));
 +        qItem("USB Settings",        QA_USB_MENU,       76);
 +        qItem("Notifications",       QA_NOTIFICATIONS,  71);
 +        qLeaf("Deep Sleep Mode",     "Ultra Low Power Saving", 89, "deepsleepmode");
