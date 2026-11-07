@@ -70,8 +70,7 @@ final class Games {
         for (ApplicationInfo app : pm.getInstalledApplications(0)) {
             boolean game = app.category == ApplicationInfo.CATEGORY_GAME
                     || (app.flags & ApplicationInfo.FLAG_IS_GAME) != 0;
-            if (!game || exclude.contains(app.packageName)
-                    || pm.getLaunchIntentForPackage(app.packageName) == null) {
+            if (!game || exclude.contains(app.packageName) || !hasLauncher(pm, app.packageName)) {
                 continue;
             }
             games.put(app.packageName, fileName(pm.getApplicationLabel(app).toString()));
@@ -92,8 +91,12 @@ final class Games {
                     delete(f);
                     continue;
                 }
-                listed.add(pkg);
                 String label = games.get(pkg);
+                if (label == null && !hasLauncher(pm, pkg)) {
+                    delete(f);   // an earlier version listed it, but Nano cannot start it
+                    continue;
+                }
+                listed.add(pkg);
                 if (label == null) continue;
                 String name = baseName(f);
                 // Nano skips dot files, so a name from an older version that starts
@@ -128,6 +131,16 @@ final class Games {
         }
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         context.startActivity(intent);
+    }
+
+    /**
+     * The game has a launcher activity, which is what Nano starts. An app whose
+     * only entry is CATEGORY_INFO (which getLaunchIntentForPackage also accepts)
+     * is not listed, since Nano could not start it.
+     */
+    private static boolean hasLauncher(PackageManager pm, String pkg) {
+        Intent main = new Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).setPackage(pkg);
+        return !pm.queryIntentActivities(main, 0).isEmpty();
     }
 
     private static boolean isInstalled(PackageManager pm, String pkg) {
