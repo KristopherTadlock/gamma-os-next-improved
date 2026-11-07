@@ -1,0 +1,59 @@
+# Game systems in the GammaOS Nano home, in this order (1.4.4 base only).
+# First-boot setup seeds them into /data/system/nano_systems.json; Nano's
+# Game Systems editor can change them after that. Nano hides a system until
+# its folder has games.
+#
+#   <ROMs folder>  name=<shown in Nano>  short=<short name>  icon=<icon>  player=<unique ID>
+#   <ROMs folder>  name=...  short=...  icon=...  package=<app>  intent=<am start arguments>  exts=<.a,.b>
+#
+# A player is one of Nano's emulator catalog entries (Daijisho's platform
+# definitions, /system/etc/nano_xmb/daijishou); the build checks its core is
+# in retroarch-cores.txt or its app is installed. In an intent, {file.uri} is
+# the game's content URI and {file.path} its path. icon=builtin:<n> is one of
+# Nano's own icons, icon=retroarch:<name> one in /system/etc/nano_xmb/icons_retroarch.
+#
+# The first 15 are Nano's own systems, in its order, with this project's
+# default emulators. The N64, PSP and Dreamcast intents are Nano's own.
+# ScummVM and PS Vita aren't listed: their players pass each game's ID, which
+# Nano can't, so those games start from the ScummVM and Vita3K apps.
+
+nes           name=NES                short=NES   icon=builtin:0   player=nes.ra64.mesen
+snes          name=SNES               short=SNES  icon=builtin:1   player=snes.ra64.snes9x
+gb            name=Game Boy           short=GB    icon=builtin:2   player=gb.ra64.sameboy
+gbc           name=Game Boy Color     short=GBC   icon=builtin:3   player=gbc.ra64.sameboy
+gba           name=Game Boy Advance   short=GBA   icon=builtin:4   player=gba.ra64.mgba
+n64           name=Nintendo 64        short=N64   icon=builtin:5   package=org.mupen64plusae.v3.fzurita  intent=-n org.mupen64plusae.v3.fzurita/paulscode.android.mupen64plusae.SplashActivity -a android.intent.action.VIEW -d {file.uri}  exts=.bin,.n64,.ndd,.u1,.v64,.z64
+nds           name=Nintendo DS        short=NDS   icon=builtin:6   player=nds.me.magnum.melondualds
+genesis       name=Genesis            short=GEN   icon=builtin:7   player=genesis.ra64.genesis_plus_gx
+mastersystem  name=Master System      short=SMS   icon=builtin:8   player=master.ra64.genesis_plus_gx
+gamegear      name=Game Gear          short=GG    icon=builtin:9   player=gamegear.ra64.genesis_plus_gx
+psx           name=PlayStation        short=PSX   icon=builtin:10  player=psx.ra64.pcsx_rearmed
+psp           name=PSP                short=PSP   icon=builtin:11  package=org.ppsspp.ppsspp  intent=-n org.ppsspp.ppsspp/.PpssppActivity -a android.intent.action.VIEW -d {file.uri} -t application/octet-stream --activity-clear-task --activity-clear-top  exts=.iso,.cso,.pbp
+dreamcast     name=Dreamcast          short=DC    icon=builtin:12  package=com.flycast.emulator  intent=-n com.flycast.emulator/com.flycast.emulator.MainActivity -a android.intent.action.VIEW -d {file.uri}  exts=.cdi,.gdi,.chd,.cue
+ngpc          name=Neo Geo Pocket     short=NGP   icon=builtin:13  player=ngpc.ra64.mednafen_ngp
+pico8         name=PICO-8             short=P-8   icon=builtin:14  player=pico8.ra64.fake08
+
+gc            name=GameCube           short=GC    icon=retroarch:Nintendo_-_GameCube  player=gc.org.dolphinemu.dolphinemu
+wii           name=Wii                short=Wii   icon=retroarch:Nintendo_-_Wii  player=wii.org.dolphinemu.dolphinemu
+n3ds          name=Nintendo 3DS       short=3DS   icon=retroarch:Nintendo_-_Nintendo_3DS  player=3ds.azahar.vanilla
+xbox          name=Xbox               short=XBOX  icon=retroarch:Microsoft_-_Xbox  player=xbox.com.rfandango.haku_x
+ps2           name=PlayStation 2      short=PS2   icon=retroarch:Sony_-_PlayStation_2  package=com.armsx2  intent=-n com.armsx2/.MainActivity -a android.intent.action.VIEW -d {file.uri} --activity-clear-task --activity-clear-top  exts=.iso,.chd,.gz,.mdf,.bin,.ciso,.cso,.img
+saturn        name=Saturn             short=SAT   icon=retroarch:Sega_-_Saturn  player=saturn.ra64.yabasanshiro
+segacd        name=Sega CD            short=SCD   icon=retroarch:Sega_-_Mega-CD_-_Sega_CD  player=segacd.ra64.genesis_plus_gx
+sega32x       name=32X                short=32X   icon=retroarch:Sega_-_32X  player=sega32x.ra64.picodrive
+pcengine      name=TurboGrafx-16      short=TG16  icon=retroarch:NEC_-_PC_Engine_-_TurboGrafx_16  player=tg16.ra64.mednafen_pce_fast
+pcenginecd    name=TurboGrafx-CD      short=TGCD  icon=retroarch:NEC_-_PC_Engine_CD_-_TurboGrafx-CD  player=tgcd.ra64.mednafen_pce_fast
+virtualboy    name=Virtual Boy        short=VB    icon=retroarch:Nintendo_-_Virtual_Boy  player=virtualboy.ra64.mednafen_vb
+atari2600     name=Atari 2600         short=2600  icon=retroarch:Atari_-_2600  player=atari2600.ra64.stella
+atari5200     name=Atari 5200         short=5200  icon=retroarch:Atari_-_5200  player=atari5200.ra64.a5200
+atari7800     name=Atari 7800         short=7800  icon=retroarch:Atari_-_7800  player=atari7800.ra64.prosystem
+atarilynx     name=Atari Lynx         short=LYNX  icon=retroarch:Atari_-_Lynx  player=lynx.ra64.mednafen_lynx
+colecovision  name=ColecoVision       short=CV    icon=retroarch:Coleco_-_ColecoVision  player=coleco.ra64.gearcoleco
+msx           name=MSX                short=MSX   icon=retroarch:Microsoft_-_MSX  player=msx.ra64.bluemsx
+wonderswan    name=WonderSwan         short=WS    icon=retroarch:Bandai_-_WonderSwan  player=ws.ra64.mednafen_wswan
+wonderswancolor  name=WonderSwan Color  short=WSC  icon=retroarch:Bandai_-_WonderSwan_Color  player=wsc.ra64.mednafen_wswan
+fds           name=Famicom Disk System  short=FDS  icon=retroarch:Nintendo_-_Family_Computer_Disk_System  player=fds.ra64.mesen
+3do           name=3DO                short=3DO   icon=retroarch:The_3DO_Company_-_3DO  player=3do.ra64.opera
+arcade        name=Arcade             short=ARC   icon=retroarch:MAME  player=mame.ra64.mamearcade
+fbneo         name=FinalBurn Neo      short=FBN   icon=retroarch:FBNeo_-_Arcade_Games  player=fbneo.ra64.fbneo
+neogeo        name=Neo Geo            short=NEO   icon=retroarch:SNK_-_Neo_Geo  player=neogeo.ra64.fbneo

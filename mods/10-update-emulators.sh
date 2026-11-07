@@ -10,12 +10,13 @@ SYSTEM="$1"
 CACHE="$(realpath -m "$2")/emulators"
 ETC="$SYSTEM/etc"
 MODS="$(cd "$(dirname "$0")" && pwd)"
+source "$MODS/../scripts/modlib.sh"
 
-# name|url|sha256|file name in /system/etc|file name it replaces
+# name|url|sha256|file name in /system/etc|file it replaces (a pattern)
 APKS=(
   "RetroArch 1.22.2|https://buildbot.libretro.com/stable/1.22.2/android/RetroArch_aarch64.apk|7bd5d208dfe93cc8e2ea6c04608948ce1a045980f160a58ca2d0993aa20ad213|RetroArch_aarch64.apk|RetroArch_aarch64.apk"
   "Flycast 2.7|https://github.com/flyinghead/flycast/releases/download/v2.7/flycast-2.7.apk|1ac54d77b8283f6d58d077396d0916ec12c15b7e4ada9d957836a64590756c00|flycast-release.apk|flycast-release.apk"
-  "PPSSPP 1.20.4|https://www.ppsspp.org/files/1_20_4/ppsspp.apk|dd702a31270ecd68db37afee311d6efe08b1d4da9601d2750ce1a73bbd316c3f|ppsspp_1.20.4.apk|ppsspp_1.18.1.apk"
+  "PPSSPP 1.20.4|https://www.ppsspp.org/files/1_20_4/ppsspp.apk|dd702a31270ecd68db37afee311d6efe08b1d4da9601d2750ce1a73bbd316c3f|ppsspp_1.20.4.apk|ppsspp_*.apk"
 )
 
 # RetroArch cores and their assets have no stable releases; this takes the
@@ -36,10 +37,17 @@ for entry in "${APKS[@]}"; do
   IFS='|' read -r name url sha file old <<<"$entry"
   fetch "$url" "$CACHE/$file"
   echo "$sha  $CACHE/$file" | sha256sum -c --quiet
+  matches=("$ETC"/$old)
+  [[ ${#matches[@]} == 1 && -f "${matches[0]}" ]] || { echo "no single $old in $ETC" >&2; exit 1; }
+  old="${matches[0]##*/}"
   if [[ "$file" != "$old" ]]; then
     sudo mv "$ETC/$old" "$ETC/$file"
-    sudo sed "s#/system/etc/$old#/system/etc/$file#g" "$SYSTEM/bin/setup.sh" >"$CACHE/setup.sh"
-    sudo cp --no-preserve=all "$CACHE/setup.sh" "$SYSTEM/bin/setup.sh"
+    if is_nano_base "$SYSTEM"; then
+      apps_list "$SYSTEM" source "/system/etc/$old" "/system/etc/$file"
+    else
+      sudo sed "s#/system/etc/$old#/system/etc/$file#g" "$SYSTEM/bin/setup.sh" >"$CACHE/setup.sh"
+      write_through "$CACHE/setup.sh" "$SYSTEM/bin/setup.sh"
+    fi
   fi
   # Writing through the existing file keeps its owner, mode, and SELinux label.
   sudo cp --no-preserve=all "$CACHE/$file" "$ETC/$file"
@@ -49,8 +57,10 @@ done
 work="$CACHE/retroarch"
 rm -rf "$work"
 mkdir -p "$work/tree" "$work/cores"
+pack="$(payload_path "$ETC" retroarch)"
+payload_to_tar "$pack" "$work/in.tar"
 # setup.sh chowns these files after extracting them, so ownership is not kept.
-tar -xJpf "$ETC/retroarch.tar.xz" --no-same-owner -C "$work/tree"
+tar -xpf "$work/in.tar" --no-same-owner -C "$work/tree"
 
 fetch "$CORES_URL/.index-extended" "$work/index.txt"
 cores_dir="$work/tree/$RA_DATA/cores"
@@ -102,9 +112,9 @@ fi
 
 # Repack the same top-level paths as the original, so no entries for data/ or
 # sdcard/ themselves are added; root would apply their owner and mode on extract.
-tar -tJf "$ETC/retroarch.tar.xz" | python3 -I "$MODS/../scripts/tar_roots.py" >"$work/roots"
-(cd "$work/tree" && tar -cpf - --owner=u0_a188:10188 --group=u0_a188:10188 -T "$work/roots") |
-  xz -9e -T0 >"$work/retroarch.tar.xz"
-echo "retroarch.tar.xz: $(stat -c %s "$ETC/retroarch.tar.xz") -> $(stat -c %s "$work/retroarch.tar.xz") bytes"
-sudo cp --no-preserve=all "$work/retroarch.tar.xz" "$ETC/retroarch.tar.xz"
+tar -tf "$work/in.tar" | python3 -I "$MODS/../scripts/tar_roots.py" >"$work/roots"
+(cd "$work/tree" && tar -cpf "$work/out.tar" --owner=u0_a188:10188 --group=u0_a188:10188 -T "$work/roots")
+tar_to_payload "$work/out.tar" "$work/${pack##*/}"
+echo "${pack##*/}: $(stat -c %s "$pack") -> $(stat -c %s "$work/${pack##*/}") bytes"
+write_through "$work/${pack##*/}" "$pack"
 rm -rf "$work"

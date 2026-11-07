@@ -3,6 +3,8 @@
 
   bundled_roms.py LIST IN_TAR OUT_TAR CACHE_DIR LICENSES_DIR LOCAL_DIR
 
+OUT_TAR is xz-compressed when its name ends in .xz, and a plain tar otherwise.
+
 Keeps the pack's folders and systeminfo files, keeps only the "upstream" games
 the list names, adds each "add" game after checking its sha256, copies each
 "tree" folder out of an archive after checking the archive's sha256, adds each
@@ -132,8 +134,12 @@ def main():
         files[name] = text
 
     kept, removed = set(), []
-    with tarfile.open(in_tar) as src, lzma.open(out_tar, "wb", preset=9 | lzma.PRESET_EXTREME) as xz:
-        with tarfile.open(fileobj=xz, mode="w", format=tarfile.GNU_FORMAT) as out:
+    if out_tar.endswith(".xz"):
+        sink = lzma.open(out_tar, "wb", preset=9 | lzma.PRESET_EXTREME)
+    else:
+        sink = open(out_tar, "wb")
+    with tarfile.open(in_tar) as src, sink:
+        with tarfile.open(fileobj=sink, mode="w", format=tarfile.GNU_FORMAT) as out:
             dirs, file_template = {}, None
             for info in src:
                 rel = info.name[len(ROMS):] if info.name.startswith(ROMS) else None

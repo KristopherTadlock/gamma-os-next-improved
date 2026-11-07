@@ -103,6 +103,31 @@ Magisk only if theme downloads fail with "Failed to lock file".
 
 Without `ESDE_APK`, the build keeps Daijisho, set up as below.
 
+### 1.4.4 base and the Nano home
+
+Building with `SYSTEM_IMG=/path/to/system.img` uses a GammaOS Next 1.4.4
+system image built from GammaOS's source
+([GammaOSNextDistribution-14](https://github.com/TheGammaSqueeze/GammaOSNextDistribution-14),
+target `arm64_bgN`) in place of the release's 1.2 system. The RG Cube's
+vendor, kernel and bootloader stay. The changes above apply to it too, adapted
+to 1.4.4's zstd payloads and its app list (`/system/etc/gammaos/apps.list`),
+except the Daijisho update (1.4.4 ships Daijisho 1.8.1) and ES-DE's app.
+
+1.4.4 adds GammaOS Nano, a console-style home that starts from the power
+menu's **Boot Nano** (and **Boot Android** to go back). `mods/50-nano.sh`
+sets it up:
+
+- the home theme is Nano's ES-DE theme engine, with
+  [Colorful (Simplified)](https://github.com/anthonycaccese/colorful-simplified-es-de)
+  in its 1:1 layout for the square screen;
+- its game systems are the ones in `mods/nano-systems.txt`, with this
+  build's default emulators: the `D - ` cores from `mods/retroarch-cores.txt`
+  (which Nano runs itself) and the standalone apps. ScummVM and PS Vita games
+  start from their apps, because their players need each game's ID.
+
+First-boot setup applies these without overriding settings already made, and
+the device boots normal Android until **Boot Nano** is chosen.
+
 ### Daijisho platforms
 
 Daijisho gets 11 more platforms, each from Daijisho's official definition:
@@ -142,7 +167,7 @@ the build uses.
 
 ## Building
 
-On Linux with `curl`, 7-Zip (`7zz` or `7z`), `xz`, `unzip`, `e2fsck` and
+On Linux with `curl`, 7-Zip (`7zz` or `7z`), `xz`, `zstd`, `unzip`, `e2fsck` and
 `resize2fs`, `setfattr`, `cc`, `python3`, `sudo` (to loop-mount the system
 image), and about 40 GB free:
 
@@ -151,7 +176,8 @@ scripts/build.sh
 ```
 
 This downloads the official release, applies each script in `mods/` to its
-system partition, and writes `out/RG_Cube_GammaOS_Next_Improved_v1.0.pac`.
+system partition, and writes `out/RG_Cube_GammaOS_Next_Improved_v1.0.pac`
+(`..._v2.0.pac` with `SYSTEM_IMG`).
 
 The tools it uses:
 

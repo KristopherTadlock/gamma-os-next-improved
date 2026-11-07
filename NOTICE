@@ -18,6 +18,12 @@ With ES-DE, the build includes MAGISK_ES-DE_fix.zip from GammaOS Next
 (https://github.com/TheGammaSqueeze/GammaOSNext), unchanged, Copyright
 TheGammaSqueeze, Apache License 2.0.
 
+On the 1.4.4 base, the build downloads and includes the Colorful (Simplified)
+theme for ES-DE (https://github.com/anthonycaccese/colorful-simplified-es-de)
+by ant, based on the Colorful theme by viking and faeran, under the Creative
+Commons Attribution-NonCommercial-ShareAlike 2.0 license; its README, with
+the full credits, is installed with it.
+
 The build downloads platform wallpapers for Daijisho from the same "BB-1 Dark"
 pack (Daijishou, MIT License, Copyright (c) 2022 TapiocaFox (Yves Chen));
 they show artwork from the games and consoles they represent, which belongs

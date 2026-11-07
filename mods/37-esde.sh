@@ -27,6 +27,10 @@ if [[ -z "${ESDE_APK:-}" ]]; then
   echo "ESDE_APK isn't set; keeping Daijisho"
   exit 0
 fi
+if [[ -f "$ETC/gammaos/apps.list" ]]; then
+  echo "ESDE_APK only works with the 1.2 base; 1.4.4's Nano home has its own ES-DE theme engine" >&2
+  exit 1
+fi
 
 rm -rf "$work"
 mkdir -p "$work/tree"

@@ -6,11 +6,15 @@ set -euo pipefail
 
 ETC="$1/etc"
 MODS="$(cd "$(dirname "$0")" && pwd)"
+source "$MODS/../scripts/modlib.sh"
 work="$2/roms"
+pack="$(payload_path "$ETC" roms)"
 
 mkdir -p "$work"
+payload_to_tar "$pack" "$work/in.tar"
 python3 -I "$MODS/../scripts/bundled_roms.py" "$MODS/bundled-roms.txt" \
-  "$ETC/roms.tar.xz" "$work/roms.tar.xz" "$work/cache" "$MODS/rom-licenses" "$MODS/rom-files"
-echo "roms.tar.xz: $(stat -c %s "$ETC/roms.tar.xz") -> $(stat -c %s "$work/roms.tar.xz") bytes"
-sudo cp --no-preserve=all "$work/roms.tar.xz" "$ETC/roms.tar.xz"
-rm "$work/roms.tar.xz"
+  "$work/in.tar" "$work/out.tar" "$work/cache" "$MODS/rom-licenses" "$MODS/rom-files"
+tar_to_payload "$work/out.tar" "$work/${pack##*/}"
+echo "${pack##*/}: $(stat -c %s "$pack") -> $(stat -c %s "$work/${pack##*/}") bytes"
+write_through "$work/${pack##*/}" "$pack"
+rm "$work/in.tar" "$work/out.tar" "$work/${pack##*/}"

@@ -16,8 +16,14 @@ DRIVER_ZIP="malisx2-0.4.0.zip"
 DRIVER_ID="armsx2libmali-v0.4.0-malisx2-0.4.0-63e307e63a"
 PACK="armsx2-malisx2.tar.gz"
 work="$(realpath -m "$2")/armsx2-malisx2"
+source "$(dirname "$0")/../scripts/modlib.sh"
 
-if ! sudo grep -q '^pm install /system/etc/ARMSX2-.*\.apk$' "$SETUP" || [[ ! -f "$ETC/$DRIVER_ZIP" ]]; then
+if is_nano_base "$SYSTEM"; then
+  installed() { sudo grep -q '^[^#][^|]*|com\.armsx2|' "$ETC/gammaos/apps.list"; }
+else
+  installed() { sudo grep -q '^pm install /system/etc/ARMSX2-.*\.apk$' "$SETUP"; }
+fi
+if ! installed || [[ ! -f "$ETC/$DRIVER_ZIP" ]]; then
   echo "ARMSX2 or $DRIVER_ZIP isn't in added-apps.txt; skipping"
   exit 0
 fi
@@ -40,8 +46,22 @@ find "$work/tree" -type f -exec chmod 660 {} +
 # those directories' owner and mode when extracted.
 (cd "$work/tree" && tar -czf "$work/$PACK" --owner=0 --group=0 "$app/files" "$app/shared_prefs")
 
-sudo install -m 644 -o root -g root "$work/$PACK" "$ETC/$PACK"
-sudo setfattr -n security.selinux -v u:object_r:system_file:s0 "$ETC/$PACK"
+install_system_file "$work/$PACK" "$ETC/$PACK"
+
+if is_nano_base "$SYSTEM"; then
+  cat >"$work/hook.sh" <<EOF
+post_armsx2() {
+    step "Setting up the MaliSX2 driver in ARMSX2."
+    tar -xzf /system/etc/$PACK -C / && own_app_data com.armsx2 && \\
+        restorecon -R /$app/files /$app/shared_prefs
+}
+EOF
+  add_setup_functions "$SYSTEM" "$work/hook.sh"
+  apps_list "$SYSTEM" hook com.armsx2 post_armsx2
+  rm -rf "$work"
+  echo "ARMSX2 will start with MaliSX2 ($DRIVER_ID) and the Vulkan renderer"
+  exit 0
+fi
 
 steps="$work/setup-steps.sh"
 cat >"$steps" <<EOF

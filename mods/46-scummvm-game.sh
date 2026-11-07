@@ -17,8 +17,14 @@ PACK="scummvm-bass.tar.xz"
 GAME_DIR="games/Beneath a Steel Sky"
 cache="$(realpath -m "$2")/scummvm"
 work="$cache/work"
+source "$(dirname "$0")/../scripts/modlib.sh"
 
-if ! sudo grep -q '^pm install /system/etc/scummvm-.*\.apk$' "$SETUP"; then
+if is_nano_base "$SYSTEM"; then
+  installed() { sudo grep -q '^[^#][^|]*|org\.scummvm\.scummvm|' "$ETC/gammaos/apps.list"; }
+else
+  installed() { sudo grep -q '^pm install /system/etc/scummvm-.*\.apk$' "$SETUP"; }
+fi
+if ! installed; then
   echo "ScummVM isn't in added-apps.txt; skipping"
   exit 0
 fi
@@ -52,8 +58,22 @@ find "$work/tree" -type f -exec chmod 660 {} +
 # those directories' owner and mode when extracted.
 (cd "$work/tree" && tar -cf - --owner=0 --group=0 "$app/files") | xz -9 -T0 >"$work/$PACK"
 
-sudo install -m 644 -o root -g root "$work/$PACK" "$ETC/$PACK"
-sudo setfattr -n security.selinux -v u:object_r:system_file:s0 "$ETC/$PACK"
+install_system_file "$work/$PACK" "$ETC/$PACK"
+
+if is_nano_base "$SYSTEM"; then
+  cat >"$work/hook.sh" <<EOF
+post_scummvm() {
+    step "Adding Beneath a Steel Sky to ScummVM."
+    tar -xJf /system/etc/$PACK -C / && own_app_data org.scummvm.scummvm && \\
+        restorecon -R /$app/files
+}
+EOF
+  add_setup_functions "$SYSTEM" "$work/hook.sh"
+  apps_list "$SYSTEM" hook org.scummvm.scummvm post_scummvm
+  echo "ScummVM will list Beneath a Steel Sky ($(stat -c %s "$work/$PACK") bytes compressed)"
+  rm -rf "$work"
+  exit 0
+fi
 
 steps="$work/setup-steps.sh"
 cat >"$steps" <<EOF

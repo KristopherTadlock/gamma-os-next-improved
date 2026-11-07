@@ -1,11 +1,15 @@
 #!/usr/bin/env bash
 # Builds out/RG_Cube_GammaOS_Next_Improved_v1.0.pac from the official release.
 #
-# Needs: curl, 7zz (or 7z), xz, unzip, e2fsck, resize2fs, setfattr, cc,
+# Needs: curl, 7zz (or 7z), xz, zstd, unzip, e2fsck, resize2fs, setfattr, cc,
 # python3, and sudo for loop-mounting the system image.
 #
+# Set SYSTEM_IMG=/path/to/system.img to use a GammaOS Next 1.4.4 system image
+# built from source instead of the release's 1.2 system (the RG Cube's vendor,
+# kernel and bootloader stay). That builds ..._Improved_v2.0.pac.
+#
 # Set ESDE_APK=/path/to/ES-DE.apk to replace Daijisho with ES-DE
-# (mods/37-esde.sh); that also needs aapt.
+# (mods/37-esde.sh, 1.2 base only); that also needs aapt.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -14,6 +18,14 @@ OUT="$ROOT/out"
 NAME="RG_Cube_GammaOS_Next_Full_v1.2"
 # Published in the upstream release notes when the build went public.
 PASSWORD="f297133b935e68072bd77309645cca86ab24bd26847e42c8080db143157a090a"
+if [[ -n "${SYSTEM_IMG:-}" ]]; then
+  [[ -f "$SYSTEM_IMG" ]] || { echo "SYSTEM_IMG: no file $SYSTEM_IMG" >&2; exit 1; }
+  SYSTEM_IMG="$(realpath "$SYSTEM_IMG")"
+  VERSION="2.0"
+else
+  VERSION="1.0"
+fi
+export IMPROVED_VERSION="GammaOS_Next_Improved_v$VERSION"
 SEVENZIP="$(command -v 7zz || command -v 7z || true)"
 [[ -n "$SEVENZIP" ]] || { echo "7-Zip (7zz or 7z) is required" >&2; exit 1; }
 if [[ -n "${ESDE_APK:-}" ]]; then
@@ -44,6 +56,12 @@ python3 -I "$ROOT/scripts/pactool.py" extract "$WORK/pac/$NAME.pac" super_full.i
 # Give the system partition the unallocated space at the end of super.
 python3 -I "$ROOT/scripts/lptool.py" grow "$super" system_a max
 python3 -I "$ROOT/scripts/lptool.py" extract "$super" system_a "$system"
+if [[ -n "${SYSTEM_IMG:-}" ]]; then
+  size="$(stat -c %s "$system")"
+  (($(stat -c %s "$SYSTEM_IMG") <= size)) || { echo "$SYSTEM_IMG is larger than system_a ($size bytes)" >&2; exit 1; }
+  cp "$SYSTEM_IMG" "$system"
+  truncate -s "$size" "$system"
+fi
 
 # The image is built with deduplicated (shared) blocks, which the kernel only
 # mounts read-only. Grow the filesystem to fill its partition, then unshare.
@@ -65,12 +83,12 @@ sudo umount "$mnt"
 trap - EXIT
 e2fsck -fn "$system"
 
-echo "writing $OUT/RG_Cube_GammaOS_Next_Improved_v1.0.pac"
-pac="$OUT/RG_Cube_GammaOS_Next_Improved_v1.0.pac"
+pac="$OUT/RG_Cube_GammaOS_Next_Improved_v$VERSION.pac"
+echo "writing $pac"
 python3 -I "$ROOT/scripts/lptool.py" replace "$super" system_a "$system"
 cp "$WORK/pac/$NAME.pac" "$pac.partial"
 python3 -I "$ROOT/scripts/pactool.py" replace "$pac.partial" super_full.img "$super"
 python3 -I "$ROOT/scripts/pactool.py" fixcrc "$pac.partial"
-python3 -I "$ROOT/scripts/pactool.py" setinfo "$pac.partial" Improved_v1.0 RG_Cube_GammaOS_Next_Improved
+python3 -I "$ROOT/scripts/pactool.py" setinfo "$pac.partial" "Improved_v$VERSION" RG_Cube_GammaOS_Next_Improved
 mv "$pac.partial" "$pac"
 rm -f "$super" "$system"
