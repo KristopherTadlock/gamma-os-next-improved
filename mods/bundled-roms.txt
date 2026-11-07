@@ -7,6 +7,8 @@
 #       author's official release).
 #   add  <system>/<file>  url=<download>  sha256=<of the file>  [member=<file in archive>]  license=<url>
 #       Download, verify, and add a game.
+#   folder  <system>
+#       Create an empty ROMs folder (for platforms without a pack-in game).
 #
 # Every game ships with its license notice; GPL games also get a source link.
 # None of these have been run on the device yet.
@@ -21,8 +23,20 @@ upstream  gbc/Tobu Tobu Girl Deluxe.gbc  license=https://github.com/SimonLarsen/
 # --- Game Boy Advance (mgba): The Hat Chooses the Wizard, Corwin Kuiper and Gwilym Inzani. MPL-2.0; music by Otto Halmén, CC BY 3.0.
 add  gba/The Hat Chooses the Wizard.gba  url=https://github.com/agbrs/agb/releases/download/v0.25.0/examples.zip  sha256=c417f2a110026b3553a9f0f26090b4bbbceeeac1e0c2ebb0f9d786fe2221021b  member=examples/the-hat-chooses-the-wizard.gba  license=https://github.com/agbrs/agb
 
-# --- Nintendo DS (DraStic): AngunaDS, Nathan Tolbert and Chris Hildenbrand. "May be distributed freely in binary form" with its readme; source MIT.
+# --- Nintendo DS (WatermelonDS): AngunaDS, Nathan Tolbert and Chris Hildenbrand. "May be distributed freely in binary form" with its readme; source MIT.
 add  nds/AngunaDS.nds  url=https://bitbucket.org/gauauu/angunads/downloads/angunaDS.zip  sha256=90617d4d3d2d363b08f99c369f4fa0691fae98917d5928fc4e3ac849b6d69d52  member=anguna.nds  license=https://bitbucket.org/gauauu/angunads
+
+# --- GameCube (Dolphin): Super Methane Brothers, Mark Page (GameCube port by carstene1ns). GPL-2.0, released with Apache Software's permission.
+add  gc/Super Methane Brothers.dol  url=https://github.com/carstene1ns/super-methane-brothers/releases/download/release_1/super-methane-brothers_gamecube_r1.zip  sha256=cc6ec6c579338436580e8228bbf90b60055285a28498d47b91f77938ffc2fa7c  member=super-methane-brothers/methane.dol  license=https://github.com/carstene1ns/super-methane-brothers
+
+# --- Wii (Dolphin): chro.mono, Thomas Perl (Wii port by Alberto Mardegan). GPL-2.0+; music CC0, sound CC BY 3.0/CC0, font OFL.
+add  wii/chro.mono.dol  url=https://github.com/mardy/chromono/releases/download/1.1.1-git3/chromono.zip  sha256=28b90fb5918ba6a1fb1f76d90f1117823028a867d004373198f0dabf82956f9f  member=chromono/boot.dol  license=https://github.com/mardy/chromono
+
+# --- Nintendo 3DS (Azahar): Anarch, drummyfish (3DS port by blitzdoughnuts). CC0 + waiver of all rights; all assets by the author.
+add  n3ds/Anarch.3dsx  url=https://github.com/blitzdoughnuts/AnarchDEVKIT/raw/0e1a08d6e6fe036168223dfdb184551e7ad4b0c5/bin/3DS_1.0.zip  sha256=26036609788548468bf81620f4582b4896b4f12a83b6a076d42af460e9ed0f3a  member=ANARCH.3dsx  license=https://gitlab.com/drummyfish/anarch
+
+# --- Xbox (hakuX): Second Reality, Future Crew (Xbox port by kooscode). Unlicense (public domain), source and data. A demo, not a game.
+add  xbox/Second Reality.iso  url=https://github.com/kooscode/SecondReality/releases/download/v1.0.1/SecondReality-2013.iso  sha256=53d58ceade9cf1105dc09bd5b1cfa7eb10810770b051e935e4f434b5bf7de726  license=https://github.com/kooscode/SecondReality
 
 # --- NES (mesen): Lala the Magical, The Mojon Twins. CC BY-NC-SA 3.0.
 add  nes/Lala the Magical.nes  url=https://www.mojontwins.com/juegos/mojon-twins--lala-the-magical-(gnrom).nes  sha256=c76222d50efee0ac625a43d0c39ed91870342c02b2a64bd3923698de9551e0eb  license=https://www.mojontwins.com/licencia-mt/
@@ -71,6 +85,7 @@ add  atari5200/Curse of the Lost Miner.bin  url=https://raw.githubusercontent.co
 
 # --- Atari 7800 (prosystem): robotfindskitten, Thomas Mathys. GPL-2.0+.
 add  atari7800/robotfindskitten.a78  url=https://robotfindskitten.org/download/Atari7800/rfk7800-6.502.20050619-bin.tar.gz  sha256=8ba293389dfc6885d3c5d1eb2224a68b8e2493bd48525406b533dfa2bd9ad91d  member=rfk7800.a78  license=https://robotfindskitten.org/download/Atari7800/rfk7800-7.502.20050619-src.tar.gz
+
 
 
 # === Platforms with no qualifying game ===

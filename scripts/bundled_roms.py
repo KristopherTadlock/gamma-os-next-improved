@@ -4,7 +4,8 @@
   bundled_roms.py LIST IN_TAR OUT_TAR CACHE_DIR LICENSES_DIR
 
 Keeps the pack's folders and systeminfo files, keeps only the "upstream" games
-the list names, and adds each "add" game after checking its sha256. Every game
+the list names, adds each "add" game after checking its sha256, and creates
+each "folder" line's folder. Every game
 gets its license file from LICENSES_DIR, either "<path>.license.txt" or a
 LICENSE.txt in the game's folder.
 
@@ -33,6 +34,9 @@ def parse(path):
             continue
         kind, target, *pairs = re.split(r"\s{2,}", line.strip())
         fields = dict(pair.split("=", 1) for pair in pairs)
+        if kind == "folder":
+            entries.append((kind, target, fields))
+            continue
         if kind not in ("upstream", "add") or "license" not in fields:
             sys.exit(f"{path}:{number}: can't parse: {line}")
         if kind == "add" and not {"url", "sha256"} <= fields.keys():
@@ -90,6 +94,8 @@ def main():
     upstream = {target for kind, target, _ in entries if kind == "upstream"}
 
     files = {}
+    folders = [target for kind, target, _ in entries if kind == "folder"]
+    entries = [entry for entry in entries if entry[0] != "folder"]
     for kind, target, fields in entries:
         if kind == "add":
             files[target] = fetch(target, fields, cache)
@@ -117,7 +123,7 @@ def main():
                 sys.exit(f"upstream games not in the pack: {', '.join(sorted(missing))}")
 
             dir_template = dirs[ROMS.rstrip("/")]
-            for rel, data in sorted(files.items()):
+            for rel, data in sorted(files.items()) + [(folder + "/", None) for folder in folders]:
                 parts = (ROMS + rel).split("/")
                 for depth in range(2, len(parts)):
                     folder = "/".join(parts[:depth])
@@ -127,6 +133,8 @@ def main():
                             setattr(info, attr, getattr(dir_template, attr))
                         out.addfile(info)
                         dirs[folder] = info
+                if data is None:
+                    continue
                 info = tarfile.TarInfo(ROMS + rel)
                 for attr in ("mode", "uid", "gid", "uname", "gname", "mtime"):
                     setattr(info, attr, getattr(file_template, attr))

@@ -42,6 +42,27 @@ RetroArch's core info files and the PPSSPP core's assets are refreshed to
 match the new cores. Mupen64Plus FZ (3.0.335) and DraStic (r2.6.0.4a) are
 already the latest public releases.
 
+### Added emulators
+
+These standalone emulators are added and installed on first boot. Each is
+unmodified and distributed under its license; the source for each version is
+linked below.
+
+| App | Systems | Version | License | Source |
+|---|---|---|---|---|
+| Dolphin | GameCube, Wii | 2609a | GPL-2.0+ | https://github.com/dolphin-emu/dolphin/tree/409881c34357d0f105fd473167d15ab0bd9c1628 |
+| ARMSX2 | PlayStation 2 | 2.9.2 | GPL-3.0 | https://github.com/ARMSX2/ARMSX2/tree/2.9.2 |
+| Azahar | Nintendo 3DS | 2126.2 | GPL-3.0 | https://github.com/azahar-emu/azahar/tree/2126.2 |
+| WatermelonDS | Nintendo DS | 0.8.0.rc3 | GPL-3.0 | https://github.com/SapphireRhodonite/WatermelonDS/tree/0.8.0.rc3 |
+| hakuX | Xbox | 1.3.0 | GPL-3.0+ | https://github.com/rfandango/hakuX/tree/v1.3.0 |
+| Vita3K | PS Vita | 0.2.1 (2026-11-06 build) | GPL-2.0 | https://github.com/Vita3K/Vita3K |
+
+The [MaliSX2](https://github.com/bmdhacks/malisx2/tree/v0.4.0) 0.4.0 Vulkan
+driver (MIT) comes pre-installed and selected in ARMSX2, with the Vulkan
+renderer, and a copy is in `/sdcard/GPU Drivers/`. Dolphin and hakuX only load
+custom drivers on Adreno GPUs, so they can't use it on the RG Cube's Mali-G57.
+Edit `mods/added-apps.txt` to change the apps.
+
 ### Pack-in games
 
 The bundled ROM pack is replaced with one game per platform, each with an
@@ -71,9 +92,12 @@ The tools it uses:
   (`system_a`, `vendor_a`, ...) in the raw `super_full.img`.
 - `tools/crc16arc.c` is the CRC-16/ARC helper `pactool.py fixcrc` uses.
 
-The upstream system filesystem is built with deduplicated blocks, which
-can't be mounted read-write. The build grows it to fill its partition and
-unshares the blocks, which leaves about 77 MB free for changes.
+The build also grows the system partition by about 431 MB, into the
+unallocated space at the end of the `super` image (`scripts/lptool.py grow`);
+the other partitions don't move. The upstream system filesystem is built
+with deduplicated blocks, which can't be mounted read-write, so the build
+grows the filesystem to fill the partition and unshares the blocks. That
+leaves about 511 MB free for changes.
 
 ## Flashing
 

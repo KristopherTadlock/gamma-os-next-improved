@@ -38,7 +38,45 @@ Nintendo DS
   License: "Anguna may be distributed freely in binary form, as long as the
   text of this file is made available with it." Source code is MIT.
   Source: https://bitbucket.org/gauauu/angunads
-  Note: 2008 homebrew. Saving may not work in DraStic; test it.
+  Note: 2008 homebrew that saves to the SD card; test saving in WatermelonDS.
+
+GameCube
+  Super Methane Brothers, by Mark Page (GameCube port by carstene1ns)
+  A 100-level action platformer for 1 or 2 players: trap enemies in gas
+  and throw them. Originally a 1993 Amiga game by Apache Software.
+  License: GPL-2.0. The author released it with Apache Software's
+  permission; graphics, music and sound are by the original team.
+  Source: https://github.com/carstene1ns/super-methane-brothers
+  Note: the publisher's permission is documented only in the author's
+  own statement.
+
+Wii
+  chro.mono, by Thomas Perl (Wii port by Alberto Mardegan)
+  A physics puzzle game: drag colored spheres to recolor the others.
+  License: GPL-2.0 or later. Music CC0, sound effects CC BY 3.0 / CC0,
+  font SIL Open Font License; all credited in the game.
+  Source: https://github.com/mardy/chromono
+  Note: uses the Wii Remote pointer; map it to a stick or touch in Dolphin.
+
+Nintendo 3DS
+  Anarch, by Miloslav Číž (drummyfish); 3DS port by blitzdoughnuts
+  A 90s-style first-person shooter.
+  License: CC0 plus a waiver of all rights. The author made all its
+  graphics, sounds and music himself.
+  Source: https://gitlab.com/drummyfish/anarch
+  Note: shooter violence and anti-capitalist messages in the game text.
+  The port's author warns audio can be choppy and suggests turning it off.
+
+Xbox
+  Second Reality, by Future Crew (Xbox port by kooscode, v1.0.1)
+  The 1993 PC demo that won Assembly '93: real-time 3D effects set to a
+  tracker soundtrack. A demo to watch, not a game.
+  License: Unlicense (public domain). Future Crew released the source and
+  data, graphics and music included, under the Unlicense in 2013; the port
+  uses the same license. Its menus use the standard IBM VGA text-mode font.
+  Source: https://github.com/kooscode/SecondReality
+  Note: the port is new (November 2026) and has been tested on a real Xbox
+  and in xemu, not in hakuX.
 
 NES
   Lala the Magical, by The Mojon Twins

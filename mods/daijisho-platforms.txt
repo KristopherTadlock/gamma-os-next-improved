@@ -1,0 +1,16 @@
+# Daijisho platforms to add, built from Daijisho's official platform
+# definitions (https://github.com/TapiocaFox/Daijishou/tree/<commit>/platforms).
+# Only the listed players are added; the first one is the platform's default.
+# A platform Daijisho already has keeps its other players.
+#
+#   <definition file>  <ROMs folder>  <player unique ID>...
+
+commit  b7843e56ae0026f947f8faeaf3d501582341a793
+
+NintendoGameCube.json  gc    gc.org.dolphinemu.dolphinemu
+NintendoWii.json       wii   wii.org.dolphinemu.dolphinemu
+Nintendo3DS.json       n3ds  3ds.azahar.vanilla
+MicrosoftXbox.json     xbox  xbox.com.rfandango.haku_x
+
+# Existing platform: make WatermelonDS the default DS emulator.
+NintendoDS.json        nds   nds.me.magnum.melondualds

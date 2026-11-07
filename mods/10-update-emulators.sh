@@ -7,8 +7,9 @@
 set -euo pipefail
 
 SYSTEM="$1"
-CACHE="$2/emulators"
+CACHE="$(realpath -m "$2")/emulators"
 ETC="$SYSTEM/etc"
+MODS="$(cd "$(dirname "$0")" && pwd)"
 
 # name|url|sha256|file name in /system/etc|file name it replaces
 APKS=(
@@ -54,7 +55,7 @@ tar -xJpf "$ETC/retroarch.tar.xz" --no-same-owner -C "$work/tree"
 fetch "$CORES_URL/.index-extended" "$work/index.txt"
 cores_dir="$work/tree/$RA_DATA/cores"
 # Lines are "core" or "D - core", where D marks the platform's default core.
-mapfile -t wanted < <(sed 's/#.*//' "$(dirname "$0")/retroarch-cores.txt" |
+mapfile -t wanted < <(sed 's/#.*//' "$MODS/retroarch-cores.txt" |
   awk 'NF { core = ($1 == "D" && $2 == "-") ? $3 : $1; print core "_libretro_android.so" }')
 for so in "$cores_dir"/*_libretro_android.so; do
   if ! printf '%s\n' "${wanted[@]}" | grep -qxF "$(basename "$so")"; then
@@ -96,7 +97,10 @@ if [[ -f "$cores_dir/ppsspp_libretro_android.so" ]]; then
 fi
 echo "updated RetroArch core info and PPSSPP core assets"
 
-(cd "$work/tree" && tar -cpf - --owner=u0_a188:10188 --group=u0_a188:10188 data sdcard) |
+# Repack the same top-level paths as the original, so no entries for data/ or
+# sdcard/ themselves are added; root would apply their owner and mode on extract.
+tar -tJf "$ETC/retroarch.tar.xz" | python3 -I "$MODS/../scripts/tar_roots.py" >"$work/roots"
+(cd "$work/tree" && tar -cpf - --owner=u0_a188:10188 --group=u0_a188:10188 -T "$work/roots") |
   xz -9e -T0 >"$work/retroarch.tar.xz"
 echo "retroarch.tar.xz: $(stat -c %s "$ETC/retroarch.tar.xz") -> $(stat -c %s "$work/retroarch.tar.xz") bytes"
 sudo cp --no-preserve=all "$work/retroarch.tar.xz" "$ETC/retroarch.tar.xz"

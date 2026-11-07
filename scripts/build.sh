@@ -27,6 +27,8 @@ echo "extracting system image"
 super="$WORK/images/super_full.img"
 system="$WORK/images/system_a.img"
 python3 -I "$ROOT/scripts/pactool.py" extract "$WORK/pac/$NAME.pac" super_full.img "$super"
+# Give the system partition the unallocated space at the end of super.
+python3 -I "$ROOT/scripts/lptool.py" grow "$super" system_a max
 python3 -I "$ROOT/scripts/lptool.py" extract "$super" system_a "$system"
 
 # The image is built with deduplicated (shared) blocks, which the kernel only

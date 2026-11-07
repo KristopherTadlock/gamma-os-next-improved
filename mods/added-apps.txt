@@ -1,0 +1,31 @@
+# Apps added to /system/etc and installed by GammaOS's first-boot setup.
+# Comment a line out to drop it.
+#
+#   apk   <file>  name=<shown in setup log>  url=<download>  sha256=<of the file>  source=<source code>
+#       Installed with "pm install".
+#   file  <file>  dest=<folder on /sdcard>   url=<download>  sha256=<of the file>  source=<source code>
+#       Copied to that folder.
+
+# Dolphin 2609a (GameCube / Wii). GPL-2.0-or-later.
+apk  dolphin-2609a.apk  name=Dolphin GameCube and Wii emulator  url=https://dl.dolphin-emu.org/releases/2609a/dolphin-2609a.apk  sha256=7f753124d289585a4e6fa649d4852c78e674bd45d5d1f6f6b891fe65460c1793  source=https://github.com/dolphin-emu/dolphin/tree/409881c34357d0f105fd473167d15ab0bd9c1628
+
+# ARMSX2 2.9.2 (PlayStation 2), Android 13+ ARMv8.2 build. GPL-3.0.
+apk  ARMSX2-2.9.2.apk  name=ARMSX2 PS2 emulator  url=https://github.com/ARMSX2/ARMSX2/releases/download/2.9.2/ARMSX2-2.9.2-a13-armv8.2-sdk33.apk  sha256=f0234a6cf40adcaed231cd46f5d27110ece1a42c45a07bd3710df9207e1e9eab  source=https://github.com/ARMSX2/ARMSX2/tree/2.9.2
+
+# Azahar 2126.2 (Nintendo 3DS), vanilla build. GPL-3.0.
+apk  azahar-2126.2.apk  name=Azahar 3DS emulator  url=https://github.com/azahar-emu/azahar/releases/download/2126.2/azahar-android-vanilla-2126.2.apk  sha256=b511d1d38012c5ab0dfdb4479335059bb89ef17acfbf0ba45e79107ed4185ba3  source=https://github.com/azahar-emu/azahar/tree/2126.2
+
+# WatermelonDS 0.8.0.rc3 (Nintendo DS), a melonDS fork. GPL-3.0.
+apk  WatermelonDS-0.8.0.rc3.apk  name=WatermelonDS DS emulator  url=https://github.com/SapphireRhodonite/WatermelonDS/releases/download/0.8.0.rc3/WatermelonDS-0.8.0.rc3.apk  sha256=275b16222b9ea7bb7e36f660b7d3d80b535a3707910578fba19ec35259f08456  source=https://github.com/SapphireRhodonite/WatermelonDS/tree/0.8.0.rc3
+
+# hakuX 1.3.0 (original Xbox), needs no BIOS or hard disk image. GPL-3.0-or-later.
+apk  hakuX-1.3.0.apk  name=hakuX Xbox emulator  url=https://github.com/rfandango/hakuX/releases/download/v1.3.0/hakuX-1.3.0.apk  sha256=143f9e602ab20a7143f357d3a5fa8eba145bdd6cde90d80cbcfadfd7919e9176  source=https://github.com/rfandango/hakuX/tree/v1.3.0
+
+# Vita3K 0.2.1 (PS Vita), build of 2026-11-06. GPL-2.0.
+# The "continuous" tag is rebuilt on every push; the sha256 pins this build.
+apk  vita3k-0.2.1.apk  name=Vita3K PS Vita emulator  url=https://github.com/Vita3K/Vita3K/releases/download/continuous/android-latest.apk  sha256=75d2f4fc7261c99979060944c8775cd2ad361a2bbe8ac31d92a6e8df6dd84976  source=https://github.com/Vita3K/Vita3K
+
+# MaliSX2 0.4.0, a Vulkan driver for Mali GPUs (tested on the Mali-G57 of the
+# T820). MIT. 45-armsx2-malisx2.sh pre-installs it in ARMSX2; Dolphin and hakuX
+# only load custom drivers on Adreno GPUs.
+file  malisx2-0.4.0.zip  dest=GPU Drivers  url=https://github.com/bmdhacks/malisx2/releases/download/v0.4.0/malisx2-0.4.0-63e307e63a.zip  sha256=835f980506ed46fa51925fd279b256d23b0ddf481ffd1ab39be2fee275cf8bf8  source=https://github.com/bmdhacks/malisx2/tree/v0.4.0
