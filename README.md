@@ -42,6 +42,18 @@ RetroArch's core info files and the PPSSPP core's assets are refreshed to
 match the new cores. Mupen64Plus FZ (3.0.335) and DraStic (r2.6.0.4a) are
 already the latest public releases.
 
+Other apps:
+
+| App | Upstream v1.2 | This build |
+|---|---|---|
+| Daijisho | 1.4.80 | 1.5.0 |
+| Aurora Store | 4.6.4 | 4.8.4 |
+| Firefox | 139.0 | replaced by [Brave](https://github.com/brave/brave-browser) 1.99.55 |
+
+MiXplorer stays at 6.64.3 because newer builds are only posted on its XDA
+thread. Magisk stays at 30.6, the version the boot image is patched with, and
+can update itself after setup. See `mods/15-update-apps.sh`.
+
 ### Added emulators
 
 These standalone emulators are added and installed on first boot. Each is
