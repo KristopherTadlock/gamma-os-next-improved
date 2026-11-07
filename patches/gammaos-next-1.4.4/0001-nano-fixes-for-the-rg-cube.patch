@@ -1,5 +1,5 @@
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenu.h b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
-index 88e7cae6699..7011812778e 100644
+index 88e7cae6699..b30368897b9 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 @@ -484,6 +484,9 @@ private:
@@ -89,6 +89,14 @@ index 88e7cae6699..7011812778e 100644
      // Per-game title override (Rename / Edit Title). A user-typed name that overrides
      // the basename-minus-extension display name everywhere (columns / recents / search /
      // Info) AND becomes the scraper search query so a corrected title can match. Stored
+@@ -3449,6 +3478,7 @@ private:
+     bool scraperDirAvailable() const;      // configured folder exists (default dir always counts)
+     void scraperStorageTick();             // per-frame: load when the SD mounts at boot/hotplug, drop on unplug
+     void boxartFolderSelect(const std::string& path);   // folder-picker target 7: relocate the cache
++    std::string scraperMissingCredsMsg(bool needSsDev);
+     void scrapeMoveThreadFunc(std::vector<std::pair<std::string, ScrapeEntry>> entries,
+                               std::string src, std::string dst);
+     void gsOpenClearArtConfirm();          // Game Systems editor: Clear Boxart confirm (theme key 49)
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuEsdeMenu.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuEsdeMenu.cpp
 index 2d621760914..5ace831aa52 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuEsdeMenu.cpp
@@ -847,7 +855,7 @@ index b0e278f3bc0..43087e17bad 100644
      // can detect a hang (e.g. an infinite loop or a stuck GL call inside a render
      // path) and abort into a tombstone instead of leaving the device frozen.
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp
-index bc837715d76..834a0a49e55 100644
+index bc837715d76..85f49fa4277 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp
 @@ -784,7 +784,7 @@ void NanoMenu::scraperArtTick() {
@@ -859,6 +867,72 @@ index bc837715d76..834a0a49e55 100644
                    (mPs3CatIdx >= 0 && mPs3CatIdx < (int)mPs3Cats.size()
                     && mPs3Cats[mPs3CatIdx].name == "Game");
      if (!inGame && (!mRomBoxartCache.empty() || mFanartTex || mNdsFanTex || mSaDecStarted.load()))
+@@ -1062,6 +1062,14 @@ nanoscraper::Credentials NanoMenu::scraperCredsFor(int sysIdx) {
+     return c;
+ }
+ 
++// Why nothing could be scraped for want of credentials: ScreenScraper answers no software without
++// developer credentials, which a build from the public source does not include (see
++// NanoScraperDevCreds.h); a user account does not replace them. TheGamesDB needs an API key.
++std::string NanoMenu::scraperMissingCredsMsg(bool needSsDev) {
++    return needSsDev ? trDyn("This build has no ScreenScraper developer credentials. Use TheGamesDB with an API key instead.")
++                     : trDyn("Set your TheGamesDB API key in Boxart Scraper settings.");
++}
++
+ nanoscraper::Engine NanoMenu::scraperEngineFor(int sysIdx, const nanoscraper::Credentials& cred) {
+     (void)cred;
+     std::string eng;
+@@ -1094,6 +1102,7 @@ void NanoMenu::scrapeSystemsAsync(const std::vector<int>& sysIdxs) {
+ 
+     std::vector<ScrapeJob> jobs;
+     bool anyConfigured = false;     // at least one system had a usable engine + creds
++    bool needSsDev = false;         // a ScreenScraper system was skipped for no developer credentials
+     for (int sysIdx : sysIdxs) {
+         if (sysIdx < 0 || sysIdx >= (int)mXmbSystems.size()) continue;
+         const XmbSystem& s = mXmbSystems[sysIdx];
+@@ -1105,7 +1114,7 @@ void NanoMenu::scrapeSystemsAsync(const std::vector<int>& sysIdxs) {
+         bool haveCreds = (eng == nanoscraper::ENGINE_SCREENSCRAPER)
+                              ? (!cred.ssDevId.empty() && !cred.ssDevPw.empty())
+                              : !cred.tgdbKey.empty();
+-        if (!haveCreds) continue;
++        if (!haveCreds) { if (eng == nanoscraper::ENGINE_SCREENSCRAPER) needSsDev = true; continue; }
+         anyConfigured = true;
+         nanoscraper::PlatformIds plat =
+             nanoscraper::platformForSystem(s.romDir, s.shortname, s.name, s.scrapePlatform);
+@@ -1154,7 +1163,7 @@ void NanoMenu::scrapeSystemsAsync(const std::vector<int>& sysIdxs) {
+     if (jobs.empty()) {
+         // Nothing to do: explain why (no credentials, or already complete).
+         mScrapeError = anyConfigured ? trDyn("All games already have art (enable Overwrite to refresh).")
+-                                     : trDyn("Set your scraper credentials in Settings first.");
++                                     : scraperMissingCredsMsg(needSsDev);
+         mScrapeDoneFlag = true;
+         mScrapeBox = wantBox; mScrapeFan = wantFan;   // (unused, keeps -Wunused quiet via assign)
+         return;
+@@ -1197,6 +1206,7 @@ void NanoMenu::scrapeOneRom(int sysIdx, int romIdx, const std::string& queryOver
+ 
+     std::vector<ScrapeJob> jobs;
+     bool anyConfigured = false;
++    bool needSsDev = false;
+     if (s.enabled) {
+         nanoscraper::Credentials cred = scraperCredsFor(sysIdx);
+         nanoscraper::Engine eng = scraperEngineFor(sysIdx, cred);
+@@ -1204,6 +1214,7 @@ void NanoMenu::scrapeOneRom(int sysIdx, int romIdx, const std::string& queryOver
+             bool haveCreds = (eng == nanoscraper::ENGINE_SCREENSCRAPER)
+                                  ? (!cred.ssDevId.empty() && !cred.ssDevPw.empty())
+                                  : !cred.tgdbKey.empty();
++            needSsDev = !haveCreds && eng == nanoscraper::ENGINE_SCREENSCRAPER;
+             if (haveCreds) {
+                 anyConfigured = true;
+                 nanoscraper::PlatformIds plat =
+@@ -1246,7 +1257,7 @@ void NanoMenu::scrapeOneRom(int sysIdx, int romIdx, const std::string& queryOver
+     }
+     if (jobs.empty()) {
+         mScrapeError = anyConfigured ? trDyn("Scraping is disabled for this system.")
+-                                     : trDyn("Set your scraper credentials in Settings first.");
++                                     : scraperMissingCredsMsg(needSsDev);
+         mScrapeDoneFlag = true;
+         mScrapeBox = wantBox; mScrapeFan = wantFan;
+         return;
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuShares.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuShares.cpp
 index fb0bb6c4794..c611a7626f6 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuShares.cpp
