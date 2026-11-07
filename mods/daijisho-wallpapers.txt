@@ -29,7 +29,7 @@ atari7800   atari7800.png   c41b945b2acb581225958d0a8a1dcc84631fd2dd0e1f62bd76c8
 
 # BB-1 Dark has no Xbox wallpaper. This one is drawn in its layout by
 # scripts/make_wallpapers.py, from the pack's placeholder and the title
-# picture of the bundled Second Reality (Unlicense).
+# picture of Second Reality (Unlicense).
 xbox        daijisho-wallpapers/xbox.png
 
 # Systems that need a BIOS have no Daijisho platform. Their wallpapers are put

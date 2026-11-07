@@ -69,17 +69,6 @@ Nintendo 3DS
   Note: shooter violence and anti-capitalist messages in the game text.
   The port's author warns audio can be choppy and suggests turning it off.
 
-Xbox
-  Second Reality, by Future Crew (Xbox port by kooscode, v1.0.1)
-  The 1993 PC demo that won Assembly '93: real-time 3D effects set to a
-  tracker soundtrack. A demo to watch, not a game.
-  License: Unlicense (public domain). Future Crew released the source and
-  data, graphics and music included, under the Unlicense in 2013; the port
-  uses the same license. Its menus use the standard IBM VGA text-mode font.
-  Source: https://github.com/kooscode/SecondReality
-  Note: the port is new (November 2026) and has been tested on a real Xbox
-  and in xemu, not in hakuX.
-
 ScummVM
   Beneath a Steel Sky, by Revolution Software (CD version 1.2)
   A 1994 science-fiction point-and-click adventure with full speech;
@@ -200,6 +189,9 @@ Atari 7800
 PLATFORMS WITHOUT A GAME
 ------------------------
 
+Xbox
+  Second Reality (Future Crew's 1993 demo, Xbox port by kooscode;
+  Unlicense) didn't run in hakuX on the RG Cube.
 WonderSwan / WonderSwan Color
   Snail Maze+ adapts Sega's Snail Maze, Wonder Breakanoid is an unfinished
   Arkanoid clone, and Inufuto's games have no license.

@@ -39,8 +39,8 @@ add  wii/chro.mono.dol  url=https://github.com/mardy/chromono/releases/download/
 # --- Nintendo 3DS (Azahar): Anarch, drummyfish (3DS port by blitzdoughnuts). CC0 + waiver of all rights; all assets by the author.
 add  n3ds/Anarch.3dsx  url=https://github.com/blitzdoughnuts/AnarchDEVKIT/raw/0e1a08d6e6fe036168223dfdb184551e7ad4b0c5/bin/3DS_1.0.zip  sha256=26036609788548468bf81620f4582b4896b4f12a83b6a076d42af460e9ed0f3a  member=ANARCH.3dsx  license=https://gitlab.com/drummyfish/anarch
 
-# --- Xbox (hakuX): Second Reality, Future Crew (Xbox port by kooscode). Unlicense (public domain), source and data. A demo, not a game.
-add  xbox/Second Reality.iso  url=https://github.com/kooscode/SecondReality/releases/download/v1.0.1/SecondReality-2013.iso  sha256=53d58ceade9cf1105dc09bd5b1cfa7eb10810770b051e935e4f434b5bf7de726  license=https://github.com/kooscode/SecondReality
+# --- Xbox (hakuX): no game. Second Reality (Unlicense) didn't run in hakuX on the device.
+folder  xbox
 
 # --- ScummVM: Beneath a Steel Sky (CD version 1.2), Revolution Software. Freeware; may be included in larger distributions with its readme.
 # 46-scummvm-game.sh installs the game into ScummVM's own storage, since ScummVM can't read /sdcard/ROMs without
