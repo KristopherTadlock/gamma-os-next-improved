@@ -19,7 +19,7 @@ index dcd7bbaf475..ee788bfcffa 100644
          mMinimaWantsFrame = false;   // the Minima renderer re-arms it while anything animates
          render();
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenu.h b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
-index 88e7cae6699..c4d11e8851b 100644
+index 88e7cae6699..2ed0a6567a4 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 @@ -484,6 +484,9 @@ private:
@@ -128,7 +128,7 @@ index 88e7cae6699..c4d11e8851b 100644
      void renderColorPicker();                        // draw the Hue/Brightness field + preview + hints
      bool colorPickerHandleKey(int code, int value);  // confirm / cancel / saturation / hold-exit (press edges)
      void colorPickerTick();                          // per-frame cursor move from held d-pad / stick / hat
-@@ -3042,6 +3073,29 @@ private:
+@@ -3042,6 +3073,30 @@ private:
      void applyEmuEntryToSystem(XmbSystem& s, const EmuCatEntry& e);  // set launch fields from a catalog entry
      std::string gsIconRefForPlatform(const std::string& platformId, const std::string& platformDisplay);
      bool mGsAddMode = false;                    // emulator picker opened to create a NEW system
@@ -142,6 +142,7 @@ index 88e7cae6699..c4d11e8851b 100644
 +    const GameEmulator* gameEmulatorFor(const std::string& romPath);
 +    void setGameEmulator(const std::string& romPath, const GameEmulator* emu);   // nullptr = the system's
 +    bool applyGameEmulator(const std::string& romPath, XmbSystem& s);   // give s the game's emulator, if set
++    int recentSystemIndex(const XmbRecentEntry& re) const;   // the system a recent entry belongs to, -1 if none
 +    void openGameEmulatorPicker(int sysIdx, const std::string& romPath);
 +    std::string mGameEmuRom;                    // the game the emulator picker is open for
 +    // Game Options (the ES-DE gamelist's Select): one game's settings as a menu level.
@@ -158,7 +159,7 @@ index 88e7cae6699..c4d11e8851b 100644
  
      // ---- Add / remove custom systems ----
      void gsAddSystem();                        // "Add New System" -> emulator picker in add mode
-@@ -3073,6 +3127,7 @@ private:
+@@ -3073,6 +3128,7 @@ private:
      std::vector<std::string> mountedShareNames() const;
      void gsFolderSelect(const std::string& path); // add a folder as a rawpath scan source
      void drasticDataFolderSelect(const std::string& path); // #90: set persist.gammaos.drastic.data_dir (folder-picker target 5)
@@ -166,7 +167,7 @@ index 88e7cae6699..c4d11e8851b 100644
      void drasticCheatsFolderSelect(const std::string& path); // persist.gammaos.drastic.cheats_dir (folder-picker target 8)
      void drasticPerfRestoreCheck();            // put back the global performance mode a per-game one parked
      void mouseModeHomeGuard();                 // gammapad mouse mode off whenever the home is the foreground
-@@ -3251,7 +3306,7 @@ private:
+@@ -3251,7 +3307,7 @@ private:
          std::string m3uPath;              // non-empty: derived from this .m3u (regenerated on scan);
                                            // empty: user-created (preserved across scans)
      };
@@ -175,7 +176,7 @@ index 88e7cae6699..c4d11e8851b 100644
      std::vector<std::string> mMusicFolders;
      std::vector<MusicTrack>  mMusicTracks;
      std::vector<MusicPlaylist> mMusicPlaylists;
-@@ -3335,6 +3390,8 @@ private:
+@@ -3335,6 +3391,8 @@ private:
      std::set<int> mEsdeGamelistLoadedSys;                            // system indices already parsed
      void esdeEnsureGamelistLoaded(int sysIdx);                       // parse gamelists/<system>/gamelist.xml once
      const ScrapeEntry* esdeMetaFor(const std::string& romPath);      // gamelist entry, else scrapeEntryFor
@@ -184,7 +185,7 @@ index 88e7cae6699..c4d11e8851b 100644
      // Per-game title override (Rename / Edit Title). A user-typed name that overrides
      // the basename-minus-extension display name everywhere (columns / recents / search /
      // Info) AND becomes the scraper search query so a corrected title can match. Stored
-@@ -3406,24 +3463,19 @@ private:
+@@ -3406,24 +3464,19 @@ private:
      void scraperDrainResults();            // render thread: merge finished art + progress
      void scraperCancel();
      void renderScrapeProgress();           // the progress / result modal
@@ -221,7 +222,7 @@ index 88e7cae6699..c4d11e8851b 100644
      // scrape worker state
      std::mutex mScrapeMutex;
      bool mScrapeRunning = false;           // worker alive
-@@ -3449,6 +3501,7 @@ private:
+@@ -3449,6 +3502,7 @@ private:
      bool scraperDirAvailable() const;      // configured folder exists (default dir always counts)
      void scraperStorageTick();             // per-frame: load when the SD mounts at boot/hotplug, drop on unplug
      void boxartFolderSelect(const std::string& path);   // folder-picker target 7: relocate the cache
@@ -229,7 +230,7 @@ index 88e7cae6699..c4d11e8851b 100644
      void scrapeMoveThreadFunc(std::vector<std::pair<std::string, ScrapeEntry>> entries,
                                std::string src, std::string dst);
      void gsOpenClearArtConfirm();          // Game Systems editor: Clear Boxart confirm (theme key 49)
-@@ -4915,6 +4968,9 @@ private:
+@@ -4915,6 +4969,9 @@ private:
      // it red) and beveled into a normal map for the XMB glass relight. Lazily built + cached.
      GLuint mHeartIconTex = 0, mHeartNmapTex = 0;
      void   ensureHeartIcon();               // build mHeartIconTex + mHeartNmapTex once
@@ -1000,10 +1001,10 @@ index 166225b4864..db6fbe36081 100644
    {"Refresh Rate Lock",22,"Lock the display to a fixed refresh rate.","Off",1,nullptr,0},
    {"Display Tweaks",22,"Enable additional display tuning options.","Off",1,nullptr,0},
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3EmuCatalog.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3EmuCatalog.cpp
-index d1b72700c49..5c09aa6ba4f 100644
+index d1b72700c49..f7b3771f2ed 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3EmuCatalog.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3EmuCatalog.cpp
-@@ -429,4 +429,103 @@ void NanoMenu::applyEmulatorChoice(int catIdx) {
+@@ -429,4 +429,113 @@ void NanoMenu::applyEmulatorChoice(int catIdx) {
      buildPs3Cats();
  }
  
@@ -1080,20 +1081,30 @@ index d1b72700c49..5c09aa6ba4f 100644
 +    bool changed = false;
 +    for (auto& re : mXmbRecent) {
 +        if (gameEmuKey(re.romPath) != key) continue;
-+        for (const XmbSystem& sys : mXmbSystems) {
-+            if ((re.romDir.empty() || sys.romDir != re.romDir)
-+                && (re.systemName.empty() || sys.shortname != re.systemName)) continue;
-+            XmbSystem g;   // just the system's launch fields
-+            g.launchType = sys.launchType; g.coreSo = sys.coreSo; g.launchPkg = sys.launchPkg;
-+            g.packageName = sys.packageName; g.launchIntent = sys.launchIntent;
-+            applyGameEmulator(re.romPath, g);
-+            re.coreSo = g.coreSo; re.launchPkg = g.launchPkg; re.launchIntent = g.launchIntent;
-+            re.standalone = g.isStandalone();
-+            changed = true;
-+            break;
-+        }
++        const int si = recentSystemIndex(re);
++        if (si < 0) continue;
++        const XmbSystem& sys = mXmbSystems[si];
++        XmbSystem g;   // just the system's launch fields
++        g.launchType = sys.launchType; g.coreSo = sys.coreSo; g.launchPkg = sys.launchPkg;
++        g.packageName = sys.packageName; g.launchIntent = sys.launchIntent;
++        applyGameEmulator(re.romPath, g);
++        re.coreSo = g.coreSo; re.launchPkg = g.launchPkg; re.launchIntent = g.launchIntent;
++        re.standalone = g.isStandalone();
++        changed = true;
 +    }
 +    if (changed) saveXmbRecent();
++}
++
++// A platform added twice shares its shortname across both systems, so the folder decides; the
++// shortname is only for an entry without a folder, or one whose folder is no longer a system.
++int NanoMenu::recentSystemIndex(const XmbRecentEntry& re) const {
++    if (!re.romDir.empty())
++        for (size_t i = 0; i < mXmbSystems.size(); i++)
++            if (mXmbSystems[i].romDir == re.romDir) return (int)i;
++    if (!re.systemName.empty())
++        for (size_t i = 0; i < mXmbSystems.size(); i++)
++            if (mXmbSystems[i].shortname == re.systemName) return (int)i;
++    return -1;
 +}
 +
 +bool NanoMenu::applyGameEmulator(const std::string& romPath, XmbSystem& s) {
@@ -1214,7 +1225,7 @@ index a778ea7da0d..638c4463dd0 100644
  // aspect bucket so the Test Controller / Calibration buttons get the identical glass
  // relight as the console icons (bevelFromRGBA), refracting the live XMB wave. round =
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
-index c6a8e9c9dc1..065bd24e78f 100644
+index c6a8e9c9dc1..630aaa67e7b 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 @@ -795,6 +795,9 @@ bool NanoMenu::themeSettingRowVisible(const char* name) const {
@@ -2294,7 +2305,7 @@ index c6a8e9c9dc1..065bd24e78f 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false; mPs3DlgAppInfo = false;
          mPs3DlgTitle = title;
          mPs3DlgBody  = body;
-@@ -13584,6 +13826,23 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13584,6 +13826,21 @@ void NanoMenu::xmbOptAction(const std::string& act) {
          }
          return;
      }
@@ -2307,9 +2318,7 @@ index c6a8e9c9dc1..065bd24e78f 100644
 +        } else if (mPs3OptCtxKind == PS3_RECENT && mPs3OptCtxA >= 0 && mPs3OptCtxA < (int)mXmbRecent.size()) {
 +            const XmbRecentEntry& re = mXmbRecent[mPs3OptCtxA];
 +            romPath = re.romPath;
-+            for (size_t i = 0; i < mXmbSystems.size(); i++)
-+                if ((!re.romDir.empty() && mXmbSystems[i].romDir == re.romDir)
-+                    || (!re.systemName.empty() && mXmbSystems[i].shortname == re.systemName)) { sysIdx = (int)i; break; }
++            sysIdx = recentSystemIndex(re);
 +        }
 +        if (sysIdx < 0 || romPath.empty()) return;
 +        openGameEmulatorPicker(sysIdx, romPath);
@@ -2318,7 +2327,7 @@ index c6a8e9c9dc1..065bd24e78f 100644
      if (act == "romrename") {
          // Per-game title override. Resolve the focused ROM path + current display name
          // exactly the way "rominfo" does, then open the OSK prefilled with the current
-@@ -13640,6 +13899,16 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13640,6 +13897,16 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              // tops, not open stack levels), with the highlight kept on the renamed game:
              // the new title re-sorts the list, so its old index points at another game.
              if (owner >= 0) rebuildOpenRomLevels(owner, romPath);
@@ -2335,7 +2344,7 @@ index c6a8e9c9dc1..065bd24e78f 100644
              // Also rebuild an open Recently Played list in place (it is not sysIdx-tagged;
              // identify it by its first item being a PS3_RECENT row).
              for (auto& lvl : mPs3Stack) {
-@@ -13765,7 +14034,10 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13765,7 +14032,10 @@ void NanoMenu::xmbOptAction(const std::string& act) {
          if (mPs3DlgBoxTex) { glDeleteTextures(1, &mPs3DlgBoxTex); mPs3DlgBoxTex = 0; }
          mPs3DlgFanW = mPs3DlgFanH = 0; mPs3DlgBoxW = mPs3DlgBoxH = 0;
  
@@ -2347,7 +2356,7 @@ index c6a8e9c9dc1..065bd24e78f 100644
          bool rich = se && (!se->box.empty() || !se->fan.empty() ||
                             !se->synopsis.empty() || !se->genre.empty() ||
                             !se->developer.empty() || !se->publisher.empty() ||
-@@ -13773,7 +14045,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13773,7 +14043,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
                             !se->releaseDate.empty());
  
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -2356,7 +2365,7 @@ index c6a8e9c9dc1..065bd24e78f 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear();
          mPs3DlgTitle = name.empty() ? std::string("Information") : name;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14042,7 +14314,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -14042,7 +14312,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              row("Path", dir);
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -2365,7 +2374,7 @@ index c6a8e9c9dc1..065bd24e78f 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false;
          mPs3DlgTitle = title; mPs3DlgBody = body;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14117,7 +14389,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -14117,7 +14387,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              body = b;
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -2374,7 +2383,7 @@ index c6a8e9c9dc1..065bd24e78f 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear();
          mPs3DlgTitle = title; mPs3DlgBody = body;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14138,7 +14410,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -14138,7 +14408,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              body = b;
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -2383,7 +2392,7 @@ index c6a8e9c9dc1..065bd24e78f 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear();
          mPs3DlgTitle = title; mPs3DlgBody = body;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -15178,6 +15450,17 @@ void NanoMenu::startNetWizard() {
+@@ -15178,6 +15448,17 @@ void NanoMenu::startNetWizard() {
      wizEnter(WS_INTRO, 1);
  }
  
