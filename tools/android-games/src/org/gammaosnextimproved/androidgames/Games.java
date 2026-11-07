@@ -46,11 +46,11 @@ final class Games {
 
     private Games() {}
 
-    /** The package a game file names, or null. */
+    /** The package a game file names, "" for an empty file, or null if it can't be read. */
     static String packageOf(File game) {
         try (BufferedReader r = new BufferedReader(new FileReader(game))) {
             String line = r.readLine();
-            return line == null ? null : line.trim();
+            return line == null ? "" : line.trim();
         } catch (IOException e) {
             return null;
         }
@@ -80,13 +80,20 @@ final class Games {
             Log.w(TAG, "can't create " + ROMS);
             return;
         }
+        // A game missing from listed gets a new file, so add none unless every existing file was
+        // read: an unreadable folder or file (storage still mounting) would otherwise duplicate
+        // games. The next sync tries again.
         Set<String> listed = new HashSet<>();
+        boolean complete = true;
         File[] files = ROMS.listFiles();
-        if (files != null) {
+        if (files == null) {
+            complete = false;
+        } else {
             for (File f : files) {
-                if (!f.getName().endsWith(EXT)) continue;
+                if (!f.getName().endsWith(EXT) || f.isDirectory()) continue;   // a folder is never a game file
                 String pkg = packageOf(f);
-                if (pkg == null) continue;
+                if (pkg == null) { complete = false; continue; }
+                if (pkg.isEmpty()) continue;
                 if (!isInstalled(pm, pkg)) {
                     delete(f);
                     continue;
@@ -110,6 +117,10 @@ final class Games {
                 }
                 writeArt(pm, pkg, name);
             }
+        }
+        if (!complete) {
+            Log.w(TAG, "can't read every file in " + ROMS + "; adding no games until the next sync");
+            return;
         }
         int added = 0;
         for (Map.Entry<String, String> g : games.entrySet()) {

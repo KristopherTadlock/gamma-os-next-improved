@@ -1000,10 +1000,10 @@ index 166225b4864..db6fbe36081 100644
    {"Refresh Rate Lock",22,"Lock the display to a fixed refresh rate.","Off",1,nullptr,0},
    {"Display Tweaks",22,"Enable additional display tuning options.","Off",1,nullptr,0},
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3EmuCatalog.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3EmuCatalog.cpp
-index d1b72700c49..07647d4d2ee 100644
+index d1b72700c49..5c09aa6ba4f 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3EmuCatalog.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3EmuCatalog.cpp
-@@ -429,4 +429,83 @@ void NanoMenu::applyEmulatorChoice(int catIdx) {
+@@ -429,4 +429,103 @@ void NanoMenu::applyEmulatorChoice(int catIdx) {
      buildPs3Cats();
  }
  
@@ -1071,9 +1071,29 @@ index d1b72700c49..07647d4d2ee 100644
 +
 +void NanoMenu::setGameEmulator(const std::string& romPath, const GameEmulator* emu) {
 +    if (!mGameEmusLoaded) loadGameEmulators();
-+    if (emu) mGameEmus[gameEmuKey(romPath)] = *emu;
-+    else     mGameEmus.erase(gameEmuKey(romPath));
++    const std::string key = gameEmuKey(romPath);
++    if (emu) mGameEmus[key] = *emu;
++    else     mGameEmus.erase(key);
 +    saveGameEmulators();
++    // Recently Played records the emulator a game was started with, and the overlay launches from
++    // that record: give the game's entry its system's current emulator, then its own, if it has one.
++    bool changed = false;
++    for (auto& re : mXmbRecent) {
++        if (gameEmuKey(re.romPath) != key) continue;
++        for (const XmbSystem& sys : mXmbSystems) {
++            if ((re.romDir.empty() || sys.romDir != re.romDir)
++                && (re.systemName.empty() || sys.shortname != re.systemName)) continue;
++            XmbSystem g;   // just the system's launch fields
++            g.launchType = sys.launchType; g.coreSo = sys.coreSo; g.launchPkg = sys.launchPkg;
++            g.packageName = sys.packageName; g.launchIntent = sys.launchIntent;
++            applyGameEmulator(re.romPath, g);
++            re.coreSo = g.coreSo; re.launchPkg = g.launchPkg; re.launchIntent = g.launchIntent;
++            re.standalone = g.isStandalone();
++            changed = true;
++            break;
++        }
++    }
++    if (changed) saveXmbRecent();
 +}
 +
 +bool NanoMenu::applyGameEmulator(const std::string& romPath, XmbSystem& s) {

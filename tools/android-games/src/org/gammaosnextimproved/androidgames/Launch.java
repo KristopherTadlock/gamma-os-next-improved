@@ -19,7 +19,7 @@ public class Launch extends Activity {
         super.onCreate(state);
         File game = gameFile();
         String pkg = game == null ? null : Games.packageOf(game);
-        if (pkg != null) {
+        if (pkg != null && !pkg.isEmpty()) {
             Games.launch(this, pkg);
         } else {
             Log.w(Games.TAG, "no game in " + getIntent());
