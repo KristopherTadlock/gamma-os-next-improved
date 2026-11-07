@@ -133,7 +133,10 @@ fixes GammaOS Nano bugs:
   take away a favourite imported from ES-DE's game lists.
 
 It also adds a **Settings Theme** setting to the ES-DE theme, so its settings
-screens can have the Minima theme's look while the game menus keep ES-DE's;
+screens can have the Minima theme's look while the game menus keep ES-DE's,
+and an **ES-DE Media Folder** setting (Theme Settings), ES-DE's game media
+directory, so covers, screenshots and manuals can live on the SD card (Nano's
+own scraped art already can: Boxart Scraper → Boxart Folder);
 makes the Anbernic button open Nano's Quick Settings, on the home screen and
 over a running game (pressing it again goes back to the game; **Toolbox → Mode
 Button Opens Quick Settings** gives the button back to games); and makes Nano
