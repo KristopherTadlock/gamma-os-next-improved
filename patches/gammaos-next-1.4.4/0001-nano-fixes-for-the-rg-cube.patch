@@ -812,7 +812,7 @@ index c35725069eb..7af0f0e0524 100644
      mPs3DlgOptions.push_back(trDyn("Cancel")); mPs3DlgSwatch.push_back(-1);
      mPs3DlgOptions.push_back(trDyn(action)); mPs3DlgSwatch.push_back(-1);
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp
-index a0824b29e6e..2958105c892 100644
+index a0824b29e6e..bcf37ac483f 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp
 @@ -2090,32 +2090,52 @@ void NanoMenu::collectionRemoveRom(int colIdx, const std::string& romPath) {
@@ -876,7 +876,7 @@ index a0824b29e6e..2958105c892 100644
  bool NanoMenu::isFavorite(const std::string& romPath) const {
      if (romPath.empty()) return false;
      for (const auto& r : mXmbFavorites) if (r == romPath) return true;
-@@ -2602,6 +2622,96 @@ void NanoMenu::handleRight() {
+@@ -2602,6 +2622,97 @@ void NanoMenu::handleRight() {
      }
  }
  
@@ -884,15 +884,16 @@ index a0824b29e6e..2958105c892 100644
 +// start new + dismiss) instead of the home exit-to-launch path. returnToApps brings the home back
 +// on the Applications list when the app exits.
 +void NanoMenu::launchInstalledApp(const std::string& pkg, bool returnToApps) {
++    if (!mOverlayMode && !isLaunchReady()) { showLaunchBusyToast(); return; }
++    // An app replaces the last game, so the next boot must not resume that game.
++    property_set("persist.gammaos.nano.qr_prepared", "0");
++    property_set("persist.gammaos.nano.qr_core", "");
 +    if (mOverlayMode) { overlayLaunchPackage(pkg); return; }
-+    if (!isLaunchReady()) { showLaunchBusyToast(); return; }
 +    ALOGI("ps3menu: launching app %s", pkg.c_str());
 +    property_set("sys.gammaos.nano.launch_app", pkg.c_str());
 +    property_set("sys.gammaos.nano.launched_pkg", pkg.c_str());
 +    setLaunchRomPath("");
 +    property_set("sys.gammaos.nano.launch_core", "");
-+    property_set("persist.gammaos.nano.qr_prepared", "0");
-+    property_set("persist.gammaos.nano.qr_core", "");
 +    property_set("sys.gammaos.nano.return_apps", returnToApps ? "1" : "0");
 +    armAppLaunchTrigger();
 +    property_set("sys.gammaos.nano.drop_input", "1");
@@ -973,7 +974,7 @@ index a0824b29e6e..2958105c892 100644
  void NanoMenu::launchXmbGame() {
      // Overlay: the home exit-to-launch handshake (set launch_* props + exit so the framework starts
      // the app) does not apply to the resident overlay - running it would make the overlay
-@@ -2613,6 +2723,7 @@ void NanoMenu::launchXmbGame() {
+@@ -2613,6 +2724,7 @@ void NanoMenu::launchXmbGame() {
      // first was a dead no-op: once an app is behind it the home runs as the resident overlay, so
      // launching from the overlay or after returning to the theme did nothing.
      if (mOverlayMode) { overlayLaunchGame(); return; }

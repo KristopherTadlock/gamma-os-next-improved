@@ -11,11 +11,14 @@ import android.graphics.drawable.Drawable;
 import android.util.Log;
 
 import java.io.BufferedReader;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -53,7 +56,7 @@ final class Games {
         PackageManager pm = context.getPackageManager();
         // The art files this app wrote, with the modification time it left them at.
         SharedPreferences ours = context.getSharedPreferences("art", Context.MODE_PRIVATE);
-        if (!ours.getBoolean("adopted", false)) adoptArt(ours);
+        if (!ours.getBoolean("adopted", false)) adoptArt(pm, ours);
         Set<String> exclude = readExclude();
         exclude.add(context.getPackageName());
 
@@ -189,12 +192,7 @@ final class Games {
             File art = new File(folder, name + ".png");
             if (art.exists() && (!isOurs(ours, dir, art) || art.lastModified() >= updated)) continue;
             if (!folder.isDirectory() && !folder.mkdirs()) continue;
-            if (bitmap == null) {
-                int size = 512;
-                bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
-                icon.setBounds(0, 0, size, size);
-                icon.draw(new Canvas(bitmap));
-            }
+            if (bitmap == null) bitmap = render(icon);
             // Written whole to a temporary file first, so a failed write never
             // leaves a broken PNG that looks current.
             File tmp = new File(folder, "." + art.getName() + ".tmp");
@@ -216,23 +214,66 @@ final class Games {
         if (bitmap != null) bitmap.recycle();
     }
 
+    private static Bitmap render(Drawable icon) {
+        int size = 512;
+        Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
+        icon.setBounds(0, 0, size, size);
+        icon.draw(new Canvas(bitmap));
+        return bitmap;
+    }
+
     /**
-     * The first test build kept no record of the art it wrote, so the art of
-     * the games already listed when this version first runs counts as its own.
+     * The first test build kept no record of the art it wrote. Its art is the
+     * game's icon rendered as writeArt renders it, so a file that is exactly
+     * that image counts as this app's; any other file (a scraped or chosen
+     * cover) is left as the user's.
      */
-    private static void adoptArt(SharedPreferences ours) {
+    private static void adoptArt(PackageManager pm, SharedPreferences ours) {
         SharedPreferences.Editor written = ours.edit();
         File[] files = ROMS.listFiles();
         if (files != null) {
             for (File f : files) {
                 if (!f.getName().endsWith(EXT)) continue;
+                String pkg = packageOf(f);
+                byte[] png = pkg == null ? null : iconPng(pm, pkg);
+                if (png == null) continue;
                 for (String dir : ART) {
                     File art = new File(new File(MEDIA, dir), baseName(f) + ".png");
-                    if (art.isFile()) written.putLong(dir + "/" + art.getName(), art.lastModified());
+                    try {
+                        if (art.isFile() && art.length() == png.length
+                                && Arrays.equals(readAll(art, png.length), png)) {
+                            written.putLong(dir + "/" + art.getName(), art.lastModified());
+                        }
+                    } catch (IOException e) {
+                        Log.w(TAG, "can't read " + art);
+                    }
                 }
             }
         }
         written.putBoolean("adopted", true).apply();
+    }
+
+    private static byte[] readAll(File f, int length) throws IOException {
+        byte[] data = new byte[length];
+        try (FileInputStream in = new FileInputStream(f)) {
+            int n = 0;
+            for (int r; n < length && (r = in.read(data, n, length - n)) > 0; ) n += r;
+            return n == length ? data : null;
+        }
+    }
+
+    private static byte[] iconPng(PackageManager pm, String pkg) {
+        Drawable icon;
+        try {
+            icon = pm.getApplicationIcon(pkg);
+        } catch (PackageManager.NameNotFoundException e) {
+            return null;
+        }
+        Bitmap bitmap = render(icon);
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        boolean ok = bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
+        bitmap.recycle();
+        return ok ? out.toByteArray() : null;
     }
 
     private static boolean isOurs(SharedPreferences ours, String dir, File art) {
