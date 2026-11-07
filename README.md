@@ -11,6 +11,7 @@ build, so you can rebuild it yourself.
 
 - Upstream release: [`v.1.2.0-ANBERNICRGCUBE`](https://github.com/TheGammaSqueeze/GammaOSNext/releases/tag/v.1.2.0-ANBERNICRGCUBE)
 - Edition: Full (Android 14 / LineageOS 21, with Google Play)
+- Prebuilt firmware: [v1.0 release](https://github.com/KristopherTadlock/gamma-os-next-improved/releases/tag/v.1.0.0-ANBERNICRGCUBE)
 
 ## Changes from upstream
 
@@ -111,7 +112,7 @@ folders when you sync again.
 
 The bundled ROM pack is replaced with one game per platform, each with an
 explicit grant to redistribute it and no third-party characters or names.
-Each game is installed with its license text. See
+Each game is installed with its license notice. See
 [PACK-IN-GAMES.txt](PACK-IN-GAMES.txt) for the games, their licenses, and the
 upstream games that were removed and why; `mods/bundled-roms.txt` is the list
 the build uses.
@@ -127,7 +128,7 @@ scripts/build.sh
 ```
 
 This downloads the official release, applies each script in `mods/` to its
-system partition, and writes `out/RG_Cube_GammaOS_Next_Improved_v1.2.pac`.
+system partition, and writes `out/RG_Cube_GammaOS_Next_Improved_v1.0.pac`.
 
 The tools it uses:
 

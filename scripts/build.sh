@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds out/RG_Cube_GammaOS_Next_Improved_v1.2.pac from the official release.
+# Builds out/RG_Cube_GammaOS_Next_Improved_v1.0.pac from the official release.
 #
 # Needs: curl, 7zz (or 7z), xz, unzip, e2fsck, resize2fs, setfattr, cc,
 # python3, and sudo for loop-mounting the system image.
@@ -56,8 +56,8 @@ sudo umount "$mnt"
 trap - EXIT
 e2fsck -fn "$system"
 
-echo "writing $OUT/RG_Cube_GammaOS_Next_Improved_v1.2.pac"
-pac="$OUT/RG_Cube_GammaOS_Next_Improved_v1.2.pac"
+echo "writing $OUT/RG_Cube_GammaOS_Next_Improved_v1.0.pac"
+pac="$OUT/RG_Cube_GammaOS_Next_Improved_v1.0.pac"
 python3 -I "$ROOT/scripts/lptool.py" replace "$super" system_a "$system"
 cp "$WORK/pac/$NAME.pac" "$pac.partial"
 python3 -I "$ROOT/scripts/pactool.py" replace "$pac.partial" super_full.img "$super"
