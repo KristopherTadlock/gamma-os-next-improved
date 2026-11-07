@@ -8,7 +8,7 @@ license notice next to it (<game file>.license.txt, or LICENSE.txt in the
 game's folder): the full license text, or for Creative Commons licenses a
 link to it, plus the notices of libraries built into the game.
 
-None of these games has been tested on the RG Cube yet.
+Only Anarch (3DS) has been confirmed to run on the RG Cube so far.
 
 
 GAMES
@@ -35,22 +35,25 @@ Game Boy Advance
   Source: https://github.com/agbrs/agb
 
 Nintendo DS
-  AngunaDS, by Nathan Tolbert (art by Chris Hildenbrand)
-  An action-adventure game with 5 dungeons.
-  License: "Anguna may be distributed freely in binary form, as long as the
-  text of this file is made available with it." Source code is MIT.
-  Source: https://bitbucket.org/gauauu/angunads
-  Note: 2008 homebrew that saves to the SD card; test saving in WatermelonDS.
+  Blimp Chicken DS, by TJ M
+  A 3D arcade flight game: fly a blimp, dodge fighter jets and crash into
+  skyscrapers.
+  License: CC0 1.0. "All in-game art, sound effects, models, and music are
+  original to this project"; the sound effects and 3D models are generated
+  by its code.
+  Source: https://github.com/My-name-is-TJ/blimp-chicken-ds
+  Note: throwing bottles is a flick on the touch screen. The theme is drunk
+  flying. The author says it was made with heavy help from an AI (Claude).
+  Saving needs an SD card image; without one it runs without saving.
 
 GameCube
-  Super Methane Brothers, by Mark Page (GameCube port by carstene1ns)
-  A 100-level action platformer for 1 or 2 players: trap enemies in gas
-  and throw them. Originally a 1993 Amiga game by Apache Software.
-  License: GPL-2.0. The author released it with Apache Software's
-  permission; graphics, music and sound are by the original team.
-  Source: https://github.com/carstene1ns/super-methane-brothers
-  Note: the publisher's permission is documented only in the author's
-  own statement.
+  Vacpyre, by Martin Holtkamp (Solarscape Games)
+  A short first-person puzzle shooter: vacuum up red objects and shoot them
+  back out. An Octave Jam 2026 entry.
+  License: MIT. All assets are by the author.
+  Source: https://github.com/mholtkamp/vacpyre
+  Note: the author says the GameCube version has no music and may crash
+  after several playthroughs.
 
 Wii
   chro.mono, by Thomas Perl (Wii port by Alberto Mardegan)
@@ -205,6 +208,12 @@ PlayStation
 Arcade
   The MAME project's free ROMs may only be distributed from mamedev.org.
   Users can download them there: https://www.mamedev.org/roms/
+
+
+REPLACED AFTER TESTING ON THE RG CUBE
+-------------------------------------
+
+  AngunaDS (nds), Super Methane Brothers (gc)
 
 
 REMOVED FROM GAMMAOS NEXT 1.2

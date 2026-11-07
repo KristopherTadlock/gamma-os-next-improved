@@ -15,7 +15,7 @@
 #       Create an empty ROMs folder (for platforms without a pack-in game).
 #
 # Every game ships with its license notice; GPL games also get a source link.
-# None of these have been run on the device yet.
+# Only Anarch (3DS) has been confirmed to run on the device so far.
 
 
 # --- Game Boy (sameboy): Big2Small, Matthew D. Steele. GPL-3.0; art and music derived from CC0/public domain.
@@ -27,11 +27,11 @@ upstream  gbc/Tobu Tobu Girl Deluxe.gbc  license=https://github.com/SimonLarsen/
 # --- Game Boy Advance (mgba): The Hat Chooses the Wizard, Corwin Kuiper and Gwilym Inzani. MPL-2.0; music by Otto Halmén, CC BY 3.0.
 add  gba/The Hat Chooses the Wizard.gba  url=https://github.com/agbrs/agb/releases/download/v0.25.0/examples.zip  sha256=c417f2a110026b3553a9f0f26090b4bbbceeeac1e0c2ebb0f9d786fe2221021b  member=examples/the-hat-chooses-the-wizard.gba  license=https://github.com/agbrs/agb
 
-# --- Nintendo DS (WatermelonDS): AngunaDS, Nathan Tolbert and Chris Hildenbrand. "May be distributed freely in binary form" with its readme; source MIT.
-add  nds/AngunaDS.nds  url=https://bitbucket.org/gauauu/angunads/downloads/angunaDS.zip  sha256=90617d4d3d2d363b08f99c369f4fa0691fae98917d5928fc4e3ac849b6d69d52  member=anguna.nds  license=https://bitbucket.org/gauauu/angunads
+# --- Nintendo DS (WatermelonDS): Blimp Chicken DS, TJ M. CC0 1.0; all art, sound, models and music original to the project.
+add  nds/Blimp Chicken DS.nds  url=https://github.com/My-name-is-TJ/blimp-chicken-ds/releases/download/NdsFile/BlimpChicken.nds  sha256=aab097308bcdb018a2e2516ec5d668aa5aeb7ff69d12ddb6bdf57e2506a1814e  license=https://github.com/My-name-is-TJ/blimp-chicken-ds
 
-# --- GameCube (Dolphin): Super Methane Brothers, Mark Page (GameCube port by carstene1ns). GPL-2.0, released with Apache Software's permission.
-add  gc/Super Methane Brothers.dol  url=https://github.com/carstene1ns/super-methane-brothers/releases/download/release_1/super-methane-brothers_gamecube_r1.zip  sha256=cc6ec6c579338436580e8228bbf90b60055285a28498d47b91f77938ffc2fa7c  member=super-methane-brothers/methane.dol  license=https://github.com/carstene1ns/super-methane-brothers
+# --- GameCube (Dolphin): Vacpyre, Martin Holtkamp. MIT; all assets by the author.
+add  gc/Vacpyre.dol  url=https://github.com/mholtkamp/vacpyre/releases/download/version-1/Vacpyre_GameCube.dol  sha256=5835a8ae54fa485a73427dd7c0d700708c8e07edfe429098cc282fe43f466798  license=https://github.com/mholtkamp/vacpyre
 
 # --- Wii (Dolphin): chro.mono, Thomas Perl (Wii port by Alberto Mardegan). GPL-2.0+; music CC0, sound CC BY 3.0/CC0, font OFL.
 add  wii/chro.mono.dol  url=https://github.com/mardy/chromono/releases/download/1.1.1-git3/chromono.zip  sha256=28b90fb5918ba6a1fb1f76d90f1117823028a867d004373198f0dabf82956f9f  member=chromono/boot.dol  license=https://github.com/mardy/chromono
