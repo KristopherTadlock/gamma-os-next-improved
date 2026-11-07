@@ -5,9 +5,12 @@
   pactool.py extract PAC FILE OUT
   pactool.py replace PAC FILE IMAGE
   pactool.py fixcrc PAC
+  pactool.py setinfo PAC VERSION ALIAS
 
 `replace` overwrites FILE's data and requires IMAGE to be exactly the same
 size, so no offsets change. Run `fixcrc` afterwards to update the data CRC.
+`setinfo` sets the product version and alias that flash tools show, and
+updates the header CRC.
 Set CRC16ARC to the path of the compiled tools/crc16arc.c helper.
 """
 
@@ -18,7 +21,11 @@ import sys
 
 HEADER_SIZE = 2124
 ENTRY_SIZE = 2580
+CRC1_OFFSET = HEADER_SIZE - 4
 CRC2_OFFSET = HEADER_SIZE - 2
+# (offset, length in UTF-16 characters) of header strings
+VERSION_FIELD = (564, 256)
+ALIAS_FIELD = (1104, 100)
 CHUNK = 64 << 20
 
 
@@ -70,7 +77,12 @@ def copy(src, dst, length):
 
 
 def cmd_list(f):
-    for e in read_entries(f):
+    entries = read_entries(f)
+    f.seek(0)
+    header = f.read(HEADER_SIZE)
+    for label, (offset, length) in (("version", VERSION_FIELD), ("alias", ALIAS_FIELD)):
+        print(f"{label}: {utf16(header[offset:offset + length * 2])}")
+    for e in entries:
         print(f"{e['id']:22s} {e['file']:32s} {e['size']:>12d}")
 
 
@@ -91,6 +103,29 @@ def cmd_replace(f, name, image_path):
         copy(img, f, size)
 
 
+def crc16arc(data):
+    crc = 0
+    for b in data:
+        crc ^= b
+        for _ in range(8):
+            crc = (crc >> 1) ^ 0xA001 if crc & 1 else crc >> 1
+    return crc
+
+
+def cmd_setinfo(f, version, alias):
+    read_entries(f)
+    f.seek(0)
+    header = bytearray(f.read(HEADER_SIZE))
+    for (offset, length), text in ((VERSION_FIELD, version), (ALIAS_FIELD, alias)):
+        raw = text.encode("utf-16le")
+        if len(raw) >= length * 2:
+            sys.exit(f"{text!r} is longer than {length - 1} characters")
+        header[offset:offset + length * 2] = raw.ljust(length * 2, b"\0")
+    struct.pack_into("<H", header, CRC1_OFFSET, crc16arc(header[:CRC1_OFFSET]))
+    f.seek(0)
+    f.write(header[:CRC2_OFFSET])
+
+
 def cmd_fixcrc(f):
     tool = os.environ.get("CRC16ARC", "crc16arc")
     out = subprocess.run(
@@ -106,12 +141,13 @@ def main():
     if len(sys.argv) < 3:
         sys.exit(__doc__)
     cmd, pac_path, *args = sys.argv[1:]
-    mode = "r+b" if cmd in ("replace", "fixcrc") else "rb"
+    mode = "r+b" if cmd in ("replace", "fixcrc", "setinfo") else "rb"
     commands = {
         "list": cmd_list,
         "extract": cmd_extract,
         "replace": cmd_replace,
         "fixcrc": cmd_fixcrc,
+        "setinfo": cmd_setinfo,
     }
     with open(pac_path, mode) as f:
         commands[cmd](f, *args)

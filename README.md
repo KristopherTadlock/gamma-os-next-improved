@@ -133,7 +133,8 @@ system partition, and writes `out/RG_Cube_GammaOS_Next_Improved_v1.0.pac`.
 The tools it uses:
 
 - `scripts/pactool.py` lists, extracts, and replaces images in the Unisoc
-  `.pac` firmware package, and recomputes its CRC.
+  `.pac` firmware package, recomputes its CRCs, and sets the product version
+  and alias that flash tools such as ResearchDownload show.
 - `scripts/lptool.py` lists, extracts, and replaces logical partitions
   (`system_a`, `vendor_a`, ...) in the raw `super_full.img`.
 - `tools/crc16arc.c` is the CRC-16/ARC helper `pactool.py fixcrc` uses.

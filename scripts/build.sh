@@ -62,5 +62,6 @@ python3 -I "$ROOT/scripts/lptool.py" replace "$super" system_a "$system"
 cp "$WORK/pac/$NAME.pac" "$pac.partial"
 python3 -I "$ROOT/scripts/pactool.py" replace "$pac.partial" super_full.img "$super"
 python3 -I "$ROOT/scripts/pactool.py" fixcrc "$pac.partial"
+python3 -I "$ROOT/scripts/pactool.py" setinfo "$pac.partial" Improved_v1.0 RG_Cube_GammaOS_Next_Improved
 mv "$pac.partial" "$pac"
 rm -f "$super" "$system"
