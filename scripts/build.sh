@@ -25,7 +25,11 @@ if [[ -n "${SYSTEM_IMG:-}" ]]; then
 else
   VERSION="1.0"
 fi
-export IMPROVED_VERSION="GammaOS_Next_Improved_v$VERSION"
+# Firmware with the ES-DE app gets its own name, so it never replaces the
+# regular build.
+VARIANT=""
+[[ -n "${ESDE_APK:-}" ]] && VARIANT="_ES-DE"
+export IMPROVED_VERSION="GammaOS_Next_Improved_v$VERSION$VARIANT"
 SEVENZIP="$(command -v 7zz || command -v 7z || true)"
 [[ -n "$SEVENZIP" ]] || { echo "7-Zip (7zz or 7z) is required" >&2; exit 1; }
 if [[ -n "${ESDE_APK:-}" ]]; then
@@ -83,12 +87,12 @@ sudo umount "$mnt"
 trap - EXIT
 e2fsck -fn "$system"
 
-pac="$OUT/RG_Cube_GammaOS_Next_Improved_v$VERSION.pac"
+pac="$OUT/RG_Cube_GammaOS_Next_Improved_v$VERSION$VARIANT.pac"
 echo "writing $pac"
 python3 -I "$ROOT/scripts/lptool.py" replace "$super" system_a "$system"
 cp "$WORK/pac/$NAME.pac" "$pac.partial"
 python3 -I "$ROOT/scripts/pactool.py" replace "$pac.partial" super_full.img "$super"
 python3 -I "$ROOT/scripts/pactool.py" fixcrc "$pac.partial"
-python3 -I "$ROOT/scripts/pactool.py" setinfo "$pac.partial" "Improved_v$VERSION" RG_Cube_GammaOS_Next_Improved
+python3 -I "$ROOT/scripts/pactool.py" setinfo "$pac.partial" "Improved_v$VERSION$VARIANT" RG_Cube_GammaOS_Next_Improved
 mv "$pac.partial" "$pac"
 rm -f "$super" "$system"
