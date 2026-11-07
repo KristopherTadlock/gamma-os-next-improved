@@ -1,0 +1,291 @@
+# Box art, screenshots and details for the pack-in games in bundled-roms.txt,
+# installed with them on first boot: ES-DE game lists and media in /sdcard/ES-DE
+# (the ES-DE theme and ES-DE read them), and on the 1.4.4 base, Nano's box art
+# index for its other themes. A scrape with Overwrite on replaces them.
+#
+#   [<system>/<file>]       a game in bundled-roms.txt
+#   title = ...             developer = ...     publisher = ...
+#   released = YYYY or YYYY-MM-DD (when the game first came out)
+#   genre = ...             players = 1, 1-2, ...
+#   desc = one line, written for this list
+#   cover, screenshot, titlescreen, marquee = an image, either
+#       url=<image>  sha256=<of the image>  license=<url>
+#       file=<image in pack-in-art/>  license=<url>
+#
+# Downloaded images come only from each game's own project (its repository,
+# release page or author's site), under the game's license; none from game
+# databases, which don't allow redistributing their media, and none with other
+# companies' marks or a third party's art. The rest are made from the games
+# themselves (tools/pack-in-art): screenshots and title screens captured from
+# the bundled ROMs with capture.py, and box art and marquees drawn by
+# make_boxes.py in the style of each console's boxes, around the game's own
+# title screen, art or screenshot, with no console or publisher logos.
+
+[gb/Big2Small.gb]
+title = Big2Small
+developer = Matthew D. Steele
+publisher = Matthew D. Steele
+released = 2021-10-22
+genre = Puzzle
+players = 1
+desc = Guide an elephant, a goat and a mouse across each level so every animal reaches its favourite food. Each animal deals with rivers, pipes, shrubs and mouse holes in its own way, and the 40 levels are solved by combining their abilities.
+cover = file=gb/Big2Small - box.png  license=https://github.com/mdsteele/big2small
+screenshot = url=https://raw.githubusercontent.com/mdsteele/big2small/01d1eaa8c87edd29882ef5b8243cff14cd4338f9/images/screenshot1.png  sha256=c09b98501caf1c9576739e702abcdc453ad20b4286b0a9068cf9cfc6d8445ad8  license=https://github.com/mdsteele/big2small
+marquee = file=gb/Big2Small - marquee.png  license=https://github.com/mdsteele/big2small
+
+[gbc/Tobu Tobu Girl Deluxe.gbc]
+title = Tobu Tobu Girl Deluxe
+developer = Tangram Games
+publisher = Tangram Games
+released = 2019-10-28
+genre = Platformer
+players = 1
+desc = A vertical arcade platformer: a girl bounces off enemies higher and higher into the sky to catch her runaway cat. Mid-air dashes and stomps steer her between bounces, and each run is ranked. A remaster of Tobu Tobu Girl for the Game Boy Color.
+cover = file=gbc/Tobu Tobu Girl Deluxe - box.png  license=https://github.com/SimonLarsen/tobutobugirl-dx/blob/4985d4d282aa43229f250ffa3b0d86998ebd55d3/README.md
+screenshot = file=gbc/Tobu Tobu Girl Deluxe - screenshot.png  license=https://github.com/SimonLarsen/tobutobugirl-dx/blob/4985d4d282aa43229f250ffa3b0d86998ebd55d3/README.md
+titlescreen = file=gbc/Tobu Tobu Girl Deluxe - title.png  license=https://github.com/SimonLarsen/tobutobugirl-dx/blob/4985d4d282aa43229f250ffa3b0d86998ebd55d3/README.md
+marquee = file=gbc/Tobu Tobu Girl Deluxe - marquee.png  license=https://github.com/SimonLarsen/tobutobugirl-dx/blob/4985d4d282aa43229f250ffa3b0d86998ebd55d3/README.md
+
+[gba/The Hat Chooses the Wizard.gba]
+title = The Hat Chooses the Wizard
+developer = Corwin Kuiper, Gwilym Inzani
+publisher = Corwin Kuiper, Gwilym Inzani
+released = 2021
+genre = Platformer
+players = 1
+desc = A wizard hunts for his missing staff with the help of a magic hat. Throw the hat, call it back, and fly towards it to cross gaps and reach high ledges past slimes and snails. Made for the GMTK Game Jam 2021.
+cover = file=gba/The Hat Chooses the Wizard - box.png  license=https://github.com/agbrs/agb
+screenshot = url=https://raw.githubusercontent.com/agbrs/agb/1c2842c954fe1dd40a4b0ce0fbecf4ab7157745a/website/agb/src/app/showcase/data/tapir/hatwiz/the-hat-chooses-the-wizard-0.png  sha256=f7f19899bc33748f1158b3593cf7858f9f969ce27893c88027a1c8368fc9be2a  license=https://github.com/agbrs/agb
+titlescreen = url=https://raw.githubusercontent.com/agbrs/agb/1c2842c954fe1dd40a4b0ce0fbecf4ab7157745a/examples/the-hat-chooses-the-wizard/gfx/splash.png  sha256=d145cb56a1ebb8bf72ba16d0a72911e1f308c18e206107736060cec89e9a7711  license=https://github.com/agbrs/agb
+marquee = file=gba/The Hat Chooses the Wizard - marquee.png  license=https://github.com/agbrs/agb
+
+[nds/Blimp Chicken DS.nds]
+title = Blimp Chicken DS
+developer = TJ M.
+publisher = TJ M.
+released = 2026-07-12
+genre = Action
+players = 1
+desc = Fly an airship over a city, ramming skyscrapers for points while dodging fighter jets. Flick bottles with the stylus to bring the jets down, and paint your own emblem in the hangar. Versus mode needs several DS consoles.
+cover = file=nds/Blimp Chicken DS - box.png  license=https://github.com/My-name-is-TJ/blimp-chicken-ds
+screenshot = file=nds/Blimp Chicken DS - screenshot.png  license=https://github.com/My-name-is-TJ/blimp-chicken-ds
+titlescreen = file=nds/Blimp Chicken DS - title.png  license=https://github.com/My-name-is-TJ/blimp-chicken-ds
+marquee = file=nds/Blimp Chicken DS - marquee.png  license=https://github.com/My-name-is-TJ/blimp-chicken-ds
+
+[gc/Vacpyre.dol]
+title = Vacpyre
+developer = Martin Holtkamp
+publisher = Solarscape Games
+released = 2026-02-04
+genre = Puzzle Shooter
+players = 1
+desc = A first-person puzzle shooter made for Octave Jam 2026. Your vacuum sucks up red objects and fires them back out, to solve puzzles on the way from checkpoint to checkpoint. The GameCube version has no music.
+cover = file=gc/Vacpyre - box.png  license=https://github.com/mholtkamp/vacpyre
+marquee = file=gc/Vacpyre - marquee.png  license=https://github.com/mholtkamp/vacpyre
+
+[wii/chro.mono.dol]
+title = chro.mono
+developer = Thomas Perl (Wii port by Alberto Mardegan)
+publisher = Thomas Perl
+released = 2013
+genre = Puzzle
+players = 1
+desc = A physics puzzle game about coloured circles. Drag fully coloured spheres into half-coloured ones to pass on the right colour, working around chains, switches and walls as the levels grow more involved.
+cover = file=wii/chro.mono - box.png  license=https://github.com/mardy/chromono
+marquee = file=wii/chro.mono - marquee.png  license=https://github.com/mardy/chromono
+
+[n3ds/Anarch.3dsx]
+title = Anarch
+developer = drummyfish (3DS port by blitzdoughnuts)
+publisher = drummyfish
+released = 2020-11-21
+genre = Shooter
+players = 1
+desc = A small 90s-style first-person shooter set in a ruined city overrun by robots. Fight through each level with a growing arsenal, collecting access cards, ammo and health on the way to the exit. A 3DS port of the public-domain original.
+cover = file=n3ds/Anarch - box.png  license=https://gitlab.com/drummyfish/anarch
+screenshot = url=https://gitlab.com/drummyfish/anarch/-/raw/6f90562161200682459e772f1dacb747f23c5f95/media/screenshot1.png  sha256=4f7d7331f12ac123914f613c41a0e99241a8968be4da18cb003e2c46a7f2c252  license=https://gitlab.com/drummyfish/anarch
+marquee = file=n3ds/Anarch - marquee.png  license=https://gitlab.com/drummyfish/anarch
+
+[nes/Lala the Magical.nes]
+title = Lala the Magical
+developer = The Mojon Twins
+publisher = The Mojon Twins
+released = 2016
+genre = Platformer
+players = 1
+desc = Lala, a magician's apprentice, wants to borrow her absent teacher's locked-away wand. Search ancient ruins for a key and eight potions, then a sky palace for three gems, conjuring short-lived platforms to cross gaps, all before nightfall.
+cover = file=nes/Lala the Magical - box.png  license=https://www.mojontwins.com/licencia-mt/
+screenshot = url=https://www.mojontwins.com/wp-content/uploads/2016/11/lala-gnrom-20161116a-rc1-201611291338032.png  sha256=092745d7ac401d20b75d92ec3246f5583778164881a5c79aea767db09bd41fa5  license=https://www.mojontwins.com/licencia-mt/
+titlescreen = url=https://www.mojontwins.com/wp-content/uploads/2016/11/lala-gnrom-20161116a-rc1-201611291114173.png  sha256=8bf91c6e2b9836304e599a086535cc8e6eccf4b988427381ec7e87cb7b0fb1a6  license=https://www.mojontwins.com/licencia-mt/
+marquee = file=nes/Lala the Magical - marquee.png  license=https://www.mojontwins.com/licencia-mt/
+
+[snes/Super Sudoku.sfc]
+title = Super Sudoku
+developer = Raphaël Assenat
+publisher = Raphaël Assenat
+released = 2019
+genre = Puzzle
+players = 1
+desc = Sudoku for the Super Nintendo, with 400 puzzles over four difficulty levels. It can give hints, flag mistakes and solve a puzzle for you.
+cover = file=snes/Super Sudoku - box.png  license=https://github.com/raphnet/super_sudoku/blob/227c9ff570c80f5cf58d0d7b62fe1a99e6f3844b/LICENSE
+screenshot = file=snes/Super Sudoku - screenshot.png  license=https://github.com/raphnet/super_sudoku/blob/227c9ff570c80f5cf58d0d7b62fe1a99e6f3844b/LICENSE
+titlescreen = file=snes/Super Sudoku - title.png  license=https://github.com/raphnet/super_sudoku/blob/227c9ff570c80f5cf58d0d7b62fe1a99e6f3844b/LICENSE
+marquee = file=snes/Super Sudoku - marquee.png  license=https://github.com/raphnet/super_sudoku/blob/227c9ff570c80f5cf58d0d7b62fe1a99e6f3844b/LICENSE
+
+[virtualboy/VUEngine Platformer Demo.vb]
+title = VUEngine Platformer Demo
+developer = VUEngine (Jorge Eremiev, Christian Radke)
+publisher = VUEngine
+released = 2018-09-05
+genre = Platformer
+players = 1
+desc = A side-scrolling platformer made to show off the VUEngine framework for the Virtual Boy. Run and jump through stereoscopic levels with layered backgrounds, collecting coins and opening doors.
+cover = file=virtualboy/VUEngine Platformer Demo - box.png  license=https://github.com/VUEngine/VUEngine-Platformer-Demo/blob/master/LICENSE
+screenshot = url=https://raw.githubusercontent.com/VUEngine/VUEngine-Platformer-Demo/7c2243571e791dead2d849610ad306ed4640d7e9/screenshot.png  sha256=8ea27424835306fc09dc4d26dc06c32f53c82d549319e6ba3b4726f44c93b8f3  license=https://github.com/VUEngine/VUEngine-Platformer-Demo/blob/master/LICENSE
+marquee = url=https://raw.githubusercontent.com/VUEngine/VUEngine-Platformer-Demo/7c2243571e791dead2d849610ad306ed4640d7e9/assets/images/Stages/TitleScreenStage/Other/Preview/PlatformerDemoLogo.png  sha256=88af501595347287775b1090b00fd26b129f703081f0ac185e409117071145a7  license=https://github.com/VUEngine/VUEngine-Platformer-Demo/blob/master/LICENSE
+
+[mastersystem/Gravity Beam Master Gaiden.sms]
+title = Gravity Beam: Master Gaiden
+developer = Mathew Carr
+publisher = Mathew Carr
+released = 2013-04-11
+genre = Action
+players = 1
+desc = Rotate and thrust a small ship through the caverns of Mars, latch your tractor beam onto a fragile bomb, and tow it out to space without knocking it against the walls. An entry in the 2013 SMS Power! coding competition.
+cover = file=mastersystem/Gravity Beam Master Gaiden - box.png  license=https://www.smspower.org/Homebrew/GravityBeamMasterGaiden-SMS
+screenshot = url=https://www.smspower.org/uploads/Homebrew/GravityBeamMasterGaiden-SMS-2.png  sha256=144461fe789560290c6e6ad91f00dca960e35964a9155c53e86cb61cec9b4225  license=https://www.smspower.org/Homebrew/GravityBeamMasterGaiden-SMS
+titlescreen = url=https://www.smspower.org/uploads/Homebrew/GravityBeamMasterGaiden-SMS-Title.png  sha256=5af3789a13a7afce57386a91ac7328a595193b5bdb4a002ae827723b8391a0fe  license=https://www.smspower.org/Homebrew/GravityBeamMasterGaiden-SMS
+marquee = file=mastersystem/Gravity Beam Master Gaiden - marquee.png  license=https://www.smspower.org/Homebrew/GravityBeamMasterGaiden-SMS
+
+[gamegear/Waternet.gg]
+title = Waternet
+developer = Willems Davy
+publisher = Willems Davy
+released = 2022-04-11
+genre = Puzzle
+players = 1
+desc = Connect every pipe on the board so the water reaches them all. Rotate single pipes, slide whole rows and columns, or both, over 375 levels in five difficulties, plus random levels.
+cover = file=gamegear/Waternet - box.png  license=https://github.com/joyrider3774/waternet
+screenshot = file=gamegear/Waternet - screenshot.png  license=https://github.com/joyrider3774/waternet
+titlescreen = file=gamegear/Waternet - title.png  license=https://github.com/joyrider3774/waternet
+marquee = file=gamegear/Waternet - marquee.png  license=https://github.com/joyrider3774/waternet
+
+[genesis/Miniplanets REMIX Ver.bin]
+title = Miniplanets REMIX
+developer = Javier Degirolmo (Sik)
+publisher = Javier Degirolmo (Sik)
+released = 2022-06-15
+genre = Platformer
+players = 1
+desc = A platformer on tiny spherical planets whose paths wrap around to the other side. As Qisha, collect keys and crystals across the planelagos to free her children, who have been turned to stone. The REMIX adds more detailed planets, reworked music and a secret planelago.
+cover = file=genesis/Miniplanets REMIX Ver - box.png  license=https://github.com/sikthehedgehog/miniplanets
+screenshot = file=genesis/Miniplanets REMIX Ver - screenshot.png  license=https://github.com/sikthehedgehog/miniplanets
+titlescreen = file=genesis/Miniplanets REMIX Ver - title.png  license=https://github.com/sikthehedgehog/miniplanets
+marquee = file=genesis/Miniplanets REMIX Ver - marquee.png  license=https://github.com/sikthehedgehog/miniplanets
+
+[sega32x/Dungeons of Noudar 3D.32x]
+title = Dungeons of Noudar 3D
+developer = Daniel Monteiro (32X port by Haroldo O. Pinheiro)
+publisher = Haroldo O. Pinheiro
+released = 2026
+genre = Dungeon Crawler
+players = 1
+desc = A turn-based first-person dungeon crawler, ported to the 32X from the MS-DOS original. Move cell by cell through eight levels, fighting demons with a sword and crossbow and using holy relics.
+cover = file=sega32x/Dungeons of Noudar 3D - box.png  license=https://github.com/haroldo-ok/noudar-32x
+screenshot = url=https://raw.githubusercontent.com/haroldo-ok/noudar-32x/792ee829cf55bcbcc284851be65b41c1961f1b48/screenshot.png  sha256=c3efe9145fb6a0a188b9a5901fb91e6d72da168e7fa504091291a5b3c2c259a6  license=https://github.com/haroldo-ok/noudar-32x
+marquee = file=sega32x/Dungeons of Noudar 3D - marquee.png  license=https://github.com/haroldo-ok/noudar-32x
+
+[dreamcast/Demon Bazooka.cdi]
+title = Demon Bazooka
+developer = Rich Stokes
+publisher = Rich Stokes
+released = 2026
+genre = Shooter
+players = 1
+desc = A 3D arena shooter: a lone fighter in a circular hellscape fires splash-damage rockets at waves of demons, with a boss every fifth wave. Dash out of harm's way and fill a meter for a screen-clearing barrage. Every graphic and sound is generated by code.
+cover = file=dreamcast/Demon Bazooka - box.png  license=https://github.com/richstokes/dreamcast-homebrew
+titlescreen = url=https://raw.githubusercontent.com/richstokes/dreamcast-homebrew/0fe12dbad08be321d3ac224f1d7094f34f9ca622/docs/screenshots/demon-bazooka.png  sha256=db9e8f44bb7e55c22c7d18591b697f515f1ff92a086179a23c88341c02c76b79  license=https://github.com/richstokes/dreamcast-homebrew
+marquee = file=dreamcast/Demon Bazooka - marquee.png  license=https://github.com/richstokes/dreamcast-homebrew
+
+[pcengine/Worm.pce]
+title = Worm
+developer = Andy McCall
+publisher = Andy McCall
+released = 2026
+genre = Action
+players = 1
+desc = Steer a growing worm around a walled field, eating flowers to make it longer. Spiders and collisions cost lives, and the game ends when all three are gone.
+cover = file=pcengine/Worm - box.png  license=https://github.com/andymccall/worm
+screenshot = file=pcengine/Worm - screenshot.png  license=https://github.com/andymccall/worm
+titlescreen = file=pcengine/Worm - title.png  license=https://github.com/andymccall/worm
+marquee = file=pcengine/Worm - marquee.png  license=https://github.com/andymccall/worm
+
+[ngpc/Stargunner.ngc]
+title = Stargunner
+developer = Tixul
+publisher = Tixul
+released = 2026
+genre = Shooter
+players = 1
+desc = A horizontally scrolling space shooter made as a demo of the NGPCraft engine. Fly through stages of enemy ships and asteroids, picking up weapon power-ups; the third stage repeats endlessly.
+cover = file=ngpc/Stargunner - box.png  license=https://github.com/Tixul/Stargunner/blob/main/LICENSE
+marquee = file=ngpc/Stargunner - marquee.png  license=https://github.com/Tixul/Stargunner/blob/main/LICENSE
+
+[psp/KleleAtoms/EBOOT.PBP]
+title = KłełeAtoms
+developer = Nightwolf-47
+publisher = Nightwolf-47
+released = 2025-12-23
+genre = Strategy
+players = 1-4
+desc = A turn-based chain-reaction game for two to four players, human or computer. Place atoms on a grid; a cell that holds too many bursts into its neighbours, taking over their atoms and possibly setting off more bursts. The last player with atoms on the board wins.
+cover = file=psp/EBOOT - box.png  license=https://github.com/Nightwolf-47/KleleAtoms-PSP
+screenshot = url=https://github.com/user-attachments/assets/152ed69d-4557-4146-a1e9-30ce85e04a28  sha256=d76e03fd71eb03a1bc53d40c8514b7faa119e383446bd7d520dff0e43603b608  license=https://github.com/Nightwolf-47/KleleAtoms-PSP
+marquee = file=psp/EBOOT - marquee.png  license=https://github.com/Nightwolf-47/KleleAtoms-PSP
+
+[pico8/Cherry Bomb.p8.png]
+title = Cherry Bomb
+developer = Krystian Majewski (music by Sebastian Haßler)
+publisher = Krystian Majewski
+released = 2022-08-21
+genre = Shooter
+players = 1
+desc = A short vertical shoot-'em-up in the style of Galaga, made for the Lazy Devs Academy tutorials. Fight through nine waves of diving aliens; cherries from fallen enemies charge a bomb that clears enemy bullets.
+screenshot = file=pico8/Cherry Bomb.p8 - screenshot.png  license=https://www.lexaloffle.com/bbs/?pid=cherrybomb
+titlescreen = file=pico8/Cherry Bomb.p8 - title.png  license=https://www.lexaloffle.com/bbs/?pid=cherrybomb
+
+[atari2600/2048 2600.bin]
+title = 2048 2600
+developer = Carlos Duarte do Nascimento (Chester)
+publisher = Carlos Duarte do Nascimento (Chester)
+released = 2014-04-08
+genre = Puzzle
+players = 1-2
+desc = The sliding-tile puzzle 2048 on the Atari 2600. Every move slides all the tiles on the 4x4 board, and matching numbers merge into their sum; aim for a 2048 tile. Two players can share one board.
+cover = url=https://raw.githubusercontent.com/chesterbr/2048-2600/a55040984eabc0d0b35e90876fdbe5d801296c36/cart-main.jpg  sha256=274dd9a90869f06180d2e8da242bacb56c3c8373236c0081ca1ed0e9622d2333  license=https://github.com/chesterbr/2048-2600/blob/main/LICENSE
+screenshot = url=https://raw.githubusercontent.com/chesterbr/chesterbr.github.io/8759f2b315ab5050eeadb1e460cdfbdb5bdece4e/img/2014/03/2048-2600.png  sha256=f7cf3336b1b2d2f04e45b19fe7563087cc2ab69ba77f8f0de28cad3b5ed9fde6  license=https://github.com/chesterbr/2048-2600/blob/main/LICENSE
+
+[atari5200/Curse of the Lost Miner.bin]
+title = Curse of the Lost Miner
+developer = BAHA Software
+publisher = BAHA Software
+released = 2015
+genre = Platformer
+players = 1
+desc = A single-screen platformer: collect every diamond in a series of caves with carefully timed high and long jumps, past crumbling rocks, ladders and deadly hazards. This version has an extra control scheme made for the 5200 controller.
+cover = file=atari5200/Curse of the Lost Miner - box.png  license=https://github.com/baktragh/culomin_sources/blob/master/culomin5200/main.c
+screenshot = file=atari5200/Curse of the Lost Miner - screenshot.png  license=https://github.com/baktragh/culomin_sources/blob/master/culomin5200/main.c
+marquee = file=atari5200/Curse of the Lost Miner - marquee.png  license=https://github.com/baktragh/culomin_sources/blob/master/culomin5200/main.c
+
+[atari7800/robotfindskitten.a78]
+title = robotfindskitten
+developer = Thomas Mathys
+publisher = Thomas Mathys
+released = 2005-06-19
+genre = Exploration
+players = 1
+desc = A robot searches a screen of random symbols for a kitten. Touch a symbol to read a short, often absurd description of an object, until one of them turns out to be kitten.
+cover = file=atari7800/robotfindskitten - box.png  license=https://robotfindskitten.org/download/Atari7800/rfk7800-7.502.20050619-src.tar.gz
+screenshot = url=https://sourceforge.net/p/rfk7800/screenshot/32622.jpg  sha256=400e13fbbd73b9ecbe324e3684018dd309368eeb9ce92af8422725ba966bad6a  license=https://robotfindskitten.org/download/Atari7800/rfk7800-7.502.20050619-src.tar.gz
+titlescreen = url=https://sourceforge.net/p/rfk7800/screenshot/32624.jpg  sha256=86f02fdc61bd4ba4177ef10a592fa145fd7d3cba6f6bedbc1e28b79af66e3a1c  license=https://robotfindskitten.org/download/Atari7800/rfk7800-7.502.20050619-src.tar.gz
+marquee = file=atari7800/robotfindskitten - marquee.png  license=https://robotfindskitten.org/download/Atari7800/rfk7800-7.502.20050619-src.tar.gz

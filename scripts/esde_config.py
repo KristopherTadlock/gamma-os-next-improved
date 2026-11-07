@@ -5,7 +5,8 @@
 
 OUT_DIR gets ES-DE/settings/es_settings.xml, ES-DE/gamelists/<system>/
 gamelist.xml for every system with a pack-in game or an emulator from
-EMULATORS_TXT, and ROMs/scummvm/<game>.scummvm for each Daijisho ScummVM
+EMULATORS_TXT (keeping the details of the games in the ROM pack's own game
+lists), and ROMs/scummvm/<game>.scummvm for each Daijisho ScummVM
 template (.dpt) in the ROM pack. Fails if an emulator label isn't one of the
 system's ES-DE commands or names a RetroArch core CORES_TXT doesn't ship, and
 if a system's ES-DE default needs a core that isn't shipped while another
@@ -20,6 +21,7 @@ import xml.etree.ElementTree as ET
 from xml.sax.saxutils import escape
 
 ROMS = "sdcard/ROMs/"
+GAMELISTS = "sdcard/ES-DE/gamelists/"
 SETTINGS = [
     ("string", "ROMDirectory", "/storage/emulated/0/ROMs"),
     ("bool", "InputTouchOverlay", "false"),
@@ -101,16 +103,32 @@ def scan_roms(roms_tar, systems):
     return games, templates
 
 
-def write_gamelist(path, label, entries):
+def pack_details(roms_tar):
+    """Returns {(system, path): {tag: text}} from the game lists in the ROM pack."""
+    details = {}
+    with tarfile.open(roms_tar) as tar:
+        for m in tar:
+            if not (m.isfile() and m.name.startswith(GAMELISTS) and m.name.endswith("/gamelist.xml")):
+                continue
+            system = m.name[len(GAMELISTS):].split("/")[0]
+            for game in ET.fromstring(tar.extractfile(m).read()).iter("game"):
+                details[(system, game.findtext("path"))] = {c.tag: c.text for c in game if c.tag != "path"}
+    return details
+
+
+def write_gamelist(path, label, entries, details):
     lines = ['<?xml version="1.0"?>']
     if label:
         lines += ["<alternativeEmulator>", f"\t<label>{escape(label)}</label>", "</alternativeEmulator>"]
     lines.append("<gameList>")
     for rel, name, link in sorted(entries):
         tag = "folder" if link else "game"
+        extra = dict(details.get(f"{rel}/{link}" if link else rel, {}))
+        name = extra.pop("name", None) or name
         lines += [f"\t<{tag}>", f"\t\t<path>{escape(rel)}</path>", f"\t\t<name>{escape(name)}</name>"]
         if link:
             lines.append(f"\t\t<folderlink>{escape(link)}</folderlink>")
+        lines += [f"\t\t<{key}>{escape(text)}</{key}>" for key, text in extra.items() if text]
         lines.append(f"\t</{tag}>")
     lines.append("</gameList>")
     os.makedirs(os.path.dirname(path), exist_ok=True)
@@ -128,10 +146,12 @@ def main():
     check_emulators(systems, emulators, cores, folders)
 
     games, templates = scan_roms(roms_tar, systems)
+    details = pack_details(roms_tar)
     for name in templates:
         games.setdefault("scummvm", []).append((f"./{name}.scummvm", name, None))
     for system in sorted(set(games) | set(emulators)):
-        write_gamelist(f"{out}/ES-DE/gamelists/{system}/gamelist.xml", emulators.get(system), games.get(system, []))
+        write_gamelist(f"{out}/ES-DE/gamelists/{system}/gamelist.xml", emulators.get(system), games.get(system, []),
+                       {path: d for (sys_name, path), d in details.items() if sys_name == system})
     for name, scummvm_id in templates.items():
         os.makedirs(f"{out}/ROMs/scummvm", exist_ok=True)
         with open(f"{out}/ROMs/scummvm/{name}.scummvm", "w") as f:

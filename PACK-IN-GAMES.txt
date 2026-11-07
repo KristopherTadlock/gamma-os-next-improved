@@ -189,6 +189,33 @@ Atari 7800
   Source: https://robotfindskitten.org/download/Atari7800/
 
 
+BOX ART AND DETAILS
+-------------------
+
+Each game is installed with its description, developer, publisher, release
+date, genre and number of players, and with box art, a screenshot, its title
+screen and a marquee (logo) where there is one, in /sdcard/ES-DE where the
+ES-DE theme reads them (mods/pack-in-media.txt). Each image is under its
+game's license.
+
+  Downloaded from the game's own project: the screenshots and title screens
+  of the other games (Curse of the Lost Miner's is kept in pack-in-art, as
+  its author's site is often unreachable), the VUEngine Platformer Demo logo, and the 2048 2600
+  cartridge label (by Chester). Nothing comes from game databases, and art
+  with other companies' marks or by third parties was left out.
+  Captured from the bundled ROMs: the screenshots and title screens of Tobu
+  Tobu Girl Deluxe, Super Sudoku, Waternet, Miniplanets REMIX, Worm, Blimp
+  Chicken DS and Cherry Bomb.
+  Made for this project: the box art of every game but 2048 2600 and
+  Cherry Bomb (whose cartridge is its picture), drawn in the style of each
+  console's boxes around the game's own pictures, with no console or
+  publisher logos; and the title marquees.
+
+Vacpyre, chro.mono, Demon Bazooka and Stargunner have no in-game screenshot:
+the first three need emulators that can't run without a display, and
+Stargunner's pictures use a third party's art.
+
+
 PLATFORMS WITHOUT A GAME
 ------------------------
 

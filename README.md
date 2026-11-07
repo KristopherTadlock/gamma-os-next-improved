@@ -243,7 +243,11 @@ explicit grant to redistribute it and no third-party characters or names.
 Each game is installed with its license notice. See
 [PACK-IN-GAMES.txt](PACK-IN-GAMES.txt) for the games, their licenses, and the
 upstream games that were removed and why; `mods/bundled-roms.txt` is the list
-the build uses.
+the build uses. Each game also comes with its description and details, box
+art, a screenshot, its title screen and a marquee where there is one
+(`mods/pack-in-media.txt`), for the ES-DE theme and Nano's other themes. The
+box art is drawn for this project in each console's style and some
+screenshots are captured from the games; `tools/pack-in-art` has the scripts.
 
 ## Building
 
