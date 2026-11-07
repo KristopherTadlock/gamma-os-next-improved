@@ -282,13 +282,17 @@ final class Games {
      */
     private static boolean adoptArt(PackageManager pm) {
         File[] files = ROMS.listFiles();
-        if (files == null) return true;
+        if (files == null) return false;   // not readable yet (storage not mounted): try again
         boolean done = true;
         for (File f : files) {
             if (!f.getName().endsWith(EXT)) continue;
             String pkg = packageOf(f);
-            byte[] png = pkg == null ? null : iconPng(pm, pkg);
-            if (png == null) continue;
+            if (pkg == null) {
+                done = false;
+                continue;
+            }
+            byte[] png = iconPng(pm, pkg);
+            if (png == null) continue;   // not installed: nothing to compare against
             for (String dir : ART) {
                 File art = new File(new File(MEDIA, dir), baseName(f) + ".png");
                 try {

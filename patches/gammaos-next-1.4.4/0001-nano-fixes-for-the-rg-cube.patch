@@ -1,5 +1,5 @@
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenu.h b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
-index 88e7cae6699..b30368897b9 100644
+index 88e7cae6699..7f487aade4e 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 @@ -484,6 +484,9 @@ private:
@@ -21,7 +21,15 @@ index 88e7cae6699..b30368897b9 100644
      // buildFavoritesSubmenu takes Ps3Level& so it is declared with the other builders below.
      // Hidden games: games taken out of every game list without deleting the file. Keyed by
      // hiddenKey (the same game reached through /data/media/0, /storage/emulated/0 or /sdcard is
-@@ -1676,6 +1681,10 @@ private:
+@@ -1595,6 +1600,7 @@ private:
+     std::string esdeGameMediaPath(const std::string& romPath, const std::string& imageType);  // resolved file ("" = none)
+     std::string esdeDefaultStarPath(bool filled);   // materialise ES-DE's built-in rating star svg, return its path
+     std::unordered_map<std::string, std::string> mEsdeMediaPath;  // "rom\x1ftype" -> resolved file ("" = none)
++    int64_t mEsdeMediaMissFlushMs = 0;            // when esdeGameMediaPath last forgot its cached misses
+     void esdeReloadForSystem(int sysIdx);         // re-parse per-system data (systeminfo/colours) on
+                                                   // a settled system change (XML only, no GL reload)
+     int  mEsdeSysSel = 0;                         // selected system (system view)
+@@ -1676,6 +1682,10 @@ private:
          bool installed = false;
      };
      bool         mEsdeMenuActive = false;         // menu open
@@ -32,7 +40,7 @@ index 88e7cae6699..b30368897b9 100644
      bool         mEsdeMenuClosing = false;        // fade-out in progress
      float        mEsdeMenuAnim = 0.0f;            // 0..1 open ease
      EsdeMenuPage mEsdeMenuPage = ESDE_PG_ROOT;
-@@ -1781,6 +1790,12 @@ private:
+@@ -1781,6 +1791,12 @@ private:
      void esdeNav(int dx, int dy);
      bool esdeSelect();
      bool esdeBack();
@@ -45,7 +53,7 @@ index 88e7cae6699..b30368897b9 100644
      bool mPs3BottomClock = false; // persist.gammaos.nano.ps3xmb.bottomclock (PSP clock on the bottom panel, dual-screen XMB)
      // Half Resolution (XMB theme only, three INDEPENDENT Theme Settings toggles). Each renders only its
      // subsystem at half resolution and sharp-linear upscales it; the rest stays full-res. Perf for weak
-@@ -2809,6 +2824,17 @@ private:
+@@ -2809,6 +2825,17 @@ private:
      // performance-mode side-panel chooser, and the kill-apps backend.
      void buildQuickPowerSubmenu(Ps3Level& out);
      void openQuickPowerMenu();   // power-hold (menu visible) -> Quick Menu Power submenu, all themes
@@ -63,7 +71,7 @@ index 88e7cae6699..b30368897b9 100644
      void launchAndroidSettings(); // Quick Menu -> launch the device's own Settings app (runtime-resolved)
      // Overlay-only per-app Orientation submenu for the foreground app.
      void buildAppOrientSubmenu(Ps3Level& out);
-@@ -3073,6 +3099,7 @@ private:
+@@ -3073,6 +3100,7 @@ private:
      std::vector<std::string> mountedShareNames() const;
      void gsFolderSelect(const std::string& path); // add a folder as a rawpath scan source
      void drasticDataFolderSelect(const std::string& path); // #90: set persist.gammaos.drastic.data_dir (folder-picker target 5)
@@ -71,7 +79,7 @@ index 88e7cae6699..b30368897b9 100644
      void drasticCheatsFolderSelect(const std::string& path); // persist.gammaos.drastic.cheats_dir (folder-picker target 8)
      void drasticPerfRestoreCheck();            // put back the global performance mode a per-game one parked
      void mouseModeHomeGuard();                 // gammapad mouse mode off whenever the home is the foreground
-@@ -3251,7 +3278,7 @@ private:
+@@ -3251,7 +3279,7 @@ private:
          std::string m3uPath;              // non-empty: derived from this .m3u (regenerated on scan);
                                            // empty: user-created (preserved across scans)
      };
@@ -80,7 +88,7 @@ index 88e7cae6699..b30368897b9 100644
      std::vector<std::string> mMusicFolders;
      std::vector<MusicTrack>  mMusicTracks;
      std::vector<MusicPlaylist> mMusicPlaylists;
-@@ -3335,6 +3362,8 @@ private:
+@@ -3335,6 +3363,8 @@ private:
      std::set<int> mEsdeGamelistLoadedSys;                            // system indices already parsed
      void esdeEnsureGamelistLoaded(int sysIdx);                       // parse gamelists/<system>/gamelist.xml once
      const ScrapeEntry* esdeMetaFor(const std::string& romPath);      // gamelist entry, else scrapeEntryFor
@@ -89,11 +97,11 @@ index 88e7cae6699..b30368897b9 100644
      // Per-game title override (Rename / Edit Title). A user-typed name that overrides
      // the basename-minus-extension display name everywhere (columns / recents / search /
      // Info) AND becomes the scraper search query so a corrected title can match. Stored
-@@ -3449,6 +3478,7 @@ private:
+@@ -3449,6 +3479,7 @@ private:
      bool scraperDirAvailable() const;      // configured folder exists (default dir always counts)
      void scraperStorageTick();             // per-frame: load when the SD mounts at boot/hotplug, drop on unplug
      void boxartFolderSelect(const std::string& path);   // folder-picker target 7: relocate the cache
-+    std::string scraperMissingCredsMsg(bool needSsDev);
++    std::string scraperMissingCredsMsg(bool needSsDev, bool needTgdb);
      void scrapeMoveThreadFunc(std::vector<std::pair<std::string, ScrapeEntry>> entries,
                                std::string src, std::string dst);
      void gsOpenClearArtConfirm();          // Game Systems editor: Clear Boxart confirm (theme key 49)
@@ -245,7 +253,7 @@ index 3f568ae08a5..25d9ba2700b 100644
      mPs3DlgThemeKey = 0;
      mPs3DlgBinding = nullptr;
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuOverlay.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuOverlay.cpp
-index afbd4bb49c5..9a0baed3d73 100644
+index afbd4bb49c5..a145cecab9a 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuOverlay.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuOverlay.cpp
 @@ -372,6 +372,10 @@ void NanoMenu::pspClockFreezeApp(bool freeze) {
@@ -267,7 +275,7 @@ index afbd4bb49c5..9a0baed3d73 100644
  
      // DSi theme, app-EXIT return only (wallpaper/launcher raise, app_launched=0): replay the
      // card-drop entrance cascade like a fresh home (user request), and reflect the Recently
-@@ -1610,6 +1615,11 @@ void NanoMenu::overlayPoll() {
+@@ -1610,6 +1615,18 @@ void NanoMenu::overlayPoll() {
      bool want = (v[0] == '1' && v[1] == '\0');
      if (want && !mOverlayShown) {
          overlayShow();   // snaps to the Quick Menu by default in scrim-over-app mode
@@ -275,11 +283,18 @@ index afbd4bb49c5..9a0baed3d73 100644
 +        // The Anbernic button pressed while the layer was still up (a retract holding it): open
 +        // Quick Settings on it rather than leave the request for the next raise.
 +        property_set("sys.gammaos.nano.qs_summon", "0");
++        // Drop the press itself, still queued on the input fds, so pollInput does not toggle
++        // Quick Settings shut again (overlayShow drains the same way).
++        struct input_event ev;
++        for (int fd : mInputFds) {
++            if (fd < 0) continue;
++            while (read(fd, &ev, sizeof(ev)) == (ssize_t)sizeof(ev)) { /* discard */ }
++        }
 +        if (!mOverlayWallpaper && !quickSettingsOpen()) toggleQuickSettingsMenu();
      } else if (!want && mOverlayShown) {
          // Do NOT lower the overlay while a standalone clock summon is still retracting:
          // let drawPspClock's teardown clear show_overlay once the clock reaches reveal 0,
-@@ -1653,6 +1663,7 @@ void NanoMenu::overlayLaunchGame() {
+@@ -1653,6 +1670,7 @@ void NanoMenu::overlayLaunchGame() {
              romName = sys.displayNames[mXmbGameIndex];
      }
      if (romPath.empty()) return;
@@ -394,7 +409,7 @@ index b3221c1d5d6..99babb1b8ad 100644
      if (path.empty() || path == "@default") {
          property_set(prop, "");
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
-index c6a8e9c9dc1..9d3b454cf7f 100644
+index c6a8e9c9dc1..a42b3ac2f1c 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 @@ -795,6 +795,7 @@ bool NanoMenu::themeSettingRowVisible(const char* name) const {
@@ -414,7 +429,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
      mPs3DlgIllust = 0; mPs3DlgNotice.clear();
      mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
      mPs3DlgIconTex = 0; mPs3DlgIconNmap = 0; mPs3DlgIconR = mPs3DlgIconG = mPs3DlgIconB = 1.0f;
-@@ -1826,10 +1827,67 @@ void NanoMenu::openQuickPowerMenu() {
+@@ -1826,10 +1827,71 @@ void NanoMenu::openQuickPowerMenu() {
      // Push the Power submenu on top and sync the DSi/Minima camera to it.
      Ps3Level lvl; buildQuickPowerSubmenu(lvl); mPs3Stack.push_back(lvl);
      mNdsCamera = (float)ndsFocusSel(); mNdsScrubbing = false; mNdsFlingVel = 0.0f;
@@ -456,6 +471,10 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
 +    if (!mPs3MenuBuilt) initPs3Menu();
 +    int quickIdx = (mPs3QuickCatIdx >= 0) ? mPs3QuickCatIdx : 0;
 +    if (quickIdx < 0 || quickIdx >= (int)mPs3Cats.size()) return;
++    // The Wi-Fi / Bluetooth screens are not stack levels: close them (stopping their scans) rather
++    // than leave them running behind Quick Settings.
++    if (mMenuState == MENU_WIFI) closeWifiScreen();
++    else if (mMenuState == MENU_BT) closeBtScreen();
 +    mQsReturn.valid = true;
 +    mQsReturn.stack = mPs3Stack;
 +    mQsReturn.cat = mPs3CatIdx; mQsReturn.item = mPs3ItemIdx;
@@ -482,7 +501,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
  // Small bounded popen capture, local to this file. (NanoMenuSettings.cpp's runCmd lives in an
  // anonymous namespace, so it has internal linkage and cannot be shared across translation units.)
  // Used only to resolve the Settings component at runtime; `timeout` bounds it so a wedged binder
-@@ -2053,6 +2111,7 @@ const QsTileMap kQsTileMap[] = {
+@@ -2053,6 +2115,7 @@ const QsTileMap kQsTileMap[] = {
      {"internet",         "Wi-Fi",               nullptr,                  -1, 85},
      {"bt",               "Bluetooth",           nullptr,                  -1, 86},
      {"performance",      "Performance Mode",    nullptr,                  QA_PERFORMANCE, 81},
@@ -490,7 +509,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
      {"gammashader",      "Global Shaders",      "CRT Shader",             -1, 16},
      {"gammargb",         "GammaRGB",            "Effect",                 -1, 80},
      {"gammaeq",          "GammaEQ",             "Enable EQ",              -1, 17},
-@@ -2062,6 +2121,9 @@ const QsTileMap kQsTileMap[] = {
+@@ -2062,6 +2125,9 @@ const QsTileMap kQsTileMap[] = {
      {"screenmap",        "Screen Map",          nullptr,                  -1, 5},
      {"deepsleepmode",    "Deep Sleep Mode",     "Ultra Low Power Saving", -1, 89},
      {"externaldocking",  "External as Primary", nullptr,                  -1, 87},
@@ -500,7 +519,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
      {"immersivemode",    "Immersive Mode",      nullptr,                  -1, 88},
      {"abxy",             "ABXY Swap",           nullptr,                  -1, 5},
      {"dpadAnalogToggle", "DPAD/Analog Swap",    nullptr,                  -1, 5},
-@@ -4862,7 +4924,7 @@ void NanoMenu::gsEditField(int field) {
+@@ -4862,7 +4928,7 @@ void NanoMenu::gsEditField(int field) {
  void NanoMenu::gsOpenLaunchTypeChooser() {
      if (mGsEditIdx < 0 || mGsEditIdx >= (int)mXmbSystems.size()) return;
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -509,7 +528,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
      // Two options: a RetroArch libretro core (fast native route), or an arbitrary
      // package launched via an am intent (Daijisho-style). sel 0 -> libretro-core,
      // sel 1 -> custom-package.
-@@ -4881,7 +4943,7 @@ void NanoMenu::gsOpenLaunchTypeChooser() {
+@@ -4881,7 +4947,7 @@ void NanoMenu::gsOpenLaunchTypeChooser() {
  void NanoMenu::openAddToCollectionDialog(const std::string& romPath) {
      mPendingCollectionRom = romPath;
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -518,7 +537,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
      mPs3DlgTitle = "Add to Collection"; mPs3DlgBody.clear();
      mPs3DlgOptions.push_back("New Collection...");  mPs3DlgSwatch.push_back(-1);
      for (const auto& c : mXmbCollections) { mPs3DlgOptions.push_back(c.name); mPs3DlgSwatch.push_back(-1); }
-@@ -4898,7 +4960,7 @@ void NanoMenu::openAddToCollectionDialog(const std::string& romPath) {
+@@ -4898,7 +4964,7 @@ void NanoMenu::openAddToCollectionDialog(const std::string& romPath) {
  void NanoMenu::gsOpenScraperChooser() {
      if (mGsEditIdx < 0 || mGsEditIdx >= (int)mXmbSystems.size()) return;
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -527,7 +546,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
      static const char* kOpts[] = {"Default", "ScreenScraper", "TheGamesDB", "Off"};
      for (const char* s : kOpts) { mPs3DlgOptions.push_back(s); mPs3DlgSwatch.push_back(-1); }
      const std::string& ov = mXmbSystems[mGsEditIdx].scraperOverride;
-@@ -4935,7 +4997,7 @@ void NanoMenu::gsEditScraperCred(bool masked) {
+@@ -4935,7 +5001,7 @@ void NanoMenu::gsEditScraperCred(bool masked) {
  void NanoMenu::gsOpenClearArtConfirm() {
      if (mGsEditIdx < 0 || mGsEditIdx >= (int)mXmbSystems.size()) return;
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -536,7 +555,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
      mPs3DlgBody = "Delete the downloaded box art and background art for every game in this system? The games and your saves are not affected. You can scrape the system again at any time.";
      mPs3DlgOptions.push_back("Cancel");          mPs3DlgSwatch.push_back(-1);
      mPs3DlgOptions.push_back("Clear Boxart");    mPs3DlgSwatch.push_back(-1);
-@@ -4949,7 +5011,7 @@ void NanoMenu::gsOpenClearArtConfirm() {
+@@ -4949,7 +5015,7 @@ void NanoMenu::gsOpenClearArtConfirm() {
  void NanoMenu::gsOpenResetConfirm() {
      if (mGsEditIdx < 0 || mGsEditIdx >= (int)mXmbSystems.size()) return;
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -545,7 +564,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
      mPs3DlgOptions.push_back("Cancel");           mPs3DlgSwatch.push_back(-1);
      mPs3DlgOptions.push_back("Reset to Default");  mPs3DlgSwatch.push_back(-1);
      mPs3DlgSel = 0;
-@@ -5686,6 +5748,7 @@ void NanoMenu::ps3XmbSelect() {
+@@ -5686,6 +5752,7 @@ void NanoMenu::ps3XmbSelect() {
              else if (mFolderPickTarget == 5) { mFolderPickTarget = 0; drasticDataFolderSelect(it.payloadStr); }
              else if (mFolderPickTarget == 7) { mFolderPickTarget = 0; boxartFolderSelect(it.payloadStr); }
              else if (mFolderPickTarget == 8) { mFolderPickTarget = 0; drasticCheatsFolderSelect(it.payloadStr); }
@@ -553,7 +572,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
              else if (mFolderPickTarget == 6) { stFolderPathSelect(it.payloadStr); }   // Syncthing: new folder path
              else gsFolderSelect(it.payloadStr);
              return;
-@@ -5839,21 +5902,7 @@ void NanoMenu::ps3XmbSelect() {
+@@ -5839,21 +5906,7 @@ void NanoMenu::ps3XmbSelect() {
              // then wait for the select-key release before the nano exits so the
              // launched app does not see a phantom press.
              if (it.payloadStr.empty()) return;
@@ -576,7 +595,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
              return;
          }
          case PS3_DATA_LEAF: {
-@@ -5893,9 +5942,12 @@ void NanoMenu::ps3XmbSelect() {
+@@ -5893,9 +5946,12 @@ void NanoMenu::ps3XmbSelect() {
              // Boxart Scraper: pick the folder scraped covers/fanart live in (persist.gammaos.scraper.dir),
              // moving the existing art there. Folder browser target 7; "Use Default Folder" moves it back.
              // DraStic Cheats Folder: the user's cheat databases (persist.gammaos.drastic.cheats_dir),
@@ -592,7 +611,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
                  std::vector<Ps3Item> ps = ps3CurItems(); int pSel = ps3CurSel();
                  Ps3Level lvl; buildFolderBrowser("", lvl); mPs3Stack.push_back(lvl);
                  mPs3SubParentItems = ps; mPs3SubParentIdx = pSel; mPs3SubChildItems = mPs3Stack.back().items;
-@@ -8476,7 +8528,7 @@ void NanoMenu::applyThemeAccentColor(const std::string& hex) {
+@@ -8476,7 +8532,7 @@ void NanoMenu::applyThemeAccentColor(const std::string& hex) {
  void NanoMenu::gsOpenTintChooser() {
      if (mGsEditIdx < 0 || mGsEditIdx >= (int)mXmbSystems.size()) return;
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -601,7 +620,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
      for (int i = 0; i < kPs3ColorCount; i++) {
          mPs3DlgOptions.push_back(kPs3ColorOpts[i].name); mPs3DlgSwatch.push_back(i);
      }
-@@ -9062,6 +9114,8 @@ static const Ps3SettingBinding kPs3Bindings[] = {
+@@ -9062,6 +9118,8 @@ static const Ps3SettingBinding kPs3Bindings[] = {
      // closePs3Dialog. "0"/empty = GammaOS XMB, "1" = the DSi Menu theme.
      {"Home Theme", SettingSource::kProp, "persist.gammaos.nano.ndstheme", "0",
       "0:GammaOS XMB,1:DSi Menu,2:Minima,3:Custom / ES-DE"},
@@ -610,7 +629,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
      // Startup target: what the home opens on a fresh boot/restart. The value is dynamic (a category
      // id or a game-system id), so this uses the @bootto pushed picker rather than a static list; the
      // row's current-value label is computed in resolvePs3ItemValue and the landing applied in
-@@ -9096,6 +9150,8 @@ static const Ps3SettingBinding kPs3Bindings[] = {
+@@ -9096,6 +9154,8 @@ static const Ps3SettingBinding kPs3Bindings[] = {
      // GammaOS Toolbox (persist.gammaos.* props)
      {"Fan Speed", SettingSource::kProp, "persist.gammaos.fan_mode", "auto",
       "auto:Auto,cool:Cool,max:Max,off:Off"},
@@ -619,7 +638,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
      {"Immersive Mode", SettingSource::kProp, "persist.gammaos.immersive", "0", "0:Off,1:On"},
      // Scheduler.cpp reads refresh.lock via GetIntProperty(...)==1, so store 0/1 (a
      // "true" string parses to 0 = the HW-VSYNC keepalive never engages).
-@@ -9615,7 +9671,7 @@ void NanoMenu::openBoundChooser(const Ps3SettingBinding* b) {
+@@ -9615,7 +9675,7 @@ void NanoMenu::openBoundChooser(const Ps3SettingBinding* b) {
          return;
      }
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -628,7 +647,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
      // A path-scoped binding ("Top Screen/Saturation") titles the dialog with its row name.
      { const char* sl = strrchr(b->label, '/'); mPs3DlgTitle = sl ? sl + 1 : b->label; }
      mPs3DlgBody.clear();
-@@ -9715,10 +9771,11 @@ std::string NanoMenu::resolvePs3ItemValue(const Ps3Item& it) {
+@@ -9715,10 +9775,11 @@ std::string NanoMenu::resolvePs3ItemValue(const Ps3Item& it) {
      const std::string& n = it.label;
      // #90 DraStic data-folder row: show the current override (its folder name) or "Default" when
      // unset. Read live (no binding/cache) so it reflects a just-picked folder immediately.
@@ -641,7 +660,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
                                                       : "persist.gammaos.drastic.data_dir", dd, "");
          if (dd[0] != '/') return std::string(trDyn("Default"));
          std::string p = dd; size_t sl = p.rfind('/');
-@@ -10419,58 +10476,58 @@ void NanoMenu::ps3DlgIllustration(int kind, float cx, float cy, float sz, float
+@@ -10419,58 +10480,58 @@ void NanoMenu::ps3DlgIllustration(int kind, float cx, float cy, float sz, float
  void NanoMenu::openPs3Dialog(const Ps3Item& it) {
      const std::string& n = it.label;
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -711,7 +730,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
          for (const char* s : kOffOnOpts) { mPs3DlgOptions.push_back(s); mPs3DlgSwatch.push_back(-1); }
          mPs3DlgSel = mPs3DstNow ? 1 : 0;
      } else {
-@@ -10527,7 +10584,7 @@ void NanoMenu::openPs3Dialog(const Ps3Item& it) {
+@@ -10527,7 +10588,7 @@ void NanoMenu::openPs3Dialog(const Ps3Item& it) {
  // Mirrors openPerformanceChooser; applyThemeSetting(themeKey, sel) commits it (sel 0 = On, 1 = Off).
  void NanoMenu::openOnOffChooser(const char* title, int iconIdx, bool currentOn, int themeKey) {
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -720,7 +739,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
      static const char* kOnOff[] = {"On", "Off"};
      for (const char* s : kOnOff) { mPs3DlgOptions.push_back(s); mPs3DlgSwatch.push_back(-1); }
      mPs3DlgSel = currentOn ? 0 : 1;
-@@ -10553,7 +10610,7 @@ void NanoMenu::openDualScreenPrompt(const std::string& pkg) {
+@@ -10553,7 +10614,7 @@ void NanoMenu::openDualScreenPrompt(const std::string& pkg) {
      }
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
      mPs3DlgBinding = nullptr; mPs3DlgThemeKey = 0; mShaderParamEdit = -1;
@@ -729,7 +748,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
      mPs3DlgIllust = 0; mPs3DlgNotice.clear();
      mPs3DlgRomInfo = false; mPs3DlgGameInfo = false; mPs3DlgHelp = false; mPs3DlgAppInfo = false;
      mPs3DlgTitle = "Dual-Screen App";
-@@ -10600,7 +10657,7 @@ void NanoMenu::pollDualScreenDetect() {
+@@ -10600,7 +10661,7 @@ void NanoMenu::pollDualScreenDetect() {
  
  void NanoMenu::openPerformanceChooser() {
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -738,7 +757,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
      static const char* kPerfOpts[] = {"Normal", "Max Performance", "Power Saver"};
      for (const char* s : kPerfOpts) { mPs3DlgOptions.push_back(s); mPs3DlgSwatch.push_back(-1); }
      char cur[PROPERTY_VALUE_MAX]; property_get("persist.gammaos.performance_mode", cur, "stock");
-@@ -11387,7 +11444,7 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
+@@ -11387,7 +11448,7 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
                      // Progress modal: stays up until the list refresh shows the app gone
                      // (closed from the apps_generation handler), or a ~10s timeout.
                      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -747,7 +766,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
                      mPs3DlgIllust = 0; mPs3DlgNotice.clear();
                      mPs3DlgRomInfo = false; mPs3DlgAppInfo = false;
                      mPs3DlgTitle = "Uninstalling";
-@@ -11695,6 +11752,8 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11695,6 +11756,8 @@ void NanoMenu::closePs3Dialog(bool apply) {
                      // overlay process (restarting gammaos-nano would not touch it). The persist
                      // prop was already written above, so the choice survives a reboot.
                      if (!strcmp(b->label, "Home Theme")) {
@@ -756,7 +775,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
                          int  tv       = atoi(v.c_str());   // 0 XMB, 1 DSi, 2 Minima, 3 ES-DE
                          bool wantDsi  = (tv == 1);
                          bool wantMin  = (tv == 2);
-@@ -11723,7 +11782,9 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11723,7 +11786,9 @@ void NanoMenu::closePs3Dialog(bool apply) {
                              mMinimaScroll = 0.0f; mMinimaSelAnim = 0.0f; mMinimaPrevDepth = -1;
                              mMinimaSfxDepth = -1; mMinimaSfxSel = -1; mMinimaTransStart = 0;
                          }
@@ -766,7 +785,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
                      // DSi Dark Theme on/off: apply LIVE. mNdsDark is read every frame by ndsPal()
                      // in each DSi renderer, so flipping the member repaints the DSi home dark/light
                      // with no restart (the persist prop was already written above for reboot).
-@@ -13260,7 +13321,7 @@ void NanoMenu::xmbOptApplySub(const Ps3OptSub& sr) {
+@@ -13260,7 +13325,7 @@ void NanoMenu::xmbOptApplySub(const Ps3OptSub& sr) {
  // been closed by the caller, so the dialog draws over the home column.
  void NanoMenu::mediaDeleteConfirm(const std::string& title, const std::string& body) {
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -775,7 +794,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
      mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false;
      mPs3DlgTitle = title; mPs3DlgBody = body;
      mPs3DlgOptions.push_back("Cancel"); mPs3DlgSwatch.push_back(-1);
-@@ -13277,7 +13338,7 @@ void NanoMenu::mediaDeleteConfirm(const std::string& title, const std::string& b
+@@ -13277,7 +13342,7 @@ void NanoMenu::mediaDeleteConfirm(const std::string& title, const std::string& b
  void NanoMenu::mediaCopyToClipboard(const std::string& name) {
      feOpen();   // enter the File Explorer at the storage roots (mFeClipPath already set by the caller)
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -784,7 +803,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
      mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false;
      mPs3DlgTitle = "Copy";
      mPs3DlgBody = std::string("Copied \"") + name +
-@@ -13511,7 +13572,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13511,7 +13576,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              body = mPs3OptCtxDesc.empty() ? std::string("No information is available.") : mPs3OptCtxDesc;
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -793,7 +812,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false; mPs3DlgAppInfo = false;
          mPs3DlgTitle = title;
          mPs3DlgBody  = body;
-@@ -13765,7 +13826,10 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13765,7 +13830,10 @@ void NanoMenu::xmbOptAction(const std::string& act) {
          if (mPs3DlgBoxTex) { glDeleteTextures(1, &mPs3DlgBoxTex); mPs3DlgBoxTex = 0; }
          mPs3DlgFanW = mPs3DlgFanH = 0; mPs3DlgBoxW = mPs3DlgBoxH = 0;
  
@@ -805,7 +824,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
          bool rich = se && (!se->box.empty() || !se->fan.empty() ||
                             !se->synopsis.empty() || !se->genre.empty() ||
                             !se->developer.empty() || !se->publisher.empty() ||
-@@ -13773,7 +13837,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13773,7 +13841,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
                             !se->releaseDate.empty());
  
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -814,7 +833,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear();
          mPs3DlgTitle = name.empty() ? std::string("Information") : name;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14042,7 +14106,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -14042,7 +14110,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              row("Path", dir);
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -823,7 +842,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false;
          mPs3DlgTitle = title; mPs3DlgBody = body;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14117,7 +14181,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -14117,7 +14185,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              body = b;
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -832,7 +851,7 @@ index c6a8e9c9dc1..9d3b454cf7f 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear();
          mPs3DlgTitle = title; mPs3DlgBody = body;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14138,7 +14202,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -14138,7 +14206,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              body = b;
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -856,7 +875,7 @@ index b0e278f3bc0..43087e17bad 100644
      // can detect a hang (e.g. an infinite loop or a stuck GL call inside a render
      // path) and abort into a tombstone instead of leaving the device frozen.
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp
-index bc837715d76..85f49fa4277 100644
+index bc837715d76..d0fea6aa7c3 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp
 @@ -784,7 +784,7 @@ void NanoMenu::scraperArtTick() {
@@ -868,14 +887,16 @@ index bc837715d76..85f49fa4277 100644
                    (mPs3CatIdx >= 0 && mPs3CatIdx < (int)mPs3Cats.size()
                     && mPs3Cats[mPs3CatIdx].name == "Game");
      if (!inGame && (!mRomBoxartCache.empty() || mFanartTex || mNdsFanTex || mSaDecStarted.load()))
-@@ -1062,6 +1062,14 @@ nanoscraper::Credentials NanoMenu::scraperCredsFor(int sysIdx) {
+@@ -1062,6 +1062,16 @@ nanoscraper::Credentials NanoMenu::scraperCredsFor(int sysIdx) {
      return c;
  }
  
 +// Why nothing could be scraped for want of credentials: ScreenScraper answers no software without
 +// developer credentials, which a build from the public source does not include (see
 +// NanoScraperDevCreds.h); a user account does not replace them. TheGamesDB needs an API key.
-+std::string NanoMenu::scraperMissingCredsMsg(bool needSsDev) {
++std::string NanoMenu::scraperMissingCredsMsg(bool needSsDev, bool needTgdb) {
++    if (needSsDev && needTgdb)
++        return trDyn("This build has no ScreenScraper developer credentials, and TheGamesDB needs an API key (Boxart Scraper settings).");
 +    return needSsDev ? trDyn("This build has no ScreenScraper developer credentials. Use TheGamesDB with an API key instead.")
 +                     : trDyn("Set your TheGamesDB API key in Boxart Scraper settings.");
 +}
@@ -883,54 +904,56 @@ index bc837715d76..85f49fa4277 100644
  nanoscraper::Engine NanoMenu::scraperEngineFor(int sysIdx, const nanoscraper::Credentials& cred) {
      (void)cred;
      std::string eng;
-@@ -1094,6 +1102,7 @@ void NanoMenu::scrapeSystemsAsync(const std::vector<int>& sysIdxs) {
+@@ -1094,6 +1104,8 @@ void NanoMenu::scrapeSystemsAsync(const std::vector<int>& sysIdxs) {
  
      std::vector<ScrapeJob> jobs;
      bool anyConfigured = false;     // at least one system had a usable engine + creds
 +    bool needSsDev = false;         // a ScreenScraper system was skipped for no developer credentials
++    bool needTgdb = false;          // a TheGamesDB system was skipped for no API key
      for (int sysIdx : sysIdxs) {
          if (sysIdx < 0 || sysIdx >= (int)mXmbSystems.size()) continue;
          const XmbSystem& s = mXmbSystems[sysIdx];
-@@ -1105,7 +1114,7 @@ void NanoMenu::scrapeSystemsAsync(const std::vector<int>& sysIdxs) {
+@@ -1105,7 +1117,7 @@ void NanoMenu::scrapeSystemsAsync(const std::vector<int>& sysIdxs) {
          bool haveCreds = (eng == nanoscraper::ENGINE_SCREENSCRAPER)
                               ? (!cred.ssDevId.empty() && !cred.ssDevPw.empty())
                               : !cred.tgdbKey.empty();
 -        if (!haveCreds) continue;
-+        if (!haveCreds) { if (eng == nanoscraper::ENGINE_SCREENSCRAPER) needSsDev = true; continue; }
++        if (!haveCreds) { (eng == nanoscraper::ENGINE_SCREENSCRAPER ? needSsDev : needTgdb) = true; continue; }
          anyConfigured = true;
          nanoscraper::PlatformIds plat =
              nanoscraper::platformForSystem(s.romDir, s.shortname, s.name, s.scrapePlatform);
-@@ -1154,7 +1163,7 @@ void NanoMenu::scrapeSystemsAsync(const std::vector<int>& sysIdxs) {
+@@ -1154,7 +1166,7 @@ void NanoMenu::scrapeSystemsAsync(const std::vector<int>& sysIdxs) {
      if (jobs.empty()) {
          // Nothing to do: explain why (no credentials, or already complete).
          mScrapeError = anyConfigured ? trDyn("All games already have art (enable Overwrite to refresh).")
 -                                     : trDyn("Set your scraper credentials in Settings first.");
-+                                     : scraperMissingCredsMsg(needSsDev);
++                                     : scraperMissingCredsMsg(needSsDev, needTgdb);
          mScrapeDoneFlag = true;
          mScrapeBox = wantBox; mScrapeFan = wantFan;   // (unused, keeps -Wunused quiet via assign)
          return;
-@@ -1197,6 +1206,7 @@ void NanoMenu::scrapeOneRom(int sysIdx, int romIdx, const std::string& queryOver
+@@ -1197,6 +1209,7 @@ void NanoMenu::scrapeOneRom(int sysIdx, int romIdx, const std::string& queryOver
  
      std::vector<ScrapeJob> jobs;
      bool anyConfigured = false;
-+    bool needSsDev = false;
++    bool needSsDev = false, needTgdb = false;
      if (s.enabled) {
          nanoscraper::Credentials cred = scraperCredsFor(sysIdx);
          nanoscraper::Engine eng = scraperEngineFor(sysIdx, cred);
-@@ -1204,6 +1214,7 @@ void NanoMenu::scrapeOneRom(int sysIdx, int romIdx, const std::string& queryOver
+@@ -1204,6 +1217,8 @@ void NanoMenu::scrapeOneRom(int sysIdx, int romIdx, const std::string& queryOver
              bool haveCreds = (eng == nanoscraper::ENGINE_SCREENSCRAPER)
                                   ? (!cred.ssDevId.empty() && !cred.ssDevPw.empty())
                                   : !cred.tgdbKey.empty();
 +            needSsDev = !haveCreds && eng == nanoscraper::ENGINE_SCREENSCRAPER;
++            needTgdb = !haveCreds && eng != nanoscraper::ENGINE_SCREENSCRAPER;
              if (haveCreds) {
                  anyConfigured = true;
                  nanoscraper::PlatformIds plat =
-@@ -1246,7 +1257,7 @@ void NanoMenu::scrapeOneRom(int sysIdx, int romIdx, const std::string& queryOver
+@@ -1246,7 +1261,7 @@ void NanoMenu::scrapeOneRom(int sysIdx, int romIdx, const std::string& queryOver
      }
      if (jobs.empty()) {
          mScrapeError = anyConfigured ? trDyn("Scraping is disabled for this system.")
 -                                     : trDyn("Set your scraper credentials in Settings first.");
-+                                     : scraperMissingCredsMsg(needSsDev);
++                                     : scraperMissingCredsMsg(needSsDev, needTgdb);
          mScrapeDoneFlag = true;
          mScrapeBox = wantBox; mScrapeFan = wantFan;
          return;
@@ -979,7 +1002,7 @@ index c35725069eb..7af0f0e0524 100644
      mPs3DlgOptions.push_back(trDyn("Cancel")); mPs3DlgSwatch.push_back(-1);
      mPs3DlgOptions.push_back(trDyn(action)); mPs3DlgSwatch.push_back(-1);
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp
-index a0824b29e6e..bcf37ac483f 100644
+index a0824b29e6e..48cbed5f141 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp
 @@ -2090,32 +2090,52 @@ void NanoMenu::collectionRemoveRom(int colIdx, const std::string& romPath) {
@@ -1043,7 +1066,7 @@ index a0824b29e6e..bcf37ac483f 100644
  bool NanoMenu::isFavorite(const std::string& romPath) const {
      if (romPath.empty()) return false;
      for (const auto& r : mXmbFavorites) if (r == romPath) return true;
-@@ -2602,6 +2622,97 @@ void NanoMenu::handleRight() {
+@@ -2602,6 +2622,100 @@ void NanoMenu::handleRight() {
      }
  }
  
@@ -1052,9 +1075,12 @@ index a0824b29e6e..bcf37ac483f 100644
 +// on the Applications list when the app exits.
 +void NanoMenu::launchInstalledApp(const std::string& pkg, bool returnToApps) {
 +    if (!mOverlayMode && !isLaunchReady()) { showLaunchBusyToast(); return; }
-+    // An app replaces the last game, so the next boot must not resume that game.
-+    property_set("persist.gammaos.nano.qr_prepared", "0");
-+    property_set("persist.gammaos.nano.qr_core", "");
++    // An app replacing the last game means the next boot must not resume that game. Selecting the
++    // app already running in the overlay only brings it back, so its Quick Resume stays.
++    if (!mOverlayMode || pkg != mOverlayPausedPkg) {
++        property_set("persist.gammaos.nano.qr_prepared", "0");
++        property_set("persist.gammaos.nano.qr_core", "");
++    }
 +    if (mOverlayMode) { overlayLaunchPackage(pkg); return; }
 +    ALOGI("ps3menu: launching app %s", pkg.c_str());
 +    property_set("sys.gammaos.nano.launch_app", pkg.c_str());
@@ -1141,7 +1167,7 @@ index a0824b29e6e..bcf37ac483f 100644
  void NanoMenu::launchXmbGame() {
      // Overlay: the home exit-to-launch handshake (set launch_* props + exit so the framework starts
      // the app) does not apply to the resident overlay - running it would make the overlay
-@@ -2613,6 +2724,7 @@ void NanoMenu::launchXmbGame() {
+@@ -2613,6 +2727,7 @@ void NanoMenu::launchXmbGame() {
      // first was a dead no-op: once an app is behind it the home runs as the resident overlay, so
      // launching from the overlay or after returning to the theme did nothing.
      if (mOverlayMode) { overlayLaunchGame(); return; }
@@ -1150,18 +1176,37 @@ index a0824b29e6e..bcf37ac483f 100644
  
      // GammaOS Nano: gate the entire XMB launch path until the system
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoThemeEngine.cpp b/frameworks/base/cmds/gammaos-nano/NanoThemeEngine.cpp
-index 857edadb1e6..2c98aea981c 100644
+index 857edadb1e6..b63d65644f0 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoThemeEngine.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoThemeEngine.cpp
-@@ -904,6 +904,20 @@ NanoMenu::EsdeSvg NanoMenu::esdeArtTex(const std::string& path, int boxW, int bo
+@@ -30,6 +30,10 @@
+ #include <log/log.h>
+ #include <cutils/properties.h>
+ #include <utils/SystemClock.h>   // uptimeMillis (carousel slide animation clock)
++#include <sys/system_properties.h>   // prop_info, __system_property_find
++// Exported by libc but declared only in the internal <sys/_system_properties.h> (as in
++// NanoMenuInput.cpp): re-read the media folder only when its property changes.
++extern "C" uint32_t __system_property_serial(const prop_info* __pi);
+ 
+ #include <unistd.h>
+ #include <sys/stat.h>          // mkdir for the on-demand default rating-star cache
+@@ -904,6 +908,28 @@ NanoMenu::EsdeSvg NanoMenu::esdeArtTex(const std::string& path, int boxW, int bo
  // Resolve the on-disk media file for a rom + ES-DE imageType (or "" if none exists), caching the
  // result per rom+type so the extension probe runs once. Shared by esdeGameMediaTex (to load the
  // texture) and the <gameselector> pick (to prefer a game that actually has the requested media).
 +// The downloaded_media folders to read, in order: the ES-DE Media Folder setting (ES-DE's
 +// MediaDirectory, persist.gammaos.nano.esde.mediadir) when set, then the default one, so media not
-+// moved there keeps showing.
-+static std::vector<std::string> esdeMediaRoots() {
-+    std::vector<std::string> roots;
++// moved there keeps showing. Re-read only when the property changes (render thread only).
++static const std::vector<std::string>& esdeMediaRoots() {
++    static std::vector<std::string> roots;
++    static const prop_info* pi = nullptr;
++    static uint32_t serial = 0;
++    static bool built = false;
++    if (!pi) pi = __system_property_find("persist.gammaos.nano.esde.mediadir");
++    const uint32_t now = pi ? __system_property_serial(pi) : 0;
++    if (built && now == serial) return roots;
++    built = true; serial = now;
++    roots.clear();
 +    char d[PROPERTY_VALUE_MAX] = {};
 +    property_get("persist.gammaos.nano.esde.mediadir", d, "");
 +    std::string custom = d;
@@ -1174,16 +1219,31 @@ index 857edadb1e6..2c98aea981c 100644
  std::string NanoMenu::esdeGameMediaPath(const std::string& romPath, const std::string& imageType) {
      if (romPath.empty()) return std::string();
      // ES-DE imageType -> downloaded_media subdirectory. "image" defaults to the miximage.
-@@ -947,7 +961,7 @@ std::string NanoMenu::esdeGameMediaPath(const std::string& romPath, const std::s
+@@ -914,6 +940,14 @@ std::string NanoMenu::esdeGameMediaPath(const std::string& romPath, const std::s
+         {"marquee", "marquees"},       {"3dbox", "3dboxes"},
+         {"physicalmedia", "physicalmedia"}, {"fanart", "fanart"},
+     };
++    // Forget cached misses every few seconds: an SD card media folder mounts after boot, and the
++    // Android Games helper adds art while nano runs.
++    const int64_t nowMs = (int64_t)uptimeMillis();
++    if (nowMs - mEsdeMediaMissFlushMs > 5000) {
++        mEsdeMediaMissFlushMs = nowMs;
++        for (auto it = mEsdeMediaPath.begin(); it != mEsdeMediaPath.end();)
++            it = it->second.empty() ? mEsdeMediaPath.erase(it) : std::next(it);
++    }
+     std::string cacheKey = romPath + "\x1f" + imageType;
+     auto ci = mEsdeMediaPath.find(cacheKey);
+     if (ci != mEsdeMediaPath.end()) return ci->second;
+@@ -947,7 +981,7 @@ std::string NanoMenu::esdeGameMediaPath(const std::string& romPath, const std::s
      }
      // Try each imageType token in order (ES-DE tries the list left-to-right); first present file wins.
      std::string found;
 -    const std::string root = "/storage/emulated/0/ES-DE/downloaded_media/";
-+    const std::vector<std::string> roots = esdeMediaRoots();
++    const std::vector<std::string>& roots = esdeMediaRoots();
      auto tokens = imageType;
      size_t start = 0;
      while (start <= tokens.size() && found.empty()) {
-@@ -958,11 +972,14 @@ std::string NanoMenu::esdeGameMediaPath(const std::string& romPath, const std::s
+@@ -958,11 +992,14 @@ std::string NanoMenu::esdeGameMediaPath(const std::string& romPath, const std::s
          while (!tok.empty() && (tok.back() == ' ')) tok.pop_back();
          auto it = kSub.find(tok);
          if (it != kSub.end()) {
@@ -1203,22 +1263,45 @@ index 857edadb1e6..2c98aea981c 100644
                  }
                  if (!found.empty()) break;
              }
-@@ -985,9 +1002,11 @@ static bool esdeManualExists(const std::string& romPath) {
+@@ -977,6 +1014,22 @@ std::string NanoMenu::esdeGameMediaPath(const std::string& romPath, const std::s
+ // ES-DE FileData::getManualPath: true when a manual media file (pdf/cbz/cbr/cb7) exists under
+ // downloaded_media/<system>/manuals/<rom-basename>, which enables the "manual" badge slot.
+ static bool esdeManualExists(const std::string& romPath) {
++    // Asked every frame for the badge, so cached per game; misses are re-checked every few seconds.
++    static std::unordered_map<std::string, bool> cache;
++    static int64_t flushMs = 0;
++    static const std::vector<std::string>* lastRoots = nullptr;
++    static std::vector<std::string> lastRootsCopy;
++    const std::vector<std::string>& roots = esdeMediaRoots();
++    const int64_t nowMs = (int64_t)uptimeMillis();
++    if (lastRoots != &roots || lastRootsCopy != roots) { cache.clear(); lastRoots = &roots; lastRootsCopy = roots; }
++    if (nowMs - flushMs > 5000) {
++        flushMs = nowMs;
++        for (auto it = cache.begin(); it != cache.end();) it = it->second ? std::next(it) : cache.erase(it);
++    }
++    auto hit = cache.find(romPath);
++    if (hit != cache.end()) return hit->second;
++    bool& found = cache[romPath];
++    found = false;
+     size_t sl = romPath.find_last_of('/');
+     std::string dir = (sl == std::string::npos) ? std::string() : romPath.substr(0, sl);
+     std::string file = (sl == std::string::npos) ? romPath : romPath.substr(sl + 1);
+@@ -985,9 +1038,11 @@ static bool esdeManualExists(const std::string& romPath) {
      size_t s2 = dir.find_last_of('/');
      std::string sys = (s2 == std::string::npos) ? dir : dir.substr(s2 + 1);
      if (sys.empty() || base.empty()) return false;
 -    std::string stem = "/storage/emulated/0/ES-DE/downloaded_media/" + sys + "/manuals/" + base;
 -    for (const char* ext : {".pdf", ".cbz", ".cbr", ".cb7"})
 -        if (access((stem + ext).c_str(), R_OK) == 0) return true;
-+    for (const auto& root : esdeMediaRoots()) {
++    for (const auto& root : roots) {
 +        std::string stem = root + sys + "/manuals/" + base;
 +        for (const char* ext : {".pdf", ".cbz", ".cbr", ".cb7"})
-+            if (access((stem + ext).c_str(), R_OK) == 0) return true;
++            if (access((stem + ext).c_str(), R_OK) == 0) return found = true;
 +    }
      return false;
  }
  
-@@ -1548,7 +1567,7 @@ void NanoMenu::renderEsde() {
+@@ -1548,7 +1603,7 @@ void NanoMenu::renderEsde() {
                  // shows it (GamelistBase), never the carousel/grid, and never in a favourites
                  // collection (nano has none). The star renders through nano's FA fallback face.
                  if (haveRom && !isCarousel && !isGrid &&
@@ -1227,7 +1310,7 @@ index 857edadb1e6..2c98aea981c 100644
                      std::string ind = primary->getS("indicators", std::string("symbols"));
                      if (ind == "ascii")     nm = "* " + nm;
                      else if (ind != "none") nm = "\xEF\x80\x85  " + nm;   // U+F005 + two spaces
-@@ -3115,7 +3134,7 @@ void NanoMenu::renderEsde() {
+@@ -3115,7 +3170,7 @@ void NanoMenu::renderEsde() {
                  // metadata, so the counter matches the control and the textlist star indicator.
                  for (const auto& r : sys.roms) {
                      const ScrapeEntry* se = esdeMetaFor(r);
@@ -1236,7 +1319,7 @@ index 857edadb1e6..2c98aea981c 100644
                  }
                  s = "\xEF\x84\x9B " + std::to_string(total) +      // U+F11B controller
                      "  \xEF\x80\x85 " + std::to_string(favs);      // U+F005 star
-@@ -3200,7 +3219,7 @@ void NanoMenu::renderEsde() {
+@@ -3200,7 +3255,7 @@ void NanoMenu::renderEsde() {
                      int favs = 0;
                      for (const auto& r : sys.roms) {
                          const ScrapeEntry* se = esdeMetaFor(r);
@@ -1245,7 +1328,7 @@ index 857edadb1e6..2c98aea981c 100644
                      }
                      auto plural = [](int n, const char* one, const char* many) {
                          return std::to_string(n) + " " + (n == 1 ? one : many);
-@@ -3811,7 +3830,7 @@ void NanoMenu::renderEsde() {
+@@ -3811,7 +3866,7 @@ void NanoMenu::renderEsde() {
              std::vector<ActiveBadge> active;
              for (auto& slot : slots) {
                  bool on = false; std::string ctrl;
@@ -1254,7 +1337,7 @@ index 857edadb1e6..2c98aea981c 100644
                  else if (slot == "completed")   on = meta && meta->completed;
                  else if (slot == "kidgame")     on = meta && meta->kidgame;
                  else if (slot == "broken")      on = meta && meta->broken;
-@@ -4054,7 +4073,7 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
+@@ -4054,7 +4109,7 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
          prompts.push_back({"a", "select"});
          prompts.push_back({"b", "back"});
          prompts.push_back({"x", "view media"});
@@ -1263,7 +1346,7 @@ index 857edadb1e6..2c98aea981c 100644
          prompts.push_back({"thumbstickclick", "random"});
          prompts.push_back({"y", "Favorites"});
          prompts.push_back({"start", "menu"});
-@@ -4072,13 +4091,8 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
+@@ -4072,13 +4127,8 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
          }
          prompts.push_back({chooseIcon, "choose"});
          prompts.push_back({"a", "select"});
@@ -1279,7 +1362,7 @@ index 857edadb1e6..2c98aea981c 100644
          prompts.push_back({"start", "menu"});
      }
  
-@@ -4460,6 +4474,91 @@ bool NanoMenu::esdeBack() {
+@@ -4460,6 +4510,91 @@ bool NanoMenu::esdeBack() {
      return false;   // at system root: let the caller handle (e.g. nothing / exit gesture)
  }
  
@@ -1384,7 +1467,7 @@ index 8e387db4282..1527ffb5bec 100644
  
      // Grab DRM master early on non-Qualcomm SoCs to beat HWC.
 diff --git a/frameworks/base/services/core/java/com/android/server/policy/PhoneWindowManager.java b/frameworks/base/services/core/java/com/android/server/policy/PhoneWindowManager.java
-index 0d7e69d0a6b..50f1e1eadd1 100644
+index 0d7e69d0a6b..d65e51cce80 100644
 --- a/frameworks/base/services/core/java/com/android/server/policy/PhoneWindowManager.java
 +++ b/frameworks/base/services/core/java/com/android/server/policy/PhoneWindowManager.java
 @@ -2608,6 +2608,9 @@ public class PhoneWindowManager implements WindowManagerPolicy {
@@ -1397,10 +1480,16 @@ index 0d7e69d0a6b..50f1e1eadd1 100644
      // GammaOS Nano: schedule (on key-down) or cancel (on key-up) the 10s emergency-recovery
      // hold. Shared by BACK and BTN_MODE so either can trigger it - the retro gamepad emits
      // BTN_MODE (Generic.kl -> BUTTON_MODE), not a BACK keycode, so MODE is the reachable key
-@@ -6872,6 +6875,39 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -6872,6 +6875,40 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                  || keyCode == KeyEvent.KEYCODE_BUTTON_MODE) {
              nanoEmergencyHoldKey(down);
          }
++        // GammaOS Nano: the key-up of a mode press that raised the overlay below, whatever the
++        // overlay state is by then, so the app never sees half a press.
++        if (keyCode == KeyEvent.KEYCODE_BUTTON_MODE && !down && mNanoModeSummoned) {
++            mNanoModeSummoned = false;
++            return 0;
++        }
 +        // GammaOS Nano: over a running app, the mode (Anbernic) button raises the overlay on the
 +        // Quick Menu's Quick Settings instead of reaching the app. Once the overlay is up, nano
 +        // reads the button itself (pressing it again resumes the app). Only once the app has
@@ -1427,11 +1516,6 @@ index 0d7e69d0a6b..50f1e1eadd1 100644
 +                mNanoModeSummoned = true;
 +                Slog.d(TAG, "GammaOS Nano: mode button -> overlay Quick Settings");
 +            }
-+            return 0;
-+        }
-+        // ...and its key-up, which comes after show_overlay is set, so the app never sees half a press.
-+        if (keyCode == KeyEvent.KEYCODE_BUTTON_MODE && mNanoModeSummoned) {
-+            if (!down) mNanoModeSummoned = false;
 +            return 0;
 +        }
          boolean isWakeKey = (policyFlags & WindowManagerPolicy.FLAG_WAKE) != 0
