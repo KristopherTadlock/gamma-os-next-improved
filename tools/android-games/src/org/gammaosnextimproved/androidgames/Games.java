@@ -58,10 +58,10 @@ final class Games {
 
     static synchronized void sync(Context context) {
         PackageManager pm = context.getPackageManager();
+        // Marking the first test build's art; retried on the next sync until every file is done.
         SharedPreferences state = context.getSharedPreferences("art", Context.MODE_PRIVATE);
-        if (!state.getBoolean("adopted", false)) {
-            adoptArt(pm);
-            state.edit().putBoolean("adopted", true).apply();
+        if (!state.getBoolean("marked_v1", false) && adoptArt(pm)) {
+            state.edit().putBoolean("marked_v1", true).apply();
         }
         Set<String> exclude = readExclude();
         exclude.add(context.getPackageName());
@@ -200,11 +200,11 @@ final class Games {
 
     /**
      * Writes data to f through a temporary file, so a failed write never leaves
-     * a broken PNG in its place.
+     * a broken PNG in its place. False if f was not written.
      */
-    private static void publish(File f, byte[] data) {
+    private static boolean publish(File f, byte[] data) {
         File folder = f.getParentFile();
-        if (!folder.isDirectory() && !folder.mkdirs()) return;
+        if (!folder.isDirectory() && !folder.mkdirs()) return false;
         File tmp = new File(folder, "." + f.getName() + ".tmp");
         boolean ok;
         try (FileOutputStream out = new FileOutputStream(tmp)) {
@@ -217,7 +217,9 @@ final class Games {
         if (!ok || !tmp.renameTo(f)) {
             Log.w(TAG, "can't write " + f);
             tmp.delete();
+            return false;
         }
+        return true;
     }
 
     /** The game's icon at 512px as a PNG, the way the first test build wrote it. */
@@ -275,11 +277,13 @@ final class Games {
     /**
      * The first test build wrote unmarked art. Its art is exactly the game's
      * icon as iconPng renders it, so a file that is that image gets the mark;
-     * any other file (a scraped or chosen cover) is left as the user's.
+     * any other file (a scraped or chosen cover) is left as the user's. False
+     * if a file could not be marked, so it is tried again.
      */
-    private static void adoptArt(PackageManager pm) {
+    private static boolean adoptArt(PackageManager pm) {
         File[] files = ROMS.listFiles();
-        if (files == null) return;
+        if (files == null) return true;
+        boolean done = true;
         for (File f : files) {
             if (!f.getName().endsWith(EXT)) continue;
             String pkg = packageOf(f);
@@ -291,14 +295,19 @@ final class Games {
                     if (art.isFile() && art.length() == png.length
                             && Arrays.equals(readAll(art, png.length), png)) {
                         long modified = art.lastModified();
-                        publish(art, mark(png));
-                        art.setLastModified(modified);   // still as old as the icon it shows
+                        if (publish(art, mark(png))) {
+                            art.setLastModified(modified);   // still as old as the icon it shows
+                        } else {
+                            done = false;
+                        }
                     }
                 } catch (IOException e) {
                     Log.w(TAG, "can't read " + art);
+                    done = false;
                 }
             }
         }
+        return done;
     }
 
     /** The first length bytes of f, or null if it is shorter. */

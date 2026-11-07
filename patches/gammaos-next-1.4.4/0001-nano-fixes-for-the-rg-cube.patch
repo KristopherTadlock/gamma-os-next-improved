@@ -334,7 +334,7 @@ index 166225b4864..159bde4c594 100644
    {"Refresh Rate Lock",22,"Lock the display to a fixed refresh rate.","Off",1,nullptr,0},
    {"Display Tweaks",22,"Enable additional display tuning options.","Off",1,nullptr,0},
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Folder.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Folder.cpp
-index b3221c1d5d6..66001d1a90d 100644
+index b3221c1d5d6..99babb1b8ad 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Folder.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Folder.cpp
 @@ -138,7 +138,7 @@ void NanoMenu::gsOpenRemoveConfirm(int sysIdx) {
@@ -364,7 +364,7 @@ index b3221c1d5d6..66001d1a90d 100644
              Ps3Item it; it.label = "Use Default Folder"; it.kind = PS3_GS_SELFOLDER; it.payloadStr = "@default";
              it.iconTex = iconTexForIcon(22); it.nmapTex = nmapForIcon(22); it.iconR = it.iconG = it.iconB = 1.0f;
              out.items.push_back(it);
-@@ -626,6 +626,27 @@ void NanoMenu::drasticCheatsFolderSelect(const std::string& path) {
+@@ -626,6 +626,28 @@ void NanoMenu::drasticCheatsFolderSelect(const std::string& path) {
      drasticFolderSelect("persist.gammaos.drastic.cheats_dir", "DraStic cheats folder", path);
  }
  
@@ -382,6 +382,7 @@ index b3221c1d5d6..66001d1a90d 100644
 +    } else {
 +        property_set("persist.gammaos.nano.esde.mediadir", p.c_str());
 +        mEsdeMediaPath.clear();   // re-resolve every game's media from the new folder
++        mEsdeLoadedSysIdx = -1;   // and the focused system's noMedia/noVideos variant with it
 +        photoShowBanner(trDyn(p.empty() ? "ES-DE media folder: Default" : "ES-DE media folder set"));
 +        ALOGI("ps3menu: ES-DE media folder -> %s", p.empty() ? "default" : p.c_str());
 +    }
