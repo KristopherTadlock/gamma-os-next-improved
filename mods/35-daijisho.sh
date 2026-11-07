@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
-# Adds the platforms in daijisho-platforms.txt to Daijisho, then sets each
-# platform's default player from retroarch-cores.txt.
+# Adds the platforms in daijisho-platforms.txt to Daijisho, sets each
+# platform's default player from retroarch-cores.txt, gives platforms without
+# a wallpaper one from daijisho-wallpapers/, and makes the game library match
+# the ROM pack. Runs after 30-bundled-roms.sh.
 #
-# Usage: 20-daijisho-defaults.sh SYSTEM_DIR CACHE_DIR
+# Usage: 35-daijisho.sh SYSTEM_DIR CACHE_DIR
 set -euo pipefail
 
 SYSTEM="$1"
 ETC="$SYSTEM/etc"
 MODS="$(cd "$(dirname "$0")" && pwd)"
 work="$(realpath -m "$2")/daijisho"
-db="$work/tree/data/data/com.magneticchen.daijishou/databases/Daijishou.db"
+app="$work/tree/data/data/com.magneticchen.daijishou"
+db="$app/databases/Daijishou.db"
 
 rm -rf "$work"
 mkdir -p "$work/tree"
@@ -18,6 +21,8 @@ tar -xJpf "$ETC/daijisho.tar.xz" --no-same-owner -C "$work/tree"
 
 python3 -I "$MODS/../scripts/daijisho_platforms.py" "$db" "$MODS/daijisho-platforms.txt" "$2/daijisho-platforms"
 python3 -I "$MODS/../scripts/daijisho_defaults.py" "$db" "$MODS/retroarch-cores.txt"
+python3 -I "$MODS/../scripts/daijisho_wallpapers.py" "$db" "$app/files" "$MODS/daijisho-wallpapers"
+python3 -I "$MODS/../scripts/daijisho_library.py" "$db" "$ETC/roms.tar.xz"
 
 # Repack the same top-level paths as the original, so no entries for data/
 # itself are added; root would apply their owner and mode on extract.

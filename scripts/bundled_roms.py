@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """Rebuilds the GammaOS ROM pack (roms.tar.xz) from mods/bundled-roms.txt.
 
-  bundled_roms.py LIST IN_TAR OUT_TAR CACHE_DIR LICENSES_DIR
+  bundled_roms.py LIST IN_TAR OUT_TAR CACHE_DIR LICENSES_DIR LOCAL_DIR
 
 Keeps the pack's folders and systeminfo files, keeps only the "upstream" games
-the list names, adds each "add" game after checking its sha256, and creates
-each "folder" line's folder. Every game
+the list names, adds each "add" game after checking its sha256, adds each
+"local" file from LOCAL_DIR, and creates each "folder" line's folder. Every game
 gets its license file from LICENSES_DIR, either "<path>.license.txt" or a
 LICENSE.txt in the game's folder.
 
@@ -37,7 +37,7 @@ def parse(path):
         if kind == "folder":
             entries.append((kind, target, fields))
             continue
-        if kind not in ("upstream", "add") or "license" not in fields:
+        if kind not in ("upstream", "add", "local") or "license" not in fields:
             sys.exit(f"{path}:{number}: can't parse: {line}")
         if kind == "add" and not {"url", "sha256"} <= fields.keys():
             sys.exit(f"{path}:{number}: add needs url= and sha256=")
@@ -88,7 +88,7 @@ def license_for(target, licenses):
 
 
 def main():
-    list_path, in_tar, out_tar, cache, licenses = sys.argv[1:6]
+    list_path, in_tar, out_tar, cache, licenses, local = sys.argv[1:7]
     os.makedirs(cache, exist_ok=True)
     entries = parse(list_path)
     upstream = {target for kind, target, _ in entries if kind == "upstream"}
@@ -99,6 +99,8 @@ def main():
     for kind, target, fields in entries:
         if kind == "add":
             files[target] = fetch(target, fields, cache)
+        elif kind == "local":
+            files[target] = open(os.path.join(local, target), "rb").read()
         name, text = license_for(target, licenses)
         files[name] = text
 

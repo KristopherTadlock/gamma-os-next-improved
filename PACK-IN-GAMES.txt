@@ -78,6 +78,19 @@ Xbox
   Note: the port is new (November 2026) and has been tested on a real Xbox
   and in xemu, not in hakuX.
 
+ScummVM
+  Beneath a Steel Sky, by Revolution Software (CD version 1.2)
+  A 1994 science-fiction point-and-click adventure with full speech;
+  backgrounds by comic artist Dave Gibbons.
+  License: freeware. "You may distribute this game for free on any medium"
+  and "in aggregate as part of a larger & possibly commercial software
+  distribution (such as a Linux distribution...)", keeping its readme and
+  copyright notices intact. All game content is (C) Revolution Software.
+  Source: https://www.scummvm.org/games/#games-sky
+  Note: installed into ScummVM's own storage (with its readme), because
+  ScummVM can't read /sdcard/ROMs without the user granting access. Daijisho
+  starts it through ROMs/scummvm/Beneath a Steel Sky.dpt. About 73 MB.
+
 NES
   Lala the Magical, by The Mojon Twins
   A platformer: an apprentice magician conjures platforms to collect

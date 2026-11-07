@@ -10,7 +10,7 @@ work="$2/roms"
 
 mkdir -p "$work"
 python3 -I "$MODS/../scripts/bundled_roms.py" "$MODS/bundled-roms.txt" \
-  "$ETC/roms.tar.xz" "$work/roms.tar.xz" "$work/cache" "$MODS/rom-licenses"
+  "$ETC/roms.tar.xz" "$work/roms.tar.xz" "$work/cache" "$MODS/rom-licenses" "$MODS/rom-files"
 echo "roms.tar.xz: $(stat -c %s "$ETC/roms.tar.xz") -> $(stat -c %s "$work/roms.tar.xz") bytes"
 sudo cp --no-preserve=all "$work/roms.tar.xz" "$ETC/roms.tar.xz"
 rm "$work/roms.tar.xz"

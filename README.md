@@ -68,12 +68,30 @@ linked below.
 | WatermelonDS | Nintendo DS | 0.8.0.rc3 | GPL-3.0 | https://github.com/SapphireRhodonite/WatermelonDS/tree/0.8.0.rc3 |
 | hakuX | Xbox | 1.3.0 | GPL-3.0+ | https://github.com/rfandango/hakuX/tree/v1.3.0 |
 | Vita3K | PS Vita | 0.2.1 (2026-11-06 build) | GPL-2.0 | https://github.com/Vita3K/Vita3K |
+| ScummVM | Adventure games | 2026.3.0 | GPL-3.0+ | https://github.com/scummvm/scummvm/tree/v2026.3.0 |
 
 The [MaliSX2](https://github.com/bmdhacks/malisx2/tree/v0.4.0) 0.4.0 Vulkan
 driver (MIT) comes pre-installed and selected in ARMSX2, with the Vulkan
 renderer, and a copy is in `/sdcard/GPU Drivers/`. Dolphin and hakuX only load
 custom drivers on Adreno GPUs, so they can't use it on the RG Cube's Mali-G57.
 Edit `mods/added-apps.txt` to change the apps.
+
+### Daijisho platforms
+
+Daijisho gets 11 more platforms, each from Daijisho's official definition:
+GameCube, Wii, 3DS, Xbox and ScummVM for the added emulators, and Virtual Boy,
+32X, PC Engine, Atari 2600, Atari 5200 and Atari 7800, which have pack-in
+games and RetroArch cores but no platform upstream. Edit
+`mods/daijisho-platforms.txt` to change them.
+
+The new platforms get wallpapers drawn by `scripts/make_wallpapers.py`: the
+platform's name on a dark panel beside a color gradient, without logos or
+game art (`mods/daijisho-wallpapers/`).
+
+Upstream ships Daijisho with its game library already synced, listing the
+removed games. The build rebuilds the library from the games it ships, and
+makes Daijisho skip the license and `systeminfo.txt` files in the ROMs
+folders when you sync again.
 
 ### Pack-in games
 
@@ -108,8 +126,8 @@ The build also grows the system partition by about 431 MB, into the
 unallocated space at the end of the `super` image (`scripts/lptool.py grow`);
 the other partitions don't move. The upstream system filesystem is built
 with deduplicated blocks, which can't be mounted read-write, so the build
-grows the filesystem to fill the partition and unshares the blocks. That
-leaves about 511 MB free for changes.
+grows the filesystem to fill the partition and unshares the blocks. With
+all of the changes above, about 270 MB of it is still free.
 
 ## Flashing
 
