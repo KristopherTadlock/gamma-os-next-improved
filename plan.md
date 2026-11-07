@@ -1,6 +1,10 @@
 # Plan: replace Daijisho with ES-DE
 
-Status: proposal. Nothing here is implemented yet.
+Status: the build side is implemented (`ESDE_APK=… bash scripts/build.sh`,
+`mods/37-esde.sh`, `scripts/esde_config.py`, `mods/esde-emulators.txt`). ES-DE
+replaces Daijisho, as decided: the ES-DE APK goes into the firmware, which
+needs the ES-DE developers' permission for a public release (step 1 below).
+Testing on the device is still to do (see "Testing on the RG Cube").
 
 ## Summary
 

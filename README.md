@@ -80,6 +80,29 @@ renderer, and a copy is in `/sdcard/GPU Drivers/`. Dolphin and hakuX only load
 custom drivers on Adreno GPUs, so they can't use it on the RG Cube's Mali-G57.
 Edit `mods/added-apps.txt` to change the apps.
 
+### ES-DE
+
+Building with `ESDE_APK=/path/to/ES-DE.apk` replaces Daijisho with
+[ES-DE](https://es-de.org) (`mods/37-esde.sh`). ES-DE's Android app is paid
+and partly closed source, so its APK isn't in this repository; the build
+takes it from that path and checks it's the version the build is set up for
+(3.5.0). First-boot setup installs it with storage access, makes it the home
+app, and puts its settings and game lists in `/sdcard/ES-DE`:
+
+- the ROMs folder, `/sdcard/ROMs`, and the touch overlay turned off;
+- for each system, the emulator Daijisho used: the `D - ` core from
+  `mods/retroarch-cores.txt` or the standalone app (`mods/esde-emulators.txt`);
+- the pack-in games, with KłełeAtoms launching from its folder and Beneath
+  a Steel Sky as the `.scummvm` file ES-DE launches ScummVM games with.
+
+ES-DE's first start still runs its setup screens; choose the default folders
+(`ES-DE` and `ROMs` on the internal storage) to use these settings. GammaOS's
+Magisk module for an ES-DE theme download error on some devices
+(`MAGISK_ES-DE_fix.zip`) is copied to `/sdcard/Download`; install it in
+Magisk only if theme downloads fail with "Failed to lock file".
+
+Without `ESDE_APK`, the build keeps Daijisho, set up as below.
+
 ### Daijisho platforms
 
 Daijisho gets 11 more platforms, each from Daijisho's official definition:

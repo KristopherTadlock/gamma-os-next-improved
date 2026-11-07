@@ -19,6 +19,11 @@ work="$(realpath -m "$2")/daijisho"
 app="$work/tree/data/data/com.magneticchen.daijishou"
 db="$app/databases/Daijishou.db"
 
+if [[ -n "${ESDE_APK:-}" ]]; then
+  echo "ES-DE replaces Daijisho; skipping"
+  exit 0
+fi
+
 rm -rf "$work"
 mkdir -p "$work/tree"
 # setup.sh chowns these files after extracting them, so ownership is not kept.

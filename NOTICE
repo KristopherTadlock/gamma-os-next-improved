@@ -14,6 +14,10 @@ by Future Crew (https://github.com/mtuomi/SecondReality), as captured by
 the Xbox port (https://github.com/kooscode/SecondReality), both released
 under the Unlicense.
 
+With ES-DE, the build includes MAGISK_ES-DE_fix.zip from GammaOS Next
+(https://github.com/TheGammaSqueeze/GammaOSNext), unchanged, Copyright
+TheGammaSqueeze, Apache License 2.0.
+
 The build downloads platform wallpapers for Daijisho from the same "BB-1 Dark"
 pack (Daijishou, MIT License, Copyright (c) 2022 TapiocaFox (Yves Chen));
 they show artwork from the games and consoles they represent, which belongs

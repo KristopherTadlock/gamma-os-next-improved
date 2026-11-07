@@ -1,0 +1,34 @@
+# The emulator ES-DE launches each system's games with, where it isn't
+# ES-DE's own default: the "D - " core from retroarch-cores.txt, or the
+# standalone app Daijisho used. Labels are ES-DE's (es_systems.xml). The build
+# fails if a label doesn't exist, needs a core that isn't shipped, or a
+# system's ES-DE default needs an unshipped core while a shipped one exists.
+#
+#   <system>  <label>
+
+gb            SameBoy
+gbc           SameBoy
+sgb           SameBoy
+psx           PCSX ReARMed
+pcengine      Beetle PCE FAST
+pcenginecd    Beetle PCE FAST
+tg16          Beetle PCE FAST
+tg-cd         Beetle PCE FAST
+saturn        YabaSanshiro
+saturnjp      YabaSanshiro
+atarilynx     Beetle Lynx
+colecovision  Gearcoleco
+pico8         Fake-08
+
+# Standalone apps
+dreamcast     Flycast (Standalone)
+n64           M64Plus FZ (Standalone)
+n64dd         M64Plus FZ (Standalone)
+nds           WatermelonDS (Standalone)
+n3ds          Azahar (Standalone)
+gc            Dolphin (Standalone)
+wii           Dolphin (Standalone)
+xbox          hakuX (Standalone)
+scummvm       ScummVM (Standalone)
+psp           PPSSPP (Standalone)
+ps2           ARMSX2 (Standalone)

@@ -3,6 +3,9 @@
 #
 # Needs: curl, 7zz (or 7z), xz, unzip, e2fsck, resize2fs, setfattr, cc,
 # python3, and sudo for loop-mounting the system image.
+#
+# Set ESDE_APK=/path/to/ES-DE.apk to replace Daijisho with ES-DE
+# (mods/37-esde.sh); that also needs aapt.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -13,6 +16,12 @@ NAME="RG_Cube_GammaOS_Next_Full_v1.2"
 PASSWORD="f297133b935e68072bd77309645cca86ab24bd26847e42c8080db143157a090a"
 SEVENZIP="$(command -v 7zz || command -v 7z || true)"
 [[ -n "$SEVENZIP" ]] || { echo "7-Zip (7zz or 7z) is required" >&2; exit 1; }
+if [[ -n "${ESDE_APK:-}" ]]; then
+  [[ -f "$ESDE_APK" ]] || { echo "ESDE_APK: no file $ESDE_APK" >&2; exit 1; }
+  command -v aapt >/dev/null || { echo "aapt is required with ESDE_APK" >&2; exit 1; }
+  ESDE_APK="$(realpath "$ESDE_APK")"
+  export ESDE_APK
+fi
 
 mkdir -p "$WORK/bin" "$WORK/images" "$WORK/mnt" "$OUT"
 export CRC16ARC="$WORK/bin/crc16arc"
