@@ -111,11 +111,14 @@ system image built from GammaOS's source
 target `arm64_bgN`) in place of the release's 1.2 system. The RG Cube's
 vendor, kernel and bootloader stay. The changes above apply to it too, adapted
 to 1.4.4's zstd payloads and its app list (`/system/etc/gammaos/apps.list`),
-except the Daijisho update (1.4.4 ships Daijisho 1.8.1) and ES-DE's app.
+except the Daijisho changes and ES-DE's app: GammaOS Nano replaces Daijisho,
+which is removed, along with Beneath a Steel Sky's Daijisho launch file
+(ScummVM lists the game itself).
 
-1.4.4 adds GammaOS Nano, a console-style home that starts from the power
-menu's **Boot Nano** (and **Boot Android** to go back). `mods/50-nano.sh`
-sets it up:
+1.4.4 adds GammaOS Nano, a console-style home. The build makes the device
+boot into it from the first boot, where Nano's setup wizard runs first-boot
+setup; **Boot Android** in the power menu switches to normal Android (with
+its own launcher), and **Boot Nano** back. `mods/50-nano.sh` sets it up:
 
 - the home theme is Nano's ES-DE theme engine, with
   [Colorful (Simplified)](https://github.com/anthonycaccese/colorful-simplified-es-de)
@@ -125,8 +128,8 @@ sets it up:
   (which Nano runs itself) and the standalone apps. ScummVM and PS Vita games
   start from their apps, because their players need each game's ID.
 
-First-boot setup applies these without overriding settings already made, and
-the device boots normal Android until **Boot Nano** is chosen.
+The boot mode and theme are `build.prop` defaults, so changes made in Nano
+stick.
 
 ### Daijisho platforms
 

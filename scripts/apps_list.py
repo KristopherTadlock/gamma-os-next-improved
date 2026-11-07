@@ -5,11 +5,13 @@
   apps_list.py LIST hook PACKAGE HOOK
   apps_list.py LIST replace PACKAGE NAME NEW_PACKAGE SOURCE
   apps_list.py LIST source OLD_SOURCE NEW_SOURCE
+  apps_list.py LIST remove PACKAGE
 
 Each app is a line "name|package|source|condition|hook". `add` appends an app,
 `hook` sets an app's post-install hook, `replace` swaps an app for another
-(keeping its condition and dropping its hook), and `source` points an app at a
-renamed file. Every command fails unless it changes exactly one line.
+(keeping its condition and dropping its hook), `source` points an app at a
+renamed file, and `remove` drops an app. Every command fails unless it
+changes exactly one line.
 """
 
 import sys
@@ -49,6 +51,10 @@ def main():
         i, f = only([(i, f) for i, f in apps() if f[2] == old], old)
         f[2] = new
         lines[i] = "|".join(f)
+    elif cmd == "remove":
+        (package,) = args
+        i, _ = only([(i, f) for i, f in apps() if f[1] == package], package)
+        del lines[i]
     else:
         sys.exit(f"unknown command {cmd}")
     open(path, "w").write("\n".join(lines) + "\n")

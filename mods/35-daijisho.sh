@@ -7,6 +7,9 @@
 # copied to /sdcard/Daijisho/Wallpapers/ on first boot. Runs after
 # 30-bundled-roms.sh.
 #
+# On the 1.4.4 base, the Nano home replaces Daijisho, so this removes it
+# instead; normal Android then uses its own launcher, Trebuchet.
+#
 # Usage: 35-daijisho.sh SYSTEM_DIR CACHE_DIR
 set -euo pipefail
 
@@ -21,6 +24,12 @@ db="$app/databases/Daijishou.db"
 
 if [[ -n "${ESDE_APK:-}" ]]; then
   echo "ES-DE replaces Daijisho; skipping"
+  exit 0
+fi
+if is_nano_base "$SYSTEM"; then
+  apps_list "$SYSTEM" remove com.magneticchen.daijishou
+  sudo rm -rf "$ETC/daijisho" "$(payload_path "$ETC" daijisho)"
+  echo "removed Daijisho; Nano is the home"
   exit 0
 fi
 

@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
-# Sets up the GammaOS Nano home (1.4.4 base only): its ES-DE theme engine as
-# the home theme, with the Colorful (Simplified) theme in its square layout, and
-# the game systems in nano-systems.txt with this project's default emulators.
-# First-boot setup applies them, without overriding anything already chosen.
-# The device still boots normal Android until "Boot Nano" is picked from the
-# power menu, like GammaOS. Runs after 40-added-apps.sh.
+# Makes the device boot into the GammaOS Nano home (1.4.4 base only), from the
+# first boot, where Nano's own setup wizard runs first-boot setup. Its home
+# theme is the ES-DE theme engine with the Colorful (Simplified) theme in its
+# square layout, and its game systems are the ones in nano-systems.txt, with
+# this project's default emulators. These are build.prop defaults, so choices
+# made later in Nano, or "Boot Android" in the power menu, stick. Runs after
+# 40-added-apps.sh.
 #
 # Usage: 50-nano.sh SYSTEM_DIR CACHE_DIR
 set -euo pipefail
@@ -50,22 +51,34 @@ python3 -I "$MODS/../scripts/nano_systems.py" "$MODS/nano-systems.txt" "$ETC/nan
   "$ETC/nano_xmb/icons_retroarch" "$ETC/gammaos/apps.list" "$MODS/retroarch-cores.txt" "$work/nano_systems.json"
 install_system_file "$work/nano_systems.json" "$ETC/gammaos/nano_systems.json"
 
-cat >"$work/setup-steps.sh" <<EOF
-step "Setting up the GammaOS Nano home."
-if [ ! -f /data/system/nano_systems.json ]; then
+# Nano's setup wizard starts Nano before setup.sh runs, and Nano writes its
+# built-in systems on its first start, so a fresh setup replaces them; Nano
+# reloads the file when it changes.
+cat >"$work/setup-steps.sh" <<'EOF'
+if [ "$FRESH_SETUP" = 1 ]; then
+    step "Setting up the GammaOS Nano game systems."
     cp /system/etc/gammaos/nano_systems.json /data/system/nano_systems.json
     chown root:root /data/system/nano_systems.json
     chmod 644 /data/system/nano_systems.json
     restorecon /data/system/nano_systems.json
 fi
-nano_default() {
-    [ -n "\$(getprop "\$1")" ] || setprop "\$1" "\$2"
-}
-nano_default persist.gammaos.nano.ndstheme 3
-nano_default persist.gammaos.nano.esde.themeset $THEME
-nano_default persist.gammaos.nano.esde.aspectratio 1:1
-nano_default persist.gammaos.nano.esde.colorscheme colorful
 
 EOF
 add_setup_steps "$SYSTEM" "$work/setup-steps.sh"
+
+sudo cat "$SYSTEM/build.prop" >"$work/build.prop"
+if grep -qE '^persist\.(bootanim\.skip_nano|gammaos\.nano\.(ndstheme|esde\.))' "$work/build.prop"; then
+  echo "build.prop already sets Nano's boot or theme" >&2
+  exit 1
+fi
+cat >>"$work/build.prop" <<EOF
+
+# gamma-os-next-improved: boot into Nano, with the ES-DE theme engine
+persist.bootanim.skip_nano=0
+persist.gammaos.nano.ndstheme=3
+persist.gammaos.nano.esde.themeset=$THEME
+persist.gammaos.nano.esde.aspectratio=1:1
+persist.gammaos.nano.esde.colorscheme=colorful
+EOF
+write_through "$work/build.prop" "$SYSTEM/build.prop"
 rm -rf "$work"
