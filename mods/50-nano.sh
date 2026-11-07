@@ -2,11 +2,13 @@
 # Makes the device boot into the GammaOS Nano home (1.4.4 base only), from the
 # first boot, where Nano's own setup wizard runs first-boot setup. Its home
 # theme is the ES-DE theme engine with the Colorful (Simplified) theme in its
-# square layout, its settings screens have the Minima theme's look, its menu
-# sounds are off, and its game systems are the ones in nano-systems.txt, with
-# this project's default emulators. These are build.prop defaults, so choices
-# made later in Nano, or "Boot Android" in the power menu, stick. Runs after
-# 40-added-apps.sh.
+# square layout, its settings screens have the Minima theme's look on a
+# Midnight background, its menu sounds are off, and its game systems are the
+# ones in nano-systems.txt, with this project's default emulators. The stick
+# LEDs follow the screen's colour, the performance mode is Max Performance,
+# and Nano's Slide Behaviour settings are hidden (the RG Cube does not slide).
+# These are build.prop defaults, so choices made later in Nano, or "Boot
+# Android" in the power menu, stick. Runs after 40-added-apps.sh.
 #
 # It also builds in the Android Games helper (tools/android-games), which lists
 # the installed Android games as the Android Games system and starts them;
@@ -87,21 +89,27 @@ EOF
 add_setup_steps "$SYSTEM" "$work/setup-steps.sh"
 
 sudo cat "$SYSTEM/build.prop" >"$work/build.prop"
-if grep -qE '^persist\.(bootanim\.skip_nano|gammaos\.nano\.(ndstheme|esde\.|nav_sounds))' "$work/build.prop"; then
-  echo "build.prop already sets Nano's boot, theme or sounds" >&2
+if grep -qE '^(persist\.(bootanim\.skip_nano|gammaos\.nano\.(ndstheme|esde\.|nav_sounds|minima\.bg)|gammaos\.performance_mode|gammargb\.control)|ro\.gammaos\.nano\.no_slide)' "$work/build.prop"; then
+  echo "build.prop already sets Nano's boot, theme, sounds, LEDs or performance mode" >&2
   exit 1
 fi
 cat >>"$work/build.prop" <<EOF
 
 # gamma-os-next-improved: boot into Nano, with the ES-DE theme engine, Minima's
-# look for the settings and no menu sounds
+# look on Midnight for the settings, no menu sounds and no slide settings
 persist.bootanim.skip_nano=0
 persist.gammaos.nano.ndstheme=3
 persist.gammaos.nano.esde.themeset=$THEME
 persist.gammaos.nano.esde.aspectratio=1:1
 persist.gammaos.nano.esde.colorscheme=colorful-dark
 persist.gammaos.nano.esde.settingstheme=minima
+persist.gammaos.nano.minima.bg=1a1a2e
 persist.gammaos.nano.nav_sounds=0
+ro.gammaos.nano.no_slide=1
+# The stick LEDs on, following the screen's colour (the vendor sets the Follow
+# effect, but nothing turns GammaRGB on), and Max Performance
+persist.gammargb.control=on
+persist.gammaos.performance_mode=max
 EOF
 write_through "$work/build.prop" "$SYSTEM/build.prop"
 

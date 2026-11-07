@@ -125,23 +125,50 @@ fixes GammaOS Nano bugs:
 
 - settings that are switches or choices, Performance Mode among them, opened
   as a 0-255 slider that did nothing;
-- Nano's settings and Quick Settings had no Fan Speed and, of the HDMI
-  options, only External as Primary; they get Fan Speed, Force Mirror, Resize
-  to External Display and Secondary Display Apps;
+- Nano's settings had no Fan Speed and, of the HDMI options, only External as
+  Primary; they get Fan Speed, Force Mirror, Resize to External Display and
+  Secondary Display Apps;
 - in the ES-DE theme the X, Y, shoulder, trigger and stick-click buttons its
   help bar shows did nothing, or acted on the hidden XMB menu, and Y could not
-  take away a favourite imported from ES-DE's game lists.
+  take away a favourite imported from ES-DE's game lists;
+- Nano's File Transfer (MTP) only worked while a full-screen "MTP Active"
+  screen stayed open.
 
-It also adds a **Settings Theme** setting to the ES-DE theme, so its settings
-screens can have the Minima theme's look while the game menus keep ES-DE's,
-and an **ES-DE Media Folder** setting (Theme Settings), ES-DE's game media
-directory, so covers, screenshots and manuals can live on the SD card (Nano's
-own scraped art already can: Boxart Scraper → Boxart Folder);
-makes the Anbernic button open Nano's Quick Settings, on the home screen and
-over a running game (pressing it again goes back to the game; **Toolbox → Mode
-Button Opens Quick Settings** gives the button back to games); and makes Nano
-start an Android Games entry as the game's own app rather than through the
-helper app, so it follows the game like any other.
+It also changes Nano:
+
+- **Quick Menu:** the Quick Settings rows (Wi-Fi, Bluetooth, Fan Speed,
+  GammaRGB, GammaEQ, Deep Sleep Mode and the controller toggles) are in the
+  Quick Menu itself instead of a Quick Settings submenu, ordered with the most
+  used first. Wi-Fi offers On, Off and Scan, and the row under it shows the
+  network you are connected to, with its signal bars. HDMI options are one
+  External Display submenu, the same as in Display Settings. System Settings is
+  renamed Android Settings and sits at the bottom. Close Current App and Screen
+  Orientation only show over a running app.
+- **Anbernic button:** opens the Quick Menu, on the home screen and over a
+  running game (pressing it again goes back to the game). The RG Cube reports it
+  as F10. **Toolbox → Anbernic Button Opens Quick Menu** gives the button back
+  to games.
+- **USB Settings:** the mode you choose (Charging Only, File Transfer (MTP),
+  Photo Transfer (PTP) or USB Ethernet (RNDIS)) stays on and is applied each
+  time a computer is connected, from boot onwards. File Transfer is the default.
+- **ES-DE theme:**
+  - **Settings Theme** (Theme Settings) gives the settings screens the Minima
+    theme's look while the game menus keep ES-DE's.
+  - **ES-DE Media Folder** (Theme Settings) is ES-DE's game media directory, so
+    covers, screenshots and manuals can live on the SD card. Nano's own scraped
+    art already can (Boxart Scraper → Boxart Folder).
+  - The Start menu gets the focused platform's settings (name, emulator, icon,
+    folders, scraper), Game Systems and Boxart Scraper.
+  - Select in a game list opens the game's options: Emulator (a different
+    emulator for that game), Rename / Edit Title, Set Boxart, Scrape This Game,
+    Favorites, Collections, Information and Search Games. The XMB's game option
+    menu gets Emulator for This Game too.
+- **Background Colour** (Theme Settings) gets a Custom option with a colour
+  picker.
+- **Slide Behaviour** is hidden on devices that cannot slide (the build sets
+  `ro.gammaos.nano.no_slide`).
+- **Android Games:** Nano starts an entry as the game's own app rather than
+  through the helper app, so it follows the game like any other.
 
 1.4.4 adds GammaOS Nano, a console-style home. The build makes the device
 boot into it from the first boot, where Nano's setup wizard runs first-boot
@@ -152,18 +179,22 @@ its own launcher), and **Boot Nano** back. `mods/50-nano.sh` sets it up:
   [Colorful (Simplified)](https://github.com/anthonycaccese/colorful-simplified-es-de)
   in its 1:1 layout for the square screen and its Colorful (Dark) color scheme;
 - the settings screens (Nano Settings and the Quick Menu) have the Minima
-  theme's look (**Theme Settings → Settings Theme** sets it back to the XMB's);
+  theme's look on a Midnight background (**Theme Settings → Settings Theme**
+  sets it back to the XMB's, **Background Colour** changes the colour);
 - the menu sounds are off (**Theme Settings → Navigation Sounds** turns them
   on);
-- Quick Settings, in Android's shade and in Nano, gets the Force Mirror and
-  Resize to External Display tiles;
+- the stick LEDs are on and follow the screen's colour (GammaRGB);
+- the performance mode is Max Performance;
+- Slide Behaviour is hidden, as the RG Cube cannot slide;
+- Quick Settings in Android's shade gets the Force Mirror and Resize to
+  External Display tiles;
 - its game systems are the ones in `mods/nano-systems.txt`, with this
   build's default emulators: the `D - ` cores from `mods/retroarch-cores.txt`
   (which Nano runs itself) and the standalone apps. ScummVM and PS Vita games
   start from their apps, because their players need each game's ID.
 
-The boot mode, theme and sounds are `build.prop` defaults, so changes made
-in Nano stick.
+The boot mode, theme, sounds, LEDs and performance mode are `build.prop`
+defaults, so changes made in Nano stick.
 
 Nano also gets an **Android Games** system listing the installed Android
 games: the apps that declare themselves games, apart from the emulators and
