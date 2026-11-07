@@ -7,6 +7,10 @@
 # made later in Nano, or "Boot Android" in the power menu, stick. Runs after
 # 40-added-apps.sh.
 #
+# It also builds in the Android Games helper (tools/android-games), which lists
+# the installed Android games as the Android Games system and starts them;
+# building it needs the tools scripts/build_android_games.sh lists.
+#
 # Usage: 50-nano.sh SYSTEM_DIR CACHE_DIR
 set -euo pipefail
 
@@ -19,6 +23,7 @@ THEME="colorful-simplified-es-de"
 THEME_COMMIT="669e7f6a2de57c5ab69fd865e70d1cd357dbabbb"
 THEME_URL="https://github.com/anthonycaccese/$THEME/archive/$THEME_COMMIT.zip"
 THEME_SHA256="b36570e97d9233343872d8079c99bddc4116283c274785d086ca63be6eee3211"
+GAMES_PKG="org.gammaosnextimproved.androidgames"
 cache="$(realpath -m "$2")/nano"
 work="$cache/work"
 
@@ -47,21 +52,35 @@ sudo find "$dest" -type d -exec chmod 755 {} + -o -type f -exec chmod 644 {} +
 sudo find "$dest" -exec setfattr -n security.selinux -v u:object_r:system_file:s0 {} +
 echo "bundled $THEME ($(sudo du -sh "$dest" | cut -f1))"
 
+bash "$MODS/../scripts/build_android_games.sh" "$work/AndroidGames.apk" "$cache/android-games.keystore"
+app_dir="$SYSTEM/app/AndroidGames"
+sudo install -d -m 755 -o root -g root "$app_dir"
+sudo setfattr -n security.selinux -v u:object_r:system_file:s0 "$app_dir"
+install_system_file "$work/AndroidGames.apk" "$app_dir/AndroidGames.apk"
+# The apps setup installs are emulators and tools, not Android games.
+sudo grep -v '^#' "$ETC/gammaos/apps.list" | cut -d'|' -f2 | grep . >"$work/android-games-exclude.txt"
+install_system_file "$work/android-games-exclude.txt" "$ETC/gammaos/android-games-exclude.txt"
+
 python3 -I "$MODS/../scripts/nano_systems.py" "$MODS/nano-systems.txt" "$ETC/nano_xmb/daijishou" \
-  "$ETC/nano_xmb/icons_retroarch" "$ETC/gammaos/apps.list" "$MODS/retroarch-cores.txt" "$work/nano_systems.json"
+  "$ETC/nano_xmb/icons_retroarch" "$ETC/gammaos/apps.list" "$MODS/retroarch-cores.txt" "$work/nano_systems.json" \
+  "$GAMES_PKG"
 install_system_file "$work/nano_systems.json" "$ETC/gammaos/nano_systems.json"
 
 # Nano's setup wizard starts Nano before setup.sh runs, and Nano writes its
 # built-in systems on its first start, so a fresh setup replaces them; Nano
 # reloads the file when it changes.
-cat >"$work/setup-steps.sh" <<'EOF'
-if [ "$FRESH_SETUP" = 1 ]; then
+cat >"$work/setup-steps.sh" <<EOF
+if [ "\$FRESH_SETUP" = 1 ]; then
     step "Setting up the GammaOS Nano game systems."
     cp /system/etc/gammaos/nano_systems.json /data/system/nano_systems.json
     chown root:root /data/system/nano_systems.json
     chmod 644 /data/system/nano_systems.json
     restorecon /data/system/nano_systems.json
 fi
+step "Listing the installed Android games."
+run pm grant $GAMES_PKG android.permission.READ_EXTERNAL_STORAGE
+run pm grant $GAMES_PKG android.permission.WRITE_EXTERNAL_STORAGE
+run am broadcast -a $GAMES_PKG.SYNC -n $GAMES_PKG/.SyncReceiver
 
 EOF
 add_setup_steps "$SYSTEM" "$work/setup-steps.sh"

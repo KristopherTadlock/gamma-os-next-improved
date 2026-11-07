@@ -57,3 +57,7 @@ fds           name=Famicom Disk System  short=FDS  icon=retroarch:Nintendo_-_Fam
 arcade        name=Arcade             short=ARC   icon=retroarch:MAME  player=mame.ra64.mamearcade
 fbneo         name=FinalBurn Neo      short=FBN   icon=retroarch:FBNeo_-_Arcade_Games  player=fbneo.ra64.fbneo
 neogeo        name=Neo Geo            short=NEO   icon=retroarch:SNK_-_Neo_Geo  player=neogeo.ra64.fbneo
+
+# The installed Android games, listed by tools/android-games (built in by
+# 50-nano.sh) as one .app file each, which starts the game.
+androidgames  name=Android Games  short=AND  icon=retroarch:Google_-_Android_Misc  package=org.gammaosnextimproved.androidgames  intent=-n org.gammaosnextimproved.androidgames/.Launch -a android.intent.action.VIEW -d {file.uri}  exts=.app

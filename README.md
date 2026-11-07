@@ -131,6 +131,18 @@ its own launcher), and **Boot Nano** back. `mods/50-nano.sh` sets it up:
 The boot mode and theme are `build.prop` defaults, so changes made in Nano
 stick.
 
+Nano also gets an **Android Games** system listing the installed Android
+games: the apps that declare themselves games, apart from the emulators and
+tools setup installs. A small helper app built into the image
+(`tools/android-games`) keeps one `.app` file per game in
+`/sdcard/ROMs/androidgames`, with the game's icon as its art in
+`/sdcard/ES-DE/downloaded_media/androidgames`, updated at boot and when an
+app is installed or removed, and starts the game when Nano opens its file.
+Nano shows new games after its next scan (at boot, or **Rescan Games**).
+Building it needs a JDK 17 (`javac`, `keytool`), the Android build tools
+`aapt2`, `d8`, `zipalign` and `apksigner`, and `ANDROID_JAR` set to an API 34
+`android.jar`; a GammaOS source tree has all of them after a build.
+
 ### Daijisho platforms
 
 Daijisho gets 11 more platforms, each from Daijisho's official definition:

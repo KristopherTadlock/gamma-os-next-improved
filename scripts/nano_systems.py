@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 """Writes GammaOS Nano's game systems file from mods/nano-systems.txt.
 
-  nano_systems.py NANO_SYSTEMS_TXT CATALOG_DIR ICONS_DIR APPS_LIST RETROARCH_CORES_TXT OUT_JSON
+  nano_systems.py NANO_SYSTEMS_TXT CATALOG_DIR ICONS_DIR APPS_LIST RETROARCH_CORES_TXT OUT_JSON [PACKAGE...]
 
 Resolves each system's player in Nano's emulator catalog (CATALOG_DIR, the
 Daijisho platform definitions) the way Nano's emulator picker applies one: a
 RetroArch 64 player runs its core in Nano, any other player starts its app
 with the player's am start arguments. Fails when a core isn't in
-RETROARCH_CORES_TXT, an app isn't in APPS_LIST, or an icon doesn't exist, so
-the list can't drift from what the image ships.
+RETROARCH_CORES_TXT, an app isn't in APPS_LIST or the PACKAGEs (apps built
+into the image), or an icon doesn't exist, so the list can't drift from what
+the image ships.
 """
 
 import json
@@ -60,11 +61,11 @@ def read_cores(path):
 
 
 def main():
-    txt, catalog_dir, icons_dir, apps_list, cores_txt, out = sys.argv[1:7]
+    txt, catalog_dir, icons_dir, apps_list, cores_txt, out, *builtin = sys.argv[1:]
     catalog = read_catalog(catalog_dir)
     cores = read_cores(cores_txt)
     packages = {line.split("|")[1] for line in open(apps_list)
-                if line.strip() and not line.startswith("#")}
+                if line.strip() and not line.startswith("#")} | set(builtin)
 
     systems, errors = [], []
     for order, (n, rom_dir, f) in enumerate(parse(txt)):
