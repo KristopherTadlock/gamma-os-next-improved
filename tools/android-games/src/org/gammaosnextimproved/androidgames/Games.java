@@ -300,8 +300,8 @@ final class Games {
         for (File f : files) {
             if (!f.getName().endsWith(EXT)) continue;
             String pkg = packageOf(f);
-            if (pkg == null) {
-                done = false;
+            if (pkg == null || pkg.isEmpty()) {
+                if (!f.canRead()) done = false;   // try again; an empty file names no game
                 continue;
             }
             byte[] png = iconPng(pm, pkg);
