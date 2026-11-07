@@ -122,7 +122,7 @@ its own launcher), and **Boot Nano** back. `mods/50-nano.sh` sets it up:
 
 - the home theme is Nano's ES-DE theme engine, with
   [Colorful (Simplified)](https://github.com/anthonycaccese/colorful-simplified-es-de)
-  in its 1:1 layout for the square screen;
+  in its 1:1 layout for the square screen and its Colorful (Dark) color scheme;
 - its game systems are the ones in `mods/nano-systems.txt`, with this
   build's default emulators: the `D - ` cores from `mods/retroarch-cores.txt`
   (which Nano runs itself) and the standalone apps. ScummVM and PS Vita games

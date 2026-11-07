@@ -78,7 +78,7 @@ persist.bootanim.skip_nano=0
 persist.gammaos.nano.ndstheme=3
 persist.gammaos.nano.esde.themeset=$THEME
 persist.gammaos.nano.esde.aspectratio=1:1
-persist.gammaos.nano.esde.colorscheme=colorful
+persist.gammaos.nano.esde.colorscheme=colorful-dark
 EOF
 write_through "$work/build.prop" "$SYSTEM/build.prop"
 rm -rf "$work"
