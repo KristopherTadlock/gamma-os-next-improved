@@ -17,19 +17,23 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.FileReader;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
+import java.util.zip.CRC32;
 
 /**
  * Keeps /sdcard/ROMs/androidgames in step with the installed games: one
  * "<game name>.app" file per game, holding its package name, and its icon as
  * the game's art in the ES-DE media folder, where Nano looks for it. A game's
  * file keeps its name once made, since Nano keys favourites, recents and
- * collections by it, and art the user put there (scraped covers) is left alone.
+ * collections by it. The art this app writes carries a PNG text chunk naming
+ * it, and only marked art is ever replaced or deleted, so art the user put
+ * there (scraped covers) is left alone.
  */
 final class Games {
     static final String TAG = "AndroidGames";
@@ -54,9 +58,11 @@ final class Games {
 
     static synchronized void sync(Context context) {
         PackageManager pm = context.getPackageManager();
-        // The art files this app wrote, with the modification time it left them at.
-        SharedPreferences ours = context.getSharedPreferences("art", Context.MODE_PRIVATE);
-        if (!ours.getBoolean("adopted", false)) adoptArt(pm, ours);
+        SharedPreferences state = context.getSharedPreferences("art", Context.MODE_PRIVATE);
+        if (!state.getBoolean("adopted", false)) {
+            adoptArt(pm);
+            state.edit().putBoolean("adopted", true).apply();
+        }
         Set<String> exclude = readExclude();
         exclude.add(context.getPackageName());
 
@@ -83,7 +89,7 @@ final class Games {
                 String pkg = packageOf(f);
                 if (pkg == null) continue;
                 if (!isInstalled(pm, pkg)) {
-                    delete(ours, f);
+                    delete(f);
                     continue;
                 }
                 listed.add(pkg);
@@ -95,11 +101,11 @@ final class Games {
                 if (name.startsWith(".")) {
                     String renamed = unique(label);
                     if (f.renameTo(new File(ROMS, renamed + EXT))) {
-                        deleteArt(ours, name);
+                        deleteArt(name);
                         name = renamed;
                     }
                 }
-                writeArt(pm, ours, pkg, name);
+                writeArt(pm, pkg, name);
             }
         }
         int added = 0;
@@ -107,7 +113,7 @@ final class Games {
             if (listed.contains(g.getKey())) continue;
             String name = unique(g.getValue());
             if (write(new File(ROMS, name + EXT), g.getKey())) {
-                writeArt(pm, ours, g.getKey(), name);
+                writeArt(pm, g.getKey(), name);
                 added++;
             }
         }
@@ -176,83 +182,126 @@ final class Games {
      * wrote it before the installed version of the game (an update can change
      * the icon). Art from anywhere else is kept.
      */
-    private static void writeArt(PackageManager pm, SharedPreferences ours, String pkg, String name) {
+    private static void writeArt(PackageManager pm, String pkg, String name) {
         long updated;
-        Drawable icon;
         try {
             updated = pm.getPackageInfo(pkg, 0).lastUpdateTime;
-            icon = pm.getApplicationIcon(pkg);
         } catch (PackageManager.NameNotFoundException e) {
             return;
         }
-        Bitmap bitmap = null;
-        SharedPreferences.Editor written = ours.edit();
+        byte[] png = null;
         for (String dir : ART) {
-            File folder = new File(MEDIA, dir);
-            File art = new File(folder, name + ".png");
-            if (art.exists() && (!isOurs(ours, dir, art) || art.lastModified() >= updated)) continue;
-            if (!folder.isDirectory() && !folder.mkdirs()) continue;
-            if (bitmap == null) bitmap = render(icon);
-            // Written whole to a temporary file first, so a failed write never
-            // leaves a broken PNG that looks current.
-            File tmp = new File(folder, "." + art.getName() + ".tmp");
-            boolean ok;
-            try (FileOutputStream out = new FileOutputStream(tmp)) {
-                ok = bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
-                out.getFD().sync();
-            } catch (IOException e) {
-                ok = false;
-            }
-            if (!ok || !tmp.renameTo(art)) {
-                Log.w(TAG, "can't write art for " + pkg);
-                tmp.delete();
-                continue;
-            }
-            written.putLong(dir + "/" + art.getName(), art.lastModified());
+            File art = new File(new File(MEDIA, dir), name + ".png");
+            if (art.exists() && (!isOurs(art) || art.lastModified() >= updated)) continue;
+            if (png == null && (png = iconPng(pm, pkg)) == null) return;
+            publish(art, mark(png));
         }
-        written.apply();
-        if (bitmap != null) bitmap.recycle();
     }
 
-    private static Bitmap render(Drawable icon) {
+    /**
+     * Writes data to f through a temporary file, so a failed write never leaves
+     * a broken PNG in its place.
+     */
+    private static void publish(File f, byte[] data) {
+        File folder = f.getParentFile();
+        if (!folder.isDirectory() && !folder.mkdirs()) return;
+        File tmp = new File(folder, "." + f.getName() + ".tmp");
+        boolean ok;
+        try (FileOutputStream out = new FileOutputStream(tmp)) {
+            out.write(data);
+            out.getFD().sync();
+            ok = true;
+        } catch (IOException e) {
+            ok = false;
+        }
+        if (!ok || !tmp.renameTo(f)) {
+            Log.w(TAG, "can't write " + f);
+            tmp.delete();
+        }
+    }
+
+    /** The game's icon at 512px as a PNG, the way the first test build wrote it. */
+    private static byte[] iconPng(PackageManager pm, String pkg) {
+        Drawable icon;
+        try {
+            icon = pm.getApplicationIcon(pkg);
+        } catch (PackageManager.NameNotFoundException e) {
+            return null;
+        }
         int size = 512;
         Bitmap bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888);
         icon.setBounds(0, 0, size, size);
         icon.draw(new Canvas(bitmap));
-        return bitmap;
+        ByteArrayOutputStream out = new ByteArrayOutputStream();
+        boolean ok = bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
+        bitmap.recycle();
+        return ok ? out.toByteArray() : null;
+    }
+
+    // A tEXt chunk ("Software" = this package) right after the PNG signature (8
+    // bytes) and IHDR, which is always the first chunk and 25 bytes long.
+    private static final int MARK_AT = 8 + 25;
+    private static final byte[] MARK_CHUNK = textChunk("Software", "org.gammaosnextimproved.androidgames");
+
+    private static byte[] textChunk(String keyword, String text) {
+        byte[] data = (keyword + "\0" + text).getBytes(StandardCharsets.ISO_8859_1);
+        ByteBuffer chunk = ByteBuffer.allocate(12 + data.length);
+        chunk.putInt(data.length).put("tEXt".getBytes(StandardCharsets.ISO_8859_1)).put(data);
+        CRC32 crc = new CRC32();
+        crc.update(chunk.array(), 4, 4 + data.length);
+        chunk.putInt((int) crc.getValue());
+        return chunk.array();
+    }
+
+    private static byte[] mark(byte[] png) {
+        byte[] marked = new byte[png.length + MARK_CHUNK.length];
+        System.arraycopy(png, 0, marked, 0, MARK_AT);
+        System.arraycopy(MARK_CHUNK, 0, marked, MARK_AT, MARK_CHUNK.length);
+        System.arraycopy(png, MARK_AT, marked, MARK_AT + MARK_CHUNK.length, png.length - MARK_AT);
+        return marked;
+    }
+
+    /** The art carries this app's mark: this app wrote it. */
+    private static boolean isOurs(File art) {
+        try {
+            byte[] head = readAll(art, MARK_AT + MARK_CHUNK.length);
+            return head != null && Arrays.equals(
+                    Arrays.copyOfRange(head, MARK_AT, head.length), MARK_CHUNK);
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     /**
-     * The first test build kept no record of the art it wrote. Its art is the
-     * game's icon rendered as writeArt renders it, so a file that is exactly
-     * that image counts as this app's; any other file (a scraped or chosen
-     * cover) is left as the user's.
+     * The first test build wrote unmarked art. Its art is exactly the game's
+     * icon as iconPng renders it, so a file that is that image gets the mark;
+     * any other file (a scraped or chosen cover) is left as the user's.
      */
-    private static void adoptArt(PackageManager pm, SharedPreferences ours) {
-        SharedPreferences.Editor written = ours.edit();
+    private static void adoptArt(PackageManager pm) {
         File[] files = ROMS.listFiles();
-        if (files != null) {
-            for (File f : files) {
-                if (!f.getName().endsWith(EXT)) continue;
-                String pkg = packageOf(f);
-                byte[] png = pkg == null ? null : iconPng(pm, pkg);
-                if (png == null) continue;
-                for (String dir : ART) {
-                    File art = new File(new File(MEDIA, dir), baseName(f) + ".png");
-                    try {
-                        if (art.isFile() && art.length() == png.length
-                                && Arrays.equals(readAll(art, png.length), png)) {
-                            written.putLong(dir + "/" + art.getName(), art.lastModified());
-                        }
-                    } catch (IOException e) {
-                        Log.w(TAG, "can't read " + art);
+        if (files == null) return;
+        for (File f : files) {
+            if (!f.getName().endsWith(EXT)) continue;
+            String pkg = packageOf(f);
+            byte[] png = pkg == null ? null : iconPng(pm, pkg);
+            if (png == null) continue;
+            for (String dir : ART) {
+                File art = new File(new File(MEDIA, dir), baseName(f) + ".png");
+                try {
+                    if (art.isFile() && art.length() == png.length
+                            && Arrays.equals(readAll(art, png.length), png)) {
+                        long modified = art.lastModified();
+                        publish(art, mark(png));
+                        art.setLastModified(modified);   // still as old as the icon it shows
                     }
+                } catch (IOException e) {
+                    Log.w(TAG, "can't read " + art);
                 }
             }
         }
-        written.putBoolean("adopted", true).apply();
     }
 
+    /** The first length bytes of f, or null if it is shorter. */
     private static byte[] readAll(File f, int length) throws IOException {
         byte[] data = new byte[length];
         try (FileInputStream in = new FileInputStream(f)) {
@@ -262,41 +311,20 @@ final class Games {
         }
     }
 
-    private static byte[] iconPng(PackageManager pm, String pkg) {
-        Drawable icon;
-        try {
-            icon = pm.getApplicationIcon(pkg);
-        } catch (PackageManager.NameNotFoundException e) {
-            return null;
-        }
-        Bitmap bitmap = render(icon);
-        ByteArrayOutputStream out = new ByteArrayOutputStream();
-        boolean ok = bitmap.compress(Bitmap.CompressFormat.PNG, 100, out);
-        bitmap.recycle();
-        return ok ? out.toByteArray() : null;
-    }
-
-    private static boolean isOurs(SharedPreferences ours, String dir, File art) {
-        return ours.getLong(dir + "/" + art.getName(), -1) == art.lastModified();
-    }
-
     private static String baseName(File game) {
         return game.getName().substring(0, game.getName().length() - EXT.length());
     }
 
-    private static void delete(SharedPreferences ours, File game) {
+    private static void delete(File game) {
         game.delete();
-        deleteArt(ours, baseName(game));
+        deleteArt(baseName(game));
     }
 
     /** Deletes the game's art that this app wrote. */
-    private static void deleteArt(SharedPreferences ours, String name) {
-        SharedPreferences.Editor written = ours.edit();
+    private static void deleteArt(String name) {
         for (String dir : ART) {
             File art = new File(new File(MEDIA, dir), name + ".png");
-            if (isOurs(ours, dir, art)) art.delete();
-            written.remove(dir + "/" + art.getName());
+            if (isOurs(art)) art.delete();
         }
-        written.apply();
     }
 }
