@@ -3,8 +3,11 @@
 # libretro buildbot (nightly/android/latest/arm64-v8a) can be added by name.
 # Listed cores are updated to the latest buildbot nightly at build time.
 #
-# The build sets each Daijisho platform's default player to its "D - " core.
-# Dreamcast, N64, DS, and PSP keep their standalone apps as the default.
+# The build sets each Daijisho platform's default player to its "D - " core,
+# and removes Daijisho players for cores that aren't listed. Dreamcast, N64,
+# DS, and PSP keep their standalone apps as the default. Dropping a platform's
+# default core stops the build with a message; change its line in
+# daijisho-platforms.txt too.
 # Sizes are uncompressed.
 
 

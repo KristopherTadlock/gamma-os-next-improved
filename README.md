@@ -38,9 +38,10 @@ in that file:
 | Game Boy Advance | gpSP | mGBA |
 | NES | Nestopia | Mesen |
 
-RetroArch's core info files and the PPSSPP core's assets are refreshed to
-match the new cores. Mupen64Plus FZ (3.0.335) and DraStic (r2.6.0.4a) are
-already the latest public releases.
+RetroArch's core info files are refreshed to match the new cores, and the
+PPSSPP core's assets are removed with the core (PSP uses the standalone
+PPSSPP app). Mupen64Plus FZ stays at 3.0.335 because newer builds
+are only on Google Play, and DraStic r2.6.0.4a is its latest release.
 
 Other apps:
 
@@ -50,6 +51,8 @@ Other apps:
 | Aurora Store | 4.6.4 | 4.8.4 |
 | Firefox | 139.0 | replaced by [Brave](https://github.com/brave/brave-browser) 1.99.55 |
 
+Aurora Store comes from IzzyOnDroid, which only keeps recent versions, so its
+link in `mods/15-update-apps.sh` will need updating for later builds.
 MiXplorer stays at 6.64.3 because newer builds are only posted on its XDA
 thread. Magisk stays at 30.6, the version the boot image is patched with, and
 can update itself after setup. See `mods/15-update-apps.sh`.
@@ -67,7 +70,7 @@ linked below.
 | Azahar | Nintendo 3DS | 2126.2 | GPL-3.0 | https://github.com/azahar-emu/azahar/tree/2126.2 |
 | WatermelonDS | Nintendo DS | 0.8.0.rc3 | GPL-3.0 | https://github.com/SapphireRhodonite/WatermelonDS/tree/0.8.0.rc3 |
 | hakuX | Xbox | 1.3.0 | GPL-3.0+ | https://github.com/rfandango/hakuX/tree/v1.3.0 |
-| Vita3K | PS Vita | 0.2.1 (2026-11-06 build) | GPL-2.0 | https://github.com/Vita3K/Vita3K |
+| Vita3K | PS Vita | 0.2.1 (build 4277, mirrored) | GPL-2.0 | https://github.com/Vita3K/Vita3K/tree/2f68c1bf0d44753eddc8263b6a4dd23fcd928f22 |
 | ScummVM | Adventure games | 2026.3.0 | GPL-3.0+ | https://github.com/scummvm/scummvm/tree/v2026.3.0 |
 
 The [MaliSX2](https://github.com/bmdhacks/malisx2/tree/v0.4.0) 0.4.0 Vulkan
@@ -80,13 +83,24 @@ Edit `mods/added-apps.txt` to change the apps.
 
 Daijisho gets 11 more platforms, each from Daijisho's official definition:
 GameCube, Wii, 3DS, Xbox and ScummVM for the added emulators, and Virtual Boy,
-32X, PC Engine, Atari 2600, Atari 5200 and Atari 7800, which have pack-in
-games and RetroArch cores but no platform upstream. Edit
+32X, TurboGrafx-16 (PC Engine HuCards), Atari 2600, Atari 5200 and Atari 7800,
+which have pack-in games and RetroArch cores but no platform upstream. Systems
+that need a BIOS (TurboGrafx-CD, Saturn, Lynx, 3DO, ColecoVision, MSX) keep
+their RetroArch cores but get no platform or pack-in game. Edit
 `mods/daijisho-platforms.txt` to change them.
 
-The new platforms get wallpapers drawn by `scripts/make_wallpapers.py`: the
-platform's name on a dark panel beside a color gradient, without logos or
-game art (`mods/daijisho-wallpapers/`).
+GammaOS's platform wallpapers come from the "BB-1 Dark" pack by
+BrunoBelmonte in Daijisho's wallpaper pack collection, and the new platforms
+get theirs from the same pack (`mods/daijisho-wallpapers.txt`). The pack has
+no Xbox wallpaper, so `scripts/make_wallpapers.py` draws one in its layout
+with Second Reality's title picture. The pack's wallpapers for the systems
+that need a BIOS are copied to `/sdcard/Daijisho/Wallpapers/`, to use if you
+add one of those platforms to Daijisho later.
+
+Daijisho's player lists drop the players that can't work here: the
+32-bit and Play Store RetroArch players (only the 64-bit RetroArch is
+installed) and RetroArch players for cores that aren't shipped. Players for
+standalone apps stay, since you can install those apps.
 
 Upstream ships Daijisho with its game library already synced, listing the
 removed games. The build rebuilds the library from the games it ships, and
@@ -104,8 +118,9 @@ the build uses.
 
 ## Building
 
-On Linux with `curl`, 7-Zip (`7zz` or `7z`), `xz`, `unzip`, `e2fsck`, `cc`,
-`python3`, `sudo` (to loop-mount the system image), and about 40 GB free:
+On Linux with `curl`, 7-Zip (`7zz` or `7z`), `xz`, `unzip`, `e2fsck` and
+`resize2fs`, `setfattr`, `cc`, `python3`, `sudo` (to loop-mount the system
+image), and about 40 GB free:
 
 ```sh
 scripts/build.sh
@@ -127,7 +142,7 @@ unallocated space at the end of the `super` image (`scripts/lptool.py grow`);
 the other partitions don't move. The upstream system filesystem is built
 with deduplicated blocks, which can't be mounted read-write, so the build
 grows the filesystem to fill the partition and unshares the blocks. With
-all of the changes above, about 270 MB of it is still free.
+all of the changes above, about 250 MB of it is still free.
 
 ## Flashing
 

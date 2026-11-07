@@ -90,12 +90,15 @@ echo "shipping ${#wanted[@]} RetroArch cores, $updated updated to $(awk '{print 
 
 curl -fsSL --retry 3 -o "$work/info.zip" "$INFO_URL"
 unzip -oq "$work/info.zip" -d "$work/tree/$RA_DATA/info"
+# The PPSSPP core's assets are only kept, refreshed, when that core ships.
 rm -rf "$work/tree/sdcard/RetroArch/system/PPSSPP"
 if [[ -f "$cores_dir/ppsspp_libretro_android.so" ]]; then
   curl -fsSL --retry 3 -o "$work/ppsspp.zip" "$PPSSPP_ASSETS_URL"
   unzip -oq "$work/ppsspp.zip" -d "$work/tree/sdcard/RetroArch/system"
+  echo "updated RetroArch core info and PPSSPP core assets"
+else
+  echo "updated RetroArch core info; removed the PPSSPP core's assets (core not shipped)"
 fi
-echo "updated RetroArch core info and PPSSPP core assets"
 
 # Repack the same top-level paths as the original, so no entries for data/ or
 # sdcard/ themselves are added; root would apply their owner and mode on extract.

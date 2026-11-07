@@ -135,6 +135,8 @@ def cmd_extract(f, name, out_path):
             f.seek(offset)
             while length:
                 buf = f.read(min(length, CHUNK))
+                if not buf:
+                    sys.exit(f"{name} extends past the end of the super image")
                 out.write(buf)
                 length -= len(buf)
 

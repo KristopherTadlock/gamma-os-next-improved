@@ -4,7 +4,8 @@
   bundled_roms.py LIST IN_TAR OUT_TAR CACHE_DIR LICENSES_DIR LOCAL_DIR
 
 Keeps the pack's folders and systeminfo files, keeps only the "upstream" games
-the list names, adds each "add" game after checking its sha256, adds each
+the list names, adds each "add" game after checking its sha256, copies each
+"tree" folder out of an archive after checking the archive's sha256, adds each
 "local" file from LOCAL_DIR, and creates each "folder" line's folder. Every game
 gets its license file from LICENSES_DIR, either "<path>.license.txt" or a
 LICENSE.txt in the game's folder.
@@ -37,16 +38,27 @@ def parse(path):
         if kind == "folder":
             entries.append((kind, target, fields))
             continue
-        if kind not in ("upstream", "add", "local") or "license" not in fields:
+        if kind not in ("upstream", "add", "tree", "local") or "license" not in fields:
             sys.exit(f"{path}:{number}: can't parse: {line}")
-        if kind == "add" and not {"url", "sha256"} <= fields.keys():
-            sys.exit(f"{path}:{number}: add needs url= and sha256=")
+        if kind in ("add", "tree") and not {"url", "sha256"} <= fields.keys():
+            sys.exit(f"{path}:{number}: {kind} needs url= and sha256=")
+        if kind == "tree" and "member" not in fields:
+            sys.exit(f"{path}:{number}: tree needs member=")
         entries.append((kind, target, fields))
     return entries
 
 
 def sha256(data):
     return hashlib.sha256(data).hexdigest()
+
+
+def download(url, cache):
+    path = os.path.join(cache, "download-" + sha256(url.encode()))
+    if not os.path.exists(path):
+        subprocess.run(["curl", "-fsSL", "--retry", "3", "-o", path + ".partial", url],
+                       check=True)
+        os.replace(path + ".partial", path)
+    return path
 
 
 def fetch(target, fields, cache):
@@ -56,20 +68,15 @@ def fetch(target, fields, cache):
         data = open(cached, "rb").read()
         if sha256(data) == want:
             return data
-    url = fields["url"]
-    download = os.path.join(cache, "download-" + sha256(url.encode()))
-    if not os.path.exists(download):
-        subprocess.run(["curl", "-fsSL", "--retry", "3", "-o", download + ".partial", url],
-                       check=True)
-        os.replace(download + ".partial", download)
-    raw = open(download, "rb").read()
+    download_path = download(fields["url"], cache)
+    raw = open(download_path, "rb").read()
     member = fields.get("member")
     if member is None:
         data = raw
-    elif zipfile.is_zipfile(download):
-        data = zipfile.ZipFile(download).read(member)
+    elif zipfile.is_zipfile(download_path):
+        data = zipfile.ZipFile(download_path).read(member)
     else:
-        with tarfile.open(download) as archive:
+        with tarfile.open(download_path) as archive:
             name = next(n for n in archive.getnames() if n == member or n.endswith("/" + member))
             data = archive.extractfile(name).read()
     if sha256(data) != want:
@@ -77,6 +84,23 @@ def fetch(target, fields, cache):
     with open(cached, "wb") as f:
         f.write(data)
     return data
+
+
+def fetch_tree(target, fields, cache):
+    """Returns {path: data} for the files under member= in the archive."""
+    path = download(fields["url"], cache)
+    if sha256(open(path, "rb").read()) != fields["sha256"]:
+        sys.exit(f"{target}: archive sha256 doesn't match")
+    prefix = fields["member"].rstrip("/") + "/"
+    archive = zipfile.ZipFile(path)
+    files = {
+        target.rstrip("/") + "/" + name[len(prefix):]: archive.read(name)
+        for name in archive.namelist()
+        if name.startswith(prefix) and not name.endswith("/")
+    }
+    if not files:
+        sys.exit(f"{target}: nothing under {prefix} in the archive")
+    return files
 
 
 def license_for(target, licenses):
@@ -99,6 +123,9 @@ def main():
     for kind, target, fields in entries:
         if kind == "add":
             files[target] = fetch(target, fields, cache)
+        elif kind == "tree":
+            files.update(fetch_tree(target, fields, cache))
+            target = target.rstrip("/")
         elif kind == "local":
             files[target] = open(os.path.join(local, target), "rb").read()
         name, text = license_for(target, licenses)

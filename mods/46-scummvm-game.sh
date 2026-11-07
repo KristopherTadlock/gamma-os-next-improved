@@ -18,6 +18,11 @@ GAME_DIR="games/Beneath a Steel Sky"
 cache="$(realpath -m "$2")/scummvm"
 work="$cache/work"
 
+if ! sudo grep -q '^pm install /system/etc/scummvm-.*\.apk$' "$SETUP"; then
+  echo "ScummVM isn't in added-apps.txt; skipping"
+  exit 0
+fi
+
 mkdir -p "$cache"
 zip="$cache/bass-cd-1.2.zip"
 [[ -f "$zip" ]] || { curl -fsSL --retry 3 -o "$zip.partial" "$URL" && mv "$zip.partial" "$zip"; }
@@ -60,7 +65,6 @@ chown -R \$launcheruser:\$launchergroup /$app/files && \\
 restorecon -R /$app/files
 
 EOF
-sudo grep -q '^pm install /system/etc/scummvm-.*\.apk$' "$SETUP" || { echo "setup.sh doesn't install ScummVM" >&2; exit 1; }
 sudo awk -v steps="$steps" '
   { print }
   /^pm install \/system\/etc\/scummvm-.*\.apk$/ { print ""; while ((getline line < steps) > 0) print line }

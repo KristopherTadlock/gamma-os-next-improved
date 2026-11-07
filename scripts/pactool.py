@@ -32,20 +32,24 @@ def read_entries(f):
     if utf16(header[:48]) != "BP_R2.0.1":
         sys.exit(f"unsupported pac version {utf16(header[:48])!r}")
     count, start = struct.unpack_from("<II", header, 1076)
+    total = f.seek(0, os.SEEK_END)
     f.seek(start)
     entries = []
     for _ in range(count):
         raw = f.read(ENTRY_SIZE)
+        if len(raw) < ENTRY_SIZE:
+            sys.exit("pac entry table is truncated")
         hi_size, hi_off, lo_size = struct.unpack_from("<III", raw, 1532)
         lo_off, = struct.unpack_from("<I", raw, 1552)
-        entries.append(
-            {
-                "id": utf16(raw[4:516]),
-                "file": utf16(raw[516:1028]),
-                "size": (hi_size << 32) | lo_size,
-                "offset": (hi_off << 32) | lo_off,
-            }
-        )
+        entry = {
+            "id": utf16(raw[4:516]),
+            "file": utf16(raw[516:1028]),
+            "size": (hi_size << 32) | lo_size,
+            "offset": (hi_off << 32) | lo_off,
+        }
+        if entry["size"] and entry["offset"] + entry["size"] > total:
+            sys.exit(f"pac is truncated: {entry['file']} ends past the end of the file")
+        entries.append(entry)
     return entries
 
 

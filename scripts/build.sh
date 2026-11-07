@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Builds out/RG_Cube_GammaOS_Next_Improved_v1.2.pac from the official release.
 #
-# Needs: curl, 7zz (or 7z), xz, unzip, e2fsck, cc, python3, and sudo for
-# loop-mounting the system image.
+# Needs: curl, 7zz (or 7z), xz, unzip, e2fsck, resize2fs, setfattr, cc,
+# python3, and sudo for loop-mounting the system image.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -20,7 +20,12 @@ cc -O2 -o "$CRC16ARC" "$ROOT/tools/crc16arc.c"
 
 "$ROOT/scripts/fetch.sh" "$WORK/download"
 if [[ ! -f "$WORK/pac/$NAME.pac" ]]; then
-  "$SEVENZIP" x -y -o"$WORK/pac" -p"$PASSWORD" "$WORK/download/$NAME.7z.001" >/dev/null
+  # Extract next to the final name, so an interrupted extraction is redone.
+  rm -rf "$WORK/pac.partial"
+  "$SEVENZIP" x -y -o"$WORK/pac.partial" -p"$PASSWORD" "$WORK/download/$NAME.7z.001" >/dev/null
+  mkdir -p "$WORK/pac"
+  mv "$WORK/pac.partial/$NAME.pac" "$WORK/pac/$NAME.pac"
+  rm -rf "$WORK/pac.partial"
 fi
 
 echo "extracting system image"

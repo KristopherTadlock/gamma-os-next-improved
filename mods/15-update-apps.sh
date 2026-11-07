@@ -57,8 +57,9 @@ pm install /sdcard/daijisho/daijisho412.apk
 cd /
 rm -rf /sdcard/daijisho
 """
+# Keep the "cd /": later steps use paths relative to / (system/etc/Toast.apk).
 replacements = [
-    (old_daijisho, "pm install /system/etc/daijisho-1.5.0.apk\n"),
+    (old_daijisho, "pm install /system/etc/daijisho-1.5.0.apk\ncd /\n"),
     ('echo "Installing FireFox"\n', 'echo "Installing Brave."\n'),
 ]
 for old, new in replacements:

@@ -5,3 +5,16 @@ This project modifies GammaOS Next by TheGammaSqueeze
 (https://github.com/TheGammaSqueeze/GammaOSNext), licensed under the
 Apache License 2.0. It is not affiliated with or endorsed by the GammaOS
 project or Anbernic.
+
+mods/daijisho-wallpapers/xbox.png is drawn on the placeholder wallpaper of
+the "BB-1 Dark" pack by BrunoBelmonte, from Daijishou
+(https://github.com/TapiocaFox/Daijishou), Copyright (c) 2022 TapiocaFox
+(Yves Chen), MIT License. It also uses the title picture of Second Reality
+by Future Crew (https://github.com/mtuomi/SecondReality), as captured by
+the Xbox port (https://github.com/kooscode/SecondReality), both released
+under the Unlicense.
+
+The build downloads platform wallpapers for Daijisho from the same "BB-1 Dark"
+pack (Daijishou, MIT License, Copyright (c) 2022 TapiocaFox (Yves Chen));
+they show artwork from the games and consoles they represent, which belongs
+to its respective owners.

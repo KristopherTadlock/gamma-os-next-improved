@@ -38,7 +38,9 @@ while IFS= read -r line; do
       printf 'echo "Installing %s."\npm install /system/etc/%s\n\n' "${f[name]}" "$file" >>"$steps"
       ;;
     file)
-      printf 'mkdir -p "/sdcard/%s"\ncp /system/etc/%s "/sdcard/%s/"\n\n' "${f[dest]}" "$file" "${f[dest]}" >>"$steps"
+      # Owned like the folders Android creates there, so the user can manage it.
+      printf 'mkdir -p "/sdcard/%s"\ncp /system/etc/%s "/sdcard/%s/"\nchown -R "$(stat -c %%u:%%g /sdcard/Download)" "/sdcard/%s"\n\n' \
+        "${f[dest]}" "$file" "${f[dest]}" "${f[dest]}" >>"$steps"
       ;;
     *)
       echo "unknown kind $kind in added-apps.txt" >&2

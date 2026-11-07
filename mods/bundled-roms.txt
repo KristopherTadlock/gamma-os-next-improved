@@ -7,6 +7,8 @@
 #       author's official release).
 #   add  <system>/<file>  url=<download>  sha256=<of the file>  [member=<file in archive>]  license=<url>
 #       Download, verify, and add a game.
+#   tree  <system>/<folder>/  url=<download>  sha256=<of the download>  member=<folder in archive>  license=<url>
+#       Download, verify, and add every file in a folder of an archive.
 #   local  <system>/<file>  license=<url>
 #       Add a file kept in rom-files/.
 #   folder  <system>
@@ -77,9 +79,10 @@ add  pcengine/Worm.pce  url=https://github.com/KristopherTadlock/gamma-os-next-i
 # --- Neo Geo Pocket Color (mednafen_ngp): Stargunner, Tixul. MIT. A shmup its author calls a demo.
 add  ngpc/Stargunner.ngc  url=https://raw.githubusercontent.com/Tixul/Stargunner/de49e240e7b715f1d1f666931b1ad082adff5069/Stargunner.ngc  sha256=089e2d9520dc2f84d34a33b1dfa1710eb9a429d90b3b0a195a06ccab89c9022f  license=https://github.com/Tixul/Stargunner/blob/main/LICENSE
 
-# --- PSP (PPSSPP): KłełeAtoms, Nightwolf-47. MIT. Needs both files in one folder.
+# --- PSP (PPSSPP): KłełeAtoms, Nightwolf-47. MIT. Needs both files in one folder; ships with its libraries' notices.
 add  psp/KleleAtoms/EBOOT.PBP  url=https://github.com/Nightwolf-47/KleleAtoms-PSP/releases/download/v1.1/kleleatoms-psp-1.1.zip  sha256=a9fe0257eff544e1dc662d254494a555dbaf1302825af409b73e6df60ff4438b  member=kleleatoms/EBOOT.PBP  license=https://github.com/Nightwolf-47/KleleAtoms-PSP
 add  psp/KleleAtoms/resources.pak  url=https://github.com/Nightwolf-47/KleleAtoms-PSP/releases/download/v1.1/kleleatoms-psp-1.1.zip  sha256=2fda925ef6e84924ac8b136e7ff9ca71054e5ed37244bfb665c1820ac2844e68  member=kleleatoms/resources.pak  license=https://github.com/Nightwolf-47/KleleAtoms-PSP
+tree  psp/KleleAtoms/third-party-licenses/  url=https://github.com/Nightwolf-47/KleleAtoms-PSP/releases/download/v1.1/kleleatoms-psp-1.1.zip  sha256=a3a0f41a17e8ac958d5a8c6cfd576feddef4c0b867428ddff1e4cc9bef3a54ff  member=kleleatoms/third-party-licenses  license=https://github.com/Nightwolf-47/KleleAtoms-PSP
 
 # --- PICO-8 (fake08): Cherry Bomb, Krystian Majewski; music by Sebastian Haßler. CC BY-NC-SA 4.0.
 add  pico8/Cherry Bomb.p8.png  url=https://www.lexaloffle.com/bbs/cposts/ch/cherrybomb-0.p8.png  sha256=e6b223cc8d91fded83605444cf9ef68366e88a987713e5c6bbbf4260163e51e3  license=https://www.lexaloffle.com/bbs/?pid=cherrybomb

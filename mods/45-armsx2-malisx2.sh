@@ -17,6 +17,11 @@ DRIVER_ID="armsx2libmali-v0.4.0-malisx2-0.4.0-63e307e63a"
 PACK="armsx2-malisx2.tar.gz"
 work="$(realpath -m "$2")/armsx2-malisx2"
 
+if ! sudo grep -q '^pm install /system/etc/ARMSX2-.*\.apk$' "$SETUP" || [[ ! -f "$ETC/$DRIVER_ZIP" ]]; then
+  echo "ARMSX2 or $DRIVER_ZIP isn't in added-apps.txt; skipping"
+  exit 0
+fi
+
 app="data/data/com.armsx2"
 rm -rf "$work"
 mkdir -p "$work/tree/$app/files/drivers/$DRIVER_ID/cache" "$work/tree/$app/shared_prefs"
@@ -48,7 +53,6 @@ chown -R \$launcheruser:\$launchergroup /$app/files /$app/shared_prefs && \\
 restorecon -R /$app/files /$app/shared_prefs
 
 EOF
-sudo grep -q '^pm install /system/etc/ARMSX2-.*\.apk$' "$SETUP" || { echo "setup.sh doesn't install ARMSX2" >&2; exit 1; }
 sudo awk -v steps="$steps" '
   { print }
   /^pm install \/system\/etc\/ARMSX2-.*\.apk$/ { print ""; while ((getline line < steps) > 0) print line }

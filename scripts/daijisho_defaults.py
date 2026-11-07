@@ -13,7 +13,8 @@ import re
 import sqlite3
 import sys
 
-CORE_RE = re.compile(r"([A-Za-z0-9_\-]+)_libretro_android\.so")
+# A path to the core, or (in newer definitions) just its name.
+CORE_RE = re.compile(r"LIBRETRO\s+(?:\S*/)?([A-Za-z0-9_\-]+?)(?:_libretro_android\.so)?(?:\s|$)")
 
 
 def read_cores(path):

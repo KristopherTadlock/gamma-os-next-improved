@@ -4,7 +4,8 @@
   daijisho_platforms.py DAIJISHOU_DB PLATFORMS_TXT CACHE_DIR
 
 Each platform gets only the players PLATFORMS_TXT names, the first being its
-default, and scans /sdcard/ROMs/<folder>. For a platform already in the
+default, and scans /sdcard/ROMs/<folder> (several folders when separated by
+commas). For a platform already in the
 database, the named players are added to its list and the first becomes its
 default.
 """
@@ -38,7 +39,9 @@ def definition(commit, name, cache):
     path = os.path.join(cache, f"{commit}-{name}")
     if not os.path.exists(path):
         url = BASE.format(commit=commit, name=name)
-        subprocess.run(["curl", "-fsSL", "--retry", "3", "-o", path, url], check=True)
+        subprocess.run(["curl", "-fsSL", "--retry", "3", "-o", path + ".partial", url], check=True)
+        json.load(open(path + ".partial"))
+        os.replace(path + ".partial", path)
     return json.load(open(path))
 
 
@@ -104,7 +107,7 @@ def main():
              p.get("boxArtAspectRatioId", 0), int(p.get("useCustomBoxArtAspectRatio", False)),
              p.get("customBoxArtAspectRatio"), p.get("screenAspectRatioId", 0),
              int(p.get("useCustomScreenAspectRatio", False)), p.get("customScreenAspectRatio"),
-             json.dumps([SYNC_URI.format(folder=folder)]),
+             json.dumps([SYNC_URI.format(folder=f) for f in folder.split(",")]),
              json.dumps(p.get("retroAchievementsConsoleIdList", [])), p.get("extra", "")),
         )
         print(f"{p['shortname']}: added '{p['name']}' scanning ROMs/{folder}, players: {', '.join(wanted)}")
