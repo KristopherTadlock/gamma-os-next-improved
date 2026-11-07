@@ -58,6 +58,10 @@ MiXplorer stays at 6.64.3 because newer builds are only posted on its XDA
 thread. Magisk stays at 30.6, the version the boot image is patched with, and
 can update itself after setup. See `mods/15-update-apps.sh`.
 
+File Transfer (MTP) is the default USB mode (Developer options → Default USB
+configuration), so a computer sees the device's storage as soon as it's
+plugged in (`mods/25-usb-mtp.sh`).
+
 ### Added emulators
 
 These standalone emulators are added and installed on first boot. Each is
@@ -115,6 +119,27 @@ except the Daijisho changes and ES-DE's app: GammaOS Nano replaces Daijisho,
 which is removed, along with Beneath a Steel Sky's Daijisho launch file
 (ScummVM lists the game itself).
 
+Apply `patches/gammaos-next-1.4.4/0001-nano-fixes-for-the-rg-cube.patch` to the
+source tree (`git apply`, from its root) before building the system image. It
+fixes GammaOS Nano bugs:
+
+- settings that are switches or choices, Performance Mode among them, opened
+  as a 0-255 slider that did nothing;
+- Nano's settings and Quick Settings had no Fan Speed and, of the HDMI
+  options, only External as Primary; they get Fan Speed, Force Mirror, Resize
+  to External Display and Secondary Display Apps;
+- in the ES-DE theme the X, Y, shoulder, trigger and stick-click buttons its
+  help bar shows did nothing, or acted on the hidden XMB menu, and Y could not
+  take away a favourite imported from ES-DE's game lists.
+
+It also adds a **Settings Theme** setting to the ES-DE theme, so its settings
+screens can have the Minima theme's look while the game menus keep ES-DE's;
+makes the Anbernic button open Nano's Quick Settings, on the home screen and
+over a running game (pressing it again goes back to the game; **Toolbox → Mode
+Button Opens Quick Settings** gives the button back to games); and makes Nano
+start an Android Games entry as the game's own app rather than through the
+helper app, so it follows the game like any other.
+
 1.4.4 adds GammaOS Nano, a console-style home. The build makes the device
 boot into it from the first boot, where Nano's setup wizard runs first-boot
 setup; **Boot Android** in the power menu switches to normal Android (with
@@ -123,13 +148,19 @@ its own launcher), and **Boot Nano** back. `mods/50-nano.sh` sets it up:
 - the home theme is Nano's ES-DE theme engine, with
   [Colorful (Simplified)](https://github.com/anthonycaccese/colorful-simplified-es-de)
   in its 1:1 layout for the square screen and its Colorful (Dark) color scheme;
+- the settings screens (Nano Settings and the Quick Menu) have the Minima
+  theme's look (**Theme Settings → Settings Theme** sets it back to the XMB's);
+- the menu sounds are off (**Theme Settings → Navigation Sounds** turns them
+  on);
+- Quick Settings, in Android's shade and in Nano, gets the Force Mirror and
+  Resize to External Display tiles;
 - its game systems are the ones in `mods/nano-systems.txt`, with this
   build's default emulators: the `D - ` cores from `mods/retroarch-cores.txt`
   (which Nano runs itself) and the standalone apps. ScummVM and PS Vita games
   start from their apps, because their players need each game's ID.
 
-The boot mode and theme are `build.prop` defaults, so changes made in Nano
-stick.
+The boot mode, theme and sounds are `build.prop` defaults, so changes made
+in Nano stick.
 
 Nano also gets an **Android Games** system listing the installed Android
 games: the apps that declare themselves games, apart from the emulators and
@@ -192,7 +223,7 @@ scripts/build.sh
 
 This downloads the official release, applies each script in `mods/` to its
 system partition, and writes `out/RG_Cube_GammaOS_Next_Improved_v1.0.pac`
-(`..._v2.0.pac` with `SYSTEM_IMG`).
+(`..._v2.0.pac` with `SYSTEM_IMG`, and `..._v1.0_ES-DE.pac` with `ESDE_APK`).
 
 The tools it uses:
 

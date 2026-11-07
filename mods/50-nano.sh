@@ -2,7 +2,8 @@
 # Makes the device boot into the GammaOS Nano home (1.4.4 base only), from the
 # first boot, where Nano's own setup wizard runs first-boot setup. Its home
 # theme is the ES-DE theme engine with the Colorful (Simplified) theme in its
-# square layout, and its game systems are the ones in nano-systems.txt, with
+# square layout, its settings screens have the Minima theme's look, its menu
+# sounds are off, and its game systems are the ones in nano-systems.txt, with
 # this project's default emulators. These are build.prop defaults, so choices
 # made later in Nano, or "Boot Android" in the power menu, stick. Runs after
 # 40-added-apps.sh.
@@ -86,18 +87,37 @@ EOF
 add_setup_steps "$SYSTEM" "$work/setup-steps.sh"
 
 sudo cat "$SYSTEM/build.prop" >"$work/build.prop"
-if grep -qE '^persist\.(bootanim\.skip_nano|gammaos\.nano\.(ndstheme|esde\.))' "$work/build.prop"; then
-  echo "build.prop already sets Nano's boot or theme" >&2
+if grep -qE '^persist\.(bootanim\.skip_nano|gammaos\.nano\.(ndstheme|esde\.|nav_sounds))' "$work/build.prop"; then
+  echo "build.prop already sets Nano's boot, theme or sounds" >&2
   exit 1
 fi
 cat >>"$work/build.prop" <<EOF
 
-# gamma-os-next-improved: boot into Nano, with the ES-DE theme engine
+# gamma-os-next-improved: boot into Nano, with the ES-DE theme engine, Minima's
+# look for the settings and no menu sounds
 persist.bootanim.skip_nano=0
 persist.gammaos.nano.ndstheme=3
 persist.gammaos.nano.esde.themeset=$THEME
 persist.gammaos.nano.esde.aspectratio=1:1
 persist.gammaos.nano.esde.colorscheme=colorful-dark
+persist.gammaos.nano.esde.settingstheme=minima
+persist.gammaos.nano.nav_sounds=0
 EOF
 write_through "$work/build.prop" "$SYSTEM/build.prop"
+
+# The RG Cube's Quick Settings tiles (its vendor build.prop), plus the Force
+# Mirror and Resize to External Display tiles, for Android's shade and Nano's
+# Quick Settings. The product partition's build.prop is read after the
+# vendor's, so these replace its list.
+sudo cat "$SYSTEM/product/etc/build.prop" >"$work/product.prop"
+cat >>"$work/product.prop" <<EOF
+
+# gamma-os-next-improved: the RG Cube's Quick Settings tiles, with the HDMI ones
+persist.gammaos.qs.override_default_tiles=1
+persist.gammaos.qs.override_default_tiles_0=internet,bt,performance,fan,gammashader,gammargb,gammaeq,rotation
+persist.gammaos.qs.override_default_tiles_1=deepsleepmode,externaldocking,externalmirror,externalresize,immersivemode
+persist.gammaos.qs.override_default_tiles_2=abxy,dpadAnalogToggle,analogsensitivity,analogdeadzone,analogcalibration
+persist.gammaos.qs.override_default_tiles_3=analogaxis,rightanalogaxis,retroarchmenubuttonoverride,mappingeditor
+EOF
+write_through "$work/product.prop" "$SYSTEM/product/etc/build.prop"
 rm -rf "$work"
