@@ -110,6 +110,8 @@ ro.gammaos.nano.no_slide=1
 # effect, but nothing turns GammaRGB on), and Max Performance
 persist.gammargb.control=on
 persist.gammaos.performance_mode=max
+# No global display shader until one is chosen
+persist.gammaos.shader.enable=0
 EOF
 write_through "$work/build.prop" "$SYSTEM/build.prop"
 
