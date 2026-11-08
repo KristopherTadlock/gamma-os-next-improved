@@ -176,7 +176,7 @@ The user's own bindings are never replaced in `add` mode: a hotkey whose setting
 | Hold to Quit | `persist.gammaos.hotkeys.quithold` | On |
 | Emulator Support | read-only: each profile, what works and its note | — |
 
-- A button can be A, B, X, Y, L1, R1, L2, R2, L3, R3, Start, Select, a D-pad direction, or Off.
+- A button can be A, B, X, Y, L1, R1, L2, R2, L3, R3, Start, Select, a D-pad direction, or Off. A D-pad direction works only in drastic-nano: the D-pad reaches Android as a hat axis, which `PhoneWindowManager` never sees.
 - Two hotkeys can't share a button: choosing a button another hotkey has swaps the two.
 
 ### drastic-nano (Nano's DS player)
