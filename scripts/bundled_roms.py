@@ -158,9 +158,9 @@ def media_files(media, cache, art_dir, nano):
     files, lists, index = {}, {}, []
     for game, info in sorted(media.items()):
         system, rel = game.split("/", 1)
-        base = os.path.splitext(os.path.basename(rel))[0]
-        # A game in its own folder (a PSP EBOOT.PBP) is also named after the folder, as ES-DE does.
-        names = [base] + ([rel.split("/")[0]] if "/" in rel else [])
+        # ES-DE keeps a game's media under the same subfolders as the game (covers/Game/EBOOT.png
+        # for psp/Game/EBOOT.PBP); a game in its own folder is also named after the folder.
+        names = [os.path.splitext(rel)[0]] + ([rel.split("/")[0]] if "/" in rel else [])
         paths = {}
         for kind, folder in MEDIA_DIRS.items():
             if kind not in info:
@@ -172,7 +172,7 @@ def media_files(media, cache, art_dir, nano):
             ext = image_ext(f"{game} {kind}", data)
             for name in names:
                 files[f"{ESDE}downloaded_media/{system}/{folder}/{name}{ext}"] = data
-            paths[kind] = f"{DEVICE_ESDE}downloaded_media/{system}/{folder}/{base}{ext}"
+            paths[kind] = f"{DEVICE_ESDE}downloaded_media/{system}/{folder}/{names[0]}{ext}"
         released = info.get("released", "")
         if released and not re.fullmatch(r"\d{4}(-\d{2}-\d{2})?", released):
             sys.exit(f"{game}: released must be YYYY or YYYY-MM-DD")
