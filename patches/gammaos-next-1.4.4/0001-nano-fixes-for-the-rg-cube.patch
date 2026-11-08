@@ -9869,7 +9869,7 @@ index 8e387db4282..1527ffb5bec 100644
  
      // Grab DRM master early on non-Qualcomm SoCs to beat HWC.
 diff --git a/frameworks/base/cmds/gammaos-net/src/com/gammaos/net/BtSubcommand.java b/frameworks/base/cmds/gammaos-net/src/com/gammaos/net/BtSubcommand.java
-index c46516e1ccb..5698948103e 100644
+index c46516e1ccb..c541c4719cb 100644
 --- a/frameworks/base/cmds/gammaos-net/src/com/gammaos/net/BtSubcommand.java
 +++ b/frameworks/base/cmds/gammaos-net/src/com/gammaos/net/BtSubcommand.java
 @@ -27,7 +27,12 @@ import android.os.Handler;
@@ -9970,7 +9970,7 @@ index c46516e1ccb..5698948103e 100644
                  clearPasskey();
              } catch (Throwable ignored) { }
              if (receiverRegistered) {
-@@ -717,6 +745,145 @@ public final class BtSubcommand {
+@@ -717,6 +745,153 @@ public final class BtSubcommand {
          return finalBond[0];
      }
  
@@ -10037,19 +10037,27 @@ index c46516e1ccb..5698948103e 100644
 +        getService.setAccessible(true);
 +        Object service = getService.invoke(BluetoothAdapter.getDefaultAdapter());
 +        if (service == null) return false;
++        // From the public IBluetooth interface: the binder proxy class that implements it is
++        // private, and invoking a method looked up on it is refused (IllegalAccessException).
 +        Method set = null;
-+        for (Method m : service.getClass().getMethods()) {
-+            if (m.getName().equals("setPasskey") && m.getParameterCount() == 6) set = m;
++        for (Class<?> c : service.getClass().getInterfaces()) {
++            for (Method m : c.getMethods()) {
++                if (m.getName().equals("setPasskey") && m.getParameterCount() == 6) set = m;
++            }
 +        }
 +        if (set == null) return false;
++        set.setAccessible(true);
 +        Class<?> recvType = set.getParameterTypes()[5];
-+        Object recv = recvType.getMethod("get").invoke(null);
++        Method get = recvType.getMethod("get");
++        get.setAccessible(true);
++        Object recv = get.invoke(null);
 +        Field attribution = BluetoothDevice.class.getDeclaredField("mAttributionSource");
 +        attribution.setAccessible(true);
 +        byte[] key = ByteBuffer.allocate(4).order(ByteOrder.nativeOrder()).putInt(passkey).array();
 +        set.invoke(service, d, true, key.length, key, attribution.get(d), recv);
-+        Object result = recvType.getMethod("awaitResultNoInterrupt", Duration.class)
-+                .invoke(recv, Duration.ofSeconds(5));
++        Method await = recvType.getMethod("awaitResultNoInterrupt", Duration.class);
++        await.setAccessible(true);
++        Object result = await.invoke(recv, Duration.ofSeconds(5));
 +        Method value = result.getClass().getMethod("getValue", Object.class);
 +        value.setAccessible(true);
 +        boolean ok = Boolean.TRUE.equals(value.invoke(result, Boolean.FALSE));
@@ -10116,7 +10124,7 @@ index c46516e1ccb..5698948103e 100644
      private static void handlePairIntent(Intent intent, String addr,
                                           int[] finalBond,
                                           CountDownLatch done,
-@@ -759,12 +926,13 @@ public final class BtSubcommand {
+@@ -759,12 +934,13 @@ public final class BtSubcommand {
                          break;
                      case 1: // PASSKEY entry (the remote shows a code we type)
                          if (pin != null) {
@@ -10132,7 +10140,7 @@ index c46516e1ccb..5698948103e 100644
                          }
                          break;
                      default:
-@@ -993,10 +1161,7 @@ public final class BtSubcommand {
+@@ -993,10 +1169,7 @@ public final class BtSubcommand {
                      dev.setPairingConfirmation(true);
                  }
              } else {
