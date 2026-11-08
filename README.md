@@ -159,8 +159,6 @@ It also changes Nano:
   address (ipapi.co, or ip-api.com if that fails) and selected on the globe,
   to confirm or change. A US time zone defaults to MM/DD/YYYY dates and the
   12-hour clock; elsewhere the defaults stay DD/MM/YYYY and 24-hour.
-  **Daylight Saving** shows On for a zone that follows daylight saving, all
-  year round.
 - **USB Settings:** the mode you choose (Charging Only, File Transfer (MTP),
   Photo Transfer (PTP) or USB Ethernet (RNDIS)) stays on and is applied each
   time a computer is connected, from boot onwards. File Transfer is the default.

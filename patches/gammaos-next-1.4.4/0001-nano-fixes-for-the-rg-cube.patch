@@ -3931,7 +3931,7 @@ index a778ea7da0d..638c4463dd0 100644
  // aspect bucket so the Test Controller / Calibration buttons get the identical glass
  // relight as the console icons (bevelFromRGBA), refracting the live XMB wave. round =
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
-index c6a8e9c9dc1..b561817f4d2 100644
+index c6a8e9c9dc1..426820eac8a 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 @@ -25,6 +25,7 @@
@@ -4879,42 +4879,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
                  }
              }
              float labelRight = hasVal ? (vx - gapW)
-@@ -8040,13 +8292,30 @@ void NanoMenu::drawPs3CinfoBg(const char* focusLabel, const std::string& fanFile
- // ---------------------------------------------------------------------------
- // clock: open-right rounded U-frame + analog face + DD/M H:MM (drawClock 1:1)
- // ---------------------------------------------------------------------------
-+// "Daylight Saving" is On while the zone follows daylight saving (an Olson zone with DST in January
-+// or July), in effect today or not; Off is a fixed Etc/GMT zone, or a zone without daylight saving.
-+static bool ps3ZoneFollowsDst() {
-+    static int64_t sLastMs = -1000;
-+    static bool sDst = false;
-+    const int64_t now = (int64_t)uptimeMillis();
-+    if (now - sLastMs < 1000) return sDst;
-+    sLastMs = now;
-+    char tz[PROPERTY_VALUE_MAX] = {};
-+    property_get("persist.sys.timezone", tz, "");
-+    sDst = false;
-+    if (strncmp(tz, "Etc/", 4) != 0)
-+        for (time_t t : {(time_t)1767225600, (time_t)1782864000}) {   // 2026-01-01, 2026-07-01 UTC
-+            struct tm lt; localtime_r(&t, &lt);
-+            if (lt.tm_isdst > 0) sDst = true;
-+        }
-+    return sDst;
-+}
-+
- void NanoMenu::drawPs3Clock(float fadeMul) {
-     time_t tt = time(nullptr);
-     struct tm lt; localtime_r(&tt, &lt);
--    // Live Daylight Saving state straight from the resolved local time (the Olson
--    // tz applies DST automatically, so this is correct with auto time too). The
--    // "Daylight Saving" menu row + chooser read this, so it auto-captures DST.
--    mPs3DstNow = (lt.tm_isdst > 0);
-+    // The "Daylight Saving" menu row + chooser read this.
-+    mPs3DstNow = ps3ZoneFollowsDst();
-     // Format-aware clock (reads the cached members, no per-frame syscall). Date
-     // Format reorders day vs month in the compact corner bar (no year, like the
-     // PS3 clock); Time Format switches 12-hour (+AM/PM) vs 24-hour. The analog
-@@ -8406,6 +8675,20 @@ static const Ps3ColorOpt kPs3ColorOpts[] = {
+@@ -8406,6 +8658,20 @@ static const Ps3ColorOpt kPs3ColorOpts[] = {
  };
  static const int kPs3ColorCount = 21;
  
@@ -4935,7 +4900,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
  // Expose a swatch's RGB by index so the DSi/Minima renderers (in NanoMenuRender.cpp) can draw
  // real colour swatches - kPs3ColorOpts is static/file-local here.
  bool NanoMenu::ps3SwatchColor(int ci, float& r, float& g, float& b) const {
-@@ -8476,7 +8759,7 @@ void NanoMenu::applyThemeAccentColor(const std::string& hex) {
+@@ -8476,7 +8742,7 @@ void NanoMenu::applyThemeAccentColor(const std::string& hex) {
  void NanoMenu::gsOpenTintChooser() {
      if (mGsEditIdx < 0 || mGsEditIdx >= (int)mXmbSystems.size()) return;
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -4944,21 +4909,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      for (int i = 0; i < kPs3ColorCount; i++) {
          mPs3DlgOptions.push_back(kPs3ColorOpts[i].name); mPs3DlgSwatch.push_back(i);
      }
-@@ -8548,10 +8831,9 @@ void NanoMenu::loadPs3ThemeSettings() {
-     mPs3DateFormatIdx = atoi(buf); if (mPs3DateFormatIdx < 0 || mPs3DateFormatIdx > 2) mPs3DateFormatIdx = 2;
-     property_get("persist.gammaos.nano.datetime.time_format", buf, "1");
-     mPs3TimeFormatIdx = atoi(buf); if (mPs3TimeFormatIdx < 0 || mPs3TimeFormatIdx > 1) mPs3TimeFormatIdx = 1;
--    // Daylight Saving reflects the real current DST state. Seed it from the local
--    // time now so the menu row reads correctly before the first clock frame;
--    // drawPs3Clock refreshes it every frame thereafter.
--    { time_t tt = time(nullptr); struct tm lt; localtime_r(&tt, &lt); mPs3DstNow = (lt.tm_isdst > 0); }
-+    // Daylight Saving: seeded here so the menu row reads correctly before the first clock frame;
-+    // drawPs3Clock refreshes it thereafter.
-+    mPs3DstNow = ps3ZoneFollowsDst();
- 
-     // Custom wallpaper: decode the user-chosen stills for the active theme's screens, and derive the
-     // XMB wave default (off when a wallpaper is set, unless the user set the toggle explicitly).
-@@ -8839,6 +9121,10 @@ void NanoMenu::drawPspClockThemeBackdrop() {
+@@ -8839,6 +9105,10 @@ void NanoMenu::drawPspClockThemeBackdrop() {
  // options uses the parseListOptions "value:Label,..." format; a toggle is just a
  // two-entry list. Keys/defaults mirror the legacy data-driven tree so both
  // front-ends drive the same settings.
@@ -4969,7 +4920,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
  static const Ps3SettingBinding kPs3Bindings[] = {
      {"Screen Timeout", SettingSource::kSystem, "screen_off_timeout", "60000",
       "15000:15 seconds,30000:30 seconds,60000:1 minute,120000:2 minutes,"
-@@ -8972,10 +9258,10 @@ static const Ps3SettingBinding kPs3Bindings[] = {
+@@ -8972,10 +9242,10 @@ static const Ps3SettingBinding kPs3Bindings[] = {
      // stays on the top screen). Requested on Discord 2026-09-27; read per frame into mNdsTileIcon.
      {"DS Icons On Tiles", SettingSource::kProp, "persist.gammaos.nano.nds.tileicon", "0", "0:Off,1:On"},
      // Minima solid background colour: the value is either "none" (default black) or a 6-digit
@@ -4984,7 +4935,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      // Minima long-name handling: 0 = shrink the font so a long name fits (default), 1 = keep the
      // font size and scroll the focused name (marquee) / clip the rest. Read live by renderMinimaList.
      {"Long Names", SettingSource::kProp, "persist.gammaos.nano.minima.namescroll", "1", "0:Shrink to Fit,1:Scroll"},
-@@ -9041,6 +9327,14 @@ static const Ps3SettingBinding kPs3Bindings[] = {
+@@ -9041,6 +9311,14 @@ static const Ps3SettingBinding kPs3Bindings[] = {
      // props to the same value. The mirror write to dpad_to_analog is in closePs3Dialog
      // (keyed on this label so the standalone rows above stay independent).
      {"DPAD/Analog Swap", SettingSource::kProp, "persist.gammaos.gamepad.analog_to_dpad", "0", "0:Off,1:On"},
@@ -4999,7 +4950,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      {"Global Sensitivity", SettingSource::kProp, "persist.gammaos.gamepad.global_sensitivity", "0",
       "-3:-50%,-2:-25%,-1:-10%,0:Off,1:+10%,2:+25%,3:+50%"},
      {"PWM Enable", SettingSource::kProp, "persist.gammaos.gamepad.pwm_enable", "1", "0:Off,1:On"},
-@@ -9049,6 +9343,7 @@ static const Ps3SettingBinding kPs3Bindings[] = {
+@@ -9049,6 +9327,7 @@ static const Ps3SettingBinding kPs3Bindings[] = {
      {"D-Pad Threshold", SettingSource::kProp, "persist.gammaos.gamepad.dpad_threshold", "50",
       "10:10,20:20,30:30,40:40,50:50,60:60,70:70,80:80,90:90"},
      {"Screen Map", SettingSource::kProp, "persist.gammaos.screenmap.enabled", "0", "0:Off,1:On"},
@@ -5007,7 +4958,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      // On-screen button-prompt theme. Read live by refreshFaceButtonPrefs() (drawFaceGlyph
      // for dialog glyphs, themeButtonText for legend text). "Button Prompts" picks letter
      // glyphs (A/B/X/Y) or PlayStation glyphs; "OK Button" relabels which face button reads
-@@ -9062,6 +9357,10 @@ static const Ps3SettingBinding kPs3Bindings[] = {
+@@ -9062,6 +9341,10 @@ static const Ps3SettingBinding kPs3Bindings[] = {
      // closePs3Dialog. "0"/empty = GammaOS XMB, "1" = the DSi Menu theme.
      {"Home Theme", SettingSource::kProp, "persist.gammaos.nano.ndstheme", "0",
       "0:GammaOS XMB,1:DSi Menu,2:Minima,3:Custom / ES-DE"},
@@ -5018,7 +4969,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      // Startup target: what the home opens on a fresh boot/restart. The value is dynamic (a category
      // id or a game-system id), so this uses the @bootto pushed picker rather than a static list; the
      // row's current-value label is computed in resolvePs3ItemValue and the landing applied in
-@@ -9096,6 +9395,8 @@ static const Ps3SettingBinding kPs3Bindings[] = {
+@@ -9096,6 +9379,8 @@ static const Ps3SettingBinding kPs3Bindings[] = {
      // GammaOS Toolbox (persist.gammaos.* props)
      {"Fan Speed", SettingSource::kProp, "persist.gammaos.fan_mode", "auto",
       "auto:Auto,cool:Cool,max:Max,off:Off"},
@@ -5027,7 +4978,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      {"Immersive Mode", SettingSource::kProp, "persist.gammaos.immersive", "0", "0:Off,1:On"},
      // Scheduler.cpp reads refresh.lock via GetIntProperty(...)==1, so store 0/1 (a
      // "true" string parses to 0 = the HW-VSYNC keepalive never engages).
-@@ -9155,7 +9456,8 @@ static const Ps3SettingBinding kPs3Bindings[] = {
+@@ -9155,7 +9440,8 @@ static const Ps3SettingBinding kPs3Bindings[] = {
      // the chooser + updates the row instantly); the authoritative radio/policy change
      // is the cmd run in closePs3Dialog (a bare settings write does not flip the radio).
      {"Airplane Mode", SettingSource::kGlobal, "airplane_mode_on", "0", "0:Off,1:On"},
@@ -5037,7 +4988,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      {"Bluetooth", SettingSource::kGlobal, "bluetooth_on", "0", "0:Off,1:On"},
      {"Do Not Disturb", SettingSource::kGlobal, "zen_mode", "0", "0:Off,2:On"},
      {"Location", SettingSource::kSecure, "location_mode", "0", "0:Off,3:On"},
-@@ -9236,6 +9538,15 @@ static const Ps3SettingBinding kPs3Bindings[] = {
+@@ -9236,6 +9522,15 @@ static const Ps3SettingBinding kPs3Bindings[] = {
      {"ScreenScraper Username", SettingSource::kProp, "persist.gammaos.scraper.ssuser", "", "@text"},
      {"ScreenScraper Password", SettingSource::kProp, "persist.gammaos.scraper.sspass", "", "@password"},
      {"TheGamesDB API Key", SettingSource::kProp, "persist.gammaos.scraper.tgdbkey", "", "@password"},
@@ -5053,7 +5004,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
  };
  
  const Ps3SettingBinding* ps3BindingFor(const std::string& label) {
-@@ -9615,7 +9926,7 @@ void NanoMenu::openBoundChooser(const Ps3SettingBinding* b) {
+@@ -9615,7 +9910,7 @@ void NanoMenu::openBoundChooser(const Ps3SettingBinding* b) {
          return;
      }
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5062,7 +5013,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      // A path-scoped binding ("Top Screen/Saturation") titles the dialog with its row name.
      { const char* sl = strrchr(b->label, '/'); mPs3DlgTitle = sl ? sl + 1 : b->label; }
      mPs3DlgBody.clear();
-@@ -9676,6 +9987,18 @@ void NanoMenu::openBoundChooser(const Ps3SettingBinding* b) {
+@@ -9676,6 +9971,18 @@ void NanoMenu::openBoundChooser(const Ps3SettingBinding* b) {
          mPs3DlgActive = true; mPs3DlgAnim = 0.0f; mPs3DlgClosing = false; mPs3DlgBlurValid = false;
          return;
      }
@@ -5081,7 +5032,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      float mn, mx, step; int scale;
      if (ps3SliderSpec(b->options, mn, mx, step, scale)) {
          // Numeric slider: snap the live value into [min,max], no option list.
-@@ -9689,9 +10012,28 @@ void NanoMenu::openBoundChooser(const Ps3SettingBinding* b) {
+@@ -9689,9 +9996,28 @@ void NanoMenu::openBoundChooser(const Ps3SettingBinding* b) {
          mPs3DlgSlider = false;
          std::vector<SettingListOption> opts = parseListOptions(b->options);
          int sel = 0;
@@ -5111,7 +5062,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
          }
          mPs3DlgSel = sel; mPs3DlgOrigSel = sel;
      }
-@@ -9715,10 +10057,13 @@ std::string NanoMenu::resolvePs3ItemValue(const Ps3Item& it) {
+@@ -9715,10 +10041,13 @@ std::string NanoMenu::resolvePs3ItemValue(const Ps3Item& it) {
      const std::string& n = it.label;
      // #90 DraStic data-folder row: show the current override (its folder name) or "Default" when
      // unset. Read live (no binding/cache) so it reflects a just-picked folder immediately.
@@ -5126,7 +5077,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
                                                       : "persist.gammaos.drastic.data_dir", dd, "");
          if (dd[0] != '/') return std::string(trDyn("Default"));
          std::string p = dd; size_t sl = p.rfind('/');
-@@ -9847,6 +10192,10 @@ std::string NanoMenu::resolvePs3ItemValue(const Ps3Item& it) {
+@@ -9847,6 +10176,10 @@ std::string NanoMenu::resolvePs3ItemValue(const Ps3Item& it) {
              int s = ps3NearestSwatch(cur);
              return (s >= 0) ? std::string(kPs3ColorOpts[s].name) : cur;
          }
@@ -5137,7 +5088,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
          float mn, mx, step; int scale;
          if (ps3SliderSpec(b->options, mn, mx, step, scale)) {
              if (cur.empty()) return std::string("-");
-@@ -10419,58 +10768,58 @@ void NanoMenu::ps3DlgIllustration(int kind, float cx, float cy, float sz, float
+@@ -10419,58 +10752,58 @@ void NanoMenu::ps3DlgIllustration(int kind, float cx, float cy, float sz, float
  void NanoMenu::openPs3Dialog(const Ps3Item& it) {
      const std::string& n = it.label;
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5207,7 +5158,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
          for (const char* s : kOffOnOpts) { mPs3DlgOptions.push_back(s); mPs3DlgSwatch.push_back(-1); }
          mPs3DlgSel = mPs3DstNow ? 1 : 0;
      } else {
-@@ -10527,7 +10876,7 @@ void NanoMenu::openPs3Dialog(const Ps3Item& it) {
+@@ -10527,7 +10860,7 @@ void NanoMenu::openPs3Dialog(const Ps3Item& it) {
  // Mirrors openPerformanceChooser; applyThemeSetting(themeKey, sel) commits it (sel 0 = On, 1 = Off).
  void NanoMenu::openOnOffChooser(const char* title, int iconIdx, bool currentOn, int themeKey) {
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5216,7 +5167,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      static const char* kOnOff[] = {"On", "Off"};
      for (const char* s : kOnOff) { mPs3DlgOptions.push_back(s); mPs3DlgSwatch.push_back(-1); }
      mPs3DlgSel = currentOn ? 0 : 1;
-@@ -10553,7 +10902,7 @@ void NanoMenu::openDualScreenPrompt(const std::string& pkg) {
+@@ -10553,7 +10886,7 @@ void NanoMenu::openDualScreenPrompt(const std::string& pkg) {
      }
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
      mPs3DlgBinding = nullptr; mPs3DlgThemeKey = 0; mShaderParamEdit = -1;
@@ -5225,7 +5176,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      mPs3DlgIllust = 0; mPs3DlgNotice.clear();
      mPs3DlgRomInfo = false; mPs3DlgGameInfo = false; mPs3DlgHelp = false; mPs3DlgAppInfo = false;
      mPs3DlgTitle = "Dual-Screen App";
-@@ -10600,7 +10949,7 @@ void NanoMenu::pollDualScreenDetect() {
+@@ -10600,7 +10933,7 @@ void NanoMenu::pollDualScreenDetect() {
  
  void NanoMenu::openPerformanceChooser() {
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5234,7 +5185,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      static const char* kPerfOpts[] = {"Normal", "Max Performance", "Power Saver"};
      for (const char* s : kPerfOpts) { mPs3DlgOptions.push_back(s); mPs3DlgSwatch.push_back(-1); }
      char cur[PROPERTY_VALUE_MAX]; property_get("persist.gammaos.performance_mode", cur, "stock");
-@@ -10876,8 +11225,18 @@ void NanoMenu::buildShaderSubmenu(Ps3Level& out) {
+@@ -10876,8 +11209,18 @@ void NanoMenu::buildShaderSubmenu(Ps3Level& out) {
          it.iconTex = iconTexForIcon(icon); it.nmapTex = nmapForIcon(icon); it.iconR = it.iconG = it.iconB = 1.0f;
          out.items.push_back(it);
      };
@@ -5255,7 +5206,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      if (type.empty()) return;   // Off: nothing else to configure
      if (custom) {
          // Empty payload -> the browser opens at the RetroArch subfolder for this type;
-@@ -10960,29 +11319,17 @@ void NanoMenu::openShaderDisclaimer() {
+@@ -10960,29 +11303,17 @@ void NanoMenu::openShaderDisclaimer() {
      mPs3DlgActive = true; mPs3DlgAnim = 0.0f; mPs3DlgClosing = false; mPs3DlgBlurValid = false;
  }
  
@@ -5295,7 +5246,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
  }
  
  // Given a shader-opt spec "key|v1:l1,v2:l2,...|title", return the display label of the
-@@ -11346,6 +11693,22 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
+@@ -11346,6 +11677,22 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
              if (sel == 1 && mGsEditIdx >= 0) gsRemoveSystem(mGsEditIdx);
              break;
          }
@@ -5318,7 +5269,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
          case 49: {  // Game Systems editor: clear the system's scraped boxart (sel 1 = clear)
              if (sel == 1 && mGsEditIdx >= 0) gsClearSystemArt(mGsEditIdx);
              break;
-@@ -11387,7 +11750,7 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
+@@ -11387,7 +11734,7 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
                      // Progress modal: stays up until the list refresh shows the app gone
                      // (closed from the apps_generation handler), or a ~10s timeout.
                      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5327,7 +5278,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
                      mPs3DlgIllust = 0; mPs3DlgNotice.clear();
                      mPs3DlgRomInfo = false; mPs3DlgAppInfo = false;
                      mPs3DlgTitle = "Uninstalling";
-@@ -11442,20 +11805,6 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
+@@ -11442,20 +11789,6 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
              stDialogResult(themeKey, sel);   // Syncthing choosers and confirms
              break;
          }
@@ -5348,7 +5299,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
          case 42:    // GammaShader: custom-shader disclaimer answered (Apply = option 1)
              if (sel == 1 && mShaderPendingTypeSel >= 0) shaderApplyType(mShaderPendingTypeSel);
              mShaderPendingTypeSel = -1;
-@@ -11627,10 +11976,16 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11627,10 +11960,16 @@ void NanoMenu::closePs3Dialog(bool apply) {
          // so the row value updates immediately.
          const Ps3SettingBinding* b = mPs3DlgBinding;
          mPs3DlgBinding = nullptr;
@@ -5365,7 +5316,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
              if (!strcmp(b->options, "@rgbeffect")) {
                  // Off -> gammargb.control=off; any effect -> control=on + rgb.effect.
                  auto list = ps3RgbEffectList();
-@@ -11675,6 +12030,23 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11675,6 +12014,23 @@ void NanoMenu::closePs3Dialog(bool apply) {
                      applyRgbSolidColor(ps3SwatchHex(sw), b);
                  }
                  mDisplayDirty = true;
@@ -5389,7 +5340,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
              } else if (mPs3DlgSlider) {
                  std::string v = ps3FormatNum(mPs3DlgSldVal, mPs3DlgSldScale);
                  writeSettingValue(b->source, b->key, v);
-@@ -11685,6 +12057,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11685,6 +12041,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
                  std::vector<SettingListOption> opts = parseListOptions(b->options);
                  if (mPs3DlgSel >= 0 && mPs3DlgSel < (int)opts.size()) {
                      const std::string& v = opts[mPs3DlgSel].value;
@@ -5397,7 +5348,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
                      writeSettingValue(b->source, b->key, v);
                      mPs3BindCache[b->label] = v;
                      refreshBoundValuesInStack();   // update the DSi/Minima frozen row-value snapshot live
-@@ -11695,6 +12068,8 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11695,6 +12052,8 @@ void NanoMenu::closePs3Dialog(bool apply) {
                      // overlay process (restarting gammaos-nano would not touch it). The persist
                      // prop was already written above, so the choice survives a reboot.
                      if (!strcmp(b->label, "Home Theme")) {
@@ -5406,7 +5357,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
                          int  tv       = atoi(v.c_str());   // 0 XMB, 1 DSi, 2 Minima, 3 ES-DE
                          bool wantDsi  = (tv == 1);
                          bool wantMin  = (tv == 2);
-@@ -11723,7 +12098,9 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11723,7 +12082,9 @@ void NanoMenu::closePs3Dialog(bool apply) {
                              mMinimaScroll = 0.0f; mMinimaSelAnim = 0.0f; mMinimaPrevDepth = -1;
                              mMinimaSfxDepth = -1; mMinimaSfxSel = -1; mMinimaTransStart = 0;
                          }
@@ -5416,7 +5367,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
                      // DSi Dark Theme on/off: apply LIVE. mNdsDark is read every frame by ndsPal()
                      // in each DSi renderer, so flipping the member repaints the DSi home dark/light
                      // with no restart (the persist prop was already written above for reboot).
-@@ -11828,6 +12205,10 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11828,6 +12189,10 @@ void NanoMenu::closePs3Dialog(bool apply) {
                      // Screen Map: mirror the volatile active flag and show/hide the
                      // cosmetic button-hint overlay service (functional effect is the
                      // two props, consumed by the gammapad daemon).
@@ -5427,7 +5378,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
                      if (!strcmp(b->label, "Screen Map")) {
                          bool on = (v == "1" || v == "true");
                          writeSettingValue(SettingSource::kProp, "sys.gammaos.screenmap.active", on ? "1" : "0");
-@@ -11847,9 +12228,17 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11847,9 +12212,17 @@ void NanoMenu::closePs3Dialog(bool apply) {
                          else if (!strcmp(b->label, "Wi-Fi"))
                              cmd = on ? "cmd wifi set-wifi-enabled enabled 2>/dev/null"
                                       : "cmd wifi set-wifi-enabled disabled 2>/dev/null";
@@ -5446,7 +5397,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
                          else if (!strcmp(b->label, "Do Not Disturb"))
                              cmd = on ? "cmd notification set_dnd on 2>/dev/null"
                                       : "cmd notification set_dnd off 2>/dev/null";
-@@ -11867,7 +12256,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11867,7 +12240,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
              // Confirmation toast: one brief self-fading pill on a successful settings-bound
              // commit. Inside `if (apply)`, so never on cancel; a slider commits only here on
              // close, so never per-frame/per-drag.
@@ -5455,7 +5406,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
          }
      } else if (mPs3DlgThemeKey == 21 && !apply) {
          // Icon-tint cancel: restore the exact original tint (not the nearest
-@@ -11896,7 +12285,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11896,7 +12269,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
              // wifi-radio, delete-playlist).
              switch (committedKey) {
                  case 6: case 22: case 23: case 30: case 31: case 32:
@@ -5464,7 +5415,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
                      break;                                   // confirm/action, not a setting
                  default:
                      photoShowBanner(trDyn("Setting changed"));
-@@ -12295,6 +12684,7 @@ void NanoMenu::openXmbOpt() {
+@@ -12295,6 +12668,7 @@ void NanoMenu::openXmbOpt() {
              // (columns / recents / search / Info) and the scraper search query; Scrape
              // This Game re-fetches just this ROM (forcing overwrite) using that query.
              add("Rename / Edit Title", "romrename", false);
@@ -5472,7 +5423,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
              add("Scrape This Game", "romscrape", false);
              // One-off scrape with a typed-in search name (does NOT rename the game): useful when the
              // filename does not match the database (a region tag, a fan-translation title, etc.).
-@@ -13260,7 +13650,7 @@ void NanoMenu::xmbOptApplySub(const Ps3OptSub& sr) {
+@@ -13260,7 +13634,7 @@ void NanoMenu::xmbOptApplySub(const Ps3OptSub& sr) {
  // been closed by the caller, so the dialog draws over the home column.
  void NanoMenu::mediaDeleteConfirm(const std::string& title, const std::string& body) {
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5481,7 +5432,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false;
      mPs3DlgTitle = title; mPs3DlgBody = body;
      mPs3DlgOptions.push_back("Cancel"); mPs3DlgSwatch.push_back(-1);
-@@ -13277,7 +13667,7 @@ void NanoMenu::mediaDeleteConfirm(const std::string& title, const std::string& b
+@@ -13277,7 +13651,7 @@ void NanoMenu::mediaDeleteConfirm(const std::string& title, const std::string& b
  void NanoMenu::mediaCopyToClipboard(const std::string& name) {
      feOpen();   // enter the File Explorer at the storage roots (mFeClipPath already set by the caller)
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5490,7 +5441,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false;
      mPs3DlgTitle = "Copy";
      mPs3DlgBody = std::string("Copied \"") + name +
-@@ -13511,7 +13901,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13511,7 +13885,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              body = mPs3OptCtxDesc.empty() ? std::string("No information is available.") : mPs3OptCtxDesc;
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5499,7 +5450,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false; mPs3DlgAppInfo = false;
          mPs3DlgTitle = title;
          mPs3DlgBody  = body;
-@@ -13584,6 +13974,21 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13584,6 +13958,21 @@ void NanoMenu::xmbOptAction(const std::string& act) {
          }
          return;
      }
@@ -5521,7 +5472,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      if (act == "romrename") {
          // Per-game title override. Resolve the focused ROM path + current display name
          // exactly the way "rominfo" does, then open the OSK prefilled with the current
-@@ -13640,6 +14045,16 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13640,6 +14029,16 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              // tops, not open stack levels), with the highlight kept on the renamed game:
              // the new title re-sorts the list, so its old index points at another game.
              if (owner >= 0) rebuildOpenRomLevels(owner, romPath);
@@ -5538,7 +5489,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
              // Also rebuild an open Recently Played list in place (it is not sysIdx-tagged;
              // identify it by its first item being a PS3_RECENT row).
              for (auto& lvl : mPs3Stack) {
-@@ -13765,7 +14180,10 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13765,7 +14164,10 @@ void NanoMenu::xmbOptAction(const std::string& act) {
          if (mPs3DlgBoxTex) { glDeleteTextures(1, &mPs3DlgBoxTex); mPs3DlgBoxTex = 0; }
          mPs3DlgFanW = mPs3DlgFanH = 0; mPs3DlgBoxW = mPs3DlgBoxH = 0;
  
@@ -5550,7 +5501,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
          bool rich = se && (!se->box.empty() || !se->fan.empty() ||
                             !se->synopsis.empty() || !se->genre.empty() ||
                             !se->developer.empty() || !se->publisher.empty() ||
-@@ -13773,7 +14191,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13773,7 +14175,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
                             !se->releaseDate.empty());
  
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5559,7 +5510,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear();
          mPs3DlgTitle = name.empty() ? std::string("Information") : name;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14042,7 +14460,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -14042,7 +14444,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              row("Path", dir);
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5568,7 +5519,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false;
          mPs3DlgTitle = title; mPs3DlgBody = body;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14117,7 +14535,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -14117,7 +14519,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              body = b;
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5577,7 +5528,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear();
          mPs3DlgTitle = title; mPs3DlgBody = body;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14138,7 +14556,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -14138,7 +14540,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              body = b;
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5586,7 +5537,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear();
          mPs3DlgTitle = title; mPs3DlgBody = body;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14530,9 +14948,15 @@ void NanoMenu::renderPs3Dialog() {
+@@ -14530,9 +14932,15 @@ void NanoMenu::renderPs3Dialog() {
              float fs = ps3::fontScale((sel ? 26.0f : 22.0f) * fb);
              float ty = cyDev - 0.45f * ps3::emPx(fs);   // web textBaseline='middle'
              const char* optTxt = trDyn(mPs3DlgOptions[i].c_str());
@@ -5604,7 +5555,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
          }
  
          // (4) Up/down scroll arrows at the text x when items scroll off-window.
-@@ -14894,7 +15318,7 @@ enum WizScr {
+@@ -14894,7 +15302,7 @@ enum WizScr {
      // the real gammaos-net bt scan/pair/connect/disconnect/unpair), BD Remote
      // Control Registration, and Audio Device Settings.
      WS_BT_MANAGE, WS_BT_REGISTER_INFO, WS_BT_SCANNING, WS_BT_DEVICE_LIST,
@@ -5613,7 +5564,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      WS_BT_DEVICE_OPTS, WS_BT_CONNECTING, WS_BT_DISCONNECTING,
      WS_BT_DELETE_CONFIRM, WS_BT_DELETING, WS_BT_INFO,
      WS_BT_BD_REMOTE,
-@@ -14939,9 +15363,6 @@ static const char* btTypeLabel(int cod) {
+@@ -14939,9 +15347,6 @@ static const char* btTypeLabel(int cod) {
          default:     return "Bluetooth Device";
      }
  }
@@ -5623,7 +5574,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
  // Build the pass-key instruction shown while pairing. gammaos-net publishes the
  // system-generated code in sys.gammaos.bt.passkey and the SSP variant in
  // sys.gammaos.bt.pk_variant (2=numeric compare, 4=display passkey, 5=display PIN).
-@@ -15119,7 +15540,10 @@ static void wizDesc(int id, WizDesc& d) {
+@@ -15119,7 +15524,10 @@ static void wizDesc(int id, WizDesc& d) {
      case WS_BT_DEVICE_LIST: d.kind = WK_SCANLIST; d.title = "Register Bluetooth® Device";
          d.body = "Select the Bluetooth® device to register."; break;
      case WS_BT_PASSKEY: d.kind = WK_TEXT; d.title = "Register Bluetooth® Device";
@@ -5635,7 +5586,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      case WS_BT_REGISTERING: d.kind = WK_PROGRESS; d.title = "Register Bluetooth® Device";
          d.body = "Registering...\nPlease wait."; d.autoNext = WS_BT_REGISTER_DONE; break;
      case WS_BT_REGISTER_DONE: d.kind = WK_RESULT; d.title = "Register Bluetooth® Device";
-@@ -15178,6 +15602,89 @@ void NanoMenu::startNetWizard() {
+@@ -15178,6 +15586,89 @@ void NanoMenu::startNetWizard() {
      wizEnter(WS_INTRO, 1);
  }
  
@@ -5725,7 +5676,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
  // First-run setup only: bring up the XMB "waiting for services" progress screen (a WK_PROGRESS
  // net-wizard page) while the setup wizard holds before the Wi-Fi step until sys.boot_completed.
  // Lives here because the WizScr enum is file-local to this translation unit; the setup wizard
-@@ -15257,6 +15764,13 @@ void NanoMenu::btWizStopReceive() {
+@@ -15257,6 +15748,13 @@ void NanoMenu::btWizStopReceive() {
  }
  
  void NanoMenu::wizEnter(int id, int dir) {
@@ -5739,7 +5690,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      mPs3WizId = id;
      mPs3WizSel = 0;
      mPs3WizScroll = 0;
-@@ -15280,7 +15794,9 @@ void NanoMenu::wizEnter(int id, int dir) {
+@@ -15280,7 +15778,9 @@ void NanoMenu::wizEnter(int id, int dir) {
          std::lock_guard<std::mutex> lk(mBtWizMutex); mBtWizScan.clear(); mBtWizPin.clear();
      }
      if (id == WS_BT_SCANNING)      btWizScanAsync();                    // real inquiry -> device list (accumulates)
@@ -5750,7 +5701,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      if (id == WS_BT_CONNECTING)    btWizConnectAsync(mBtWizSelAddr);    // real profile connect
      if (id == WS_BT_DISCONNECTING) btWizDisconnectAsync(mBtWizSelAddr); // real profile disconnect
      if (id == WS_BT_DELETING)      btWizUnpairAsync(mBtWizSelAddr);     // real removeBond
-@@ -15305,34 +15821,8 @@ void NanoMenu::wizEnter(int id, int dir) {
+@@ -15305,34 +15805,8 @@ void NanoMenu::wizEnter(int id, int dir) {
      // (NTP) and nudge a refresh on a background thread (the 2.6s dwell is real work).
      if (id == WS_DT_SVI_PROGRESS) {
          std::thread([]{
@@ -5786,7 +5737,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
          }).detach();
          // auto_time_zone is now on; the Olson tz captures DST automatically and the
          // "Daylight Saving" row reflects it live (drawPs3Clock -> mPs3DstNow).
-@@ -15411,6 +15901,11 @@ void NanoMenu::wizOpenTextField(int field) {
+@@ -15411,6 +15885,11 @@ void NanoMenu::wizOpenTextField(int field) {
          std::string err = validateWizField(field, val);
          if (!err.empty()) { mPs3WizFieldError = err; mPs3WizPendingTextField = field; return; }
          mPs3WizFieldError.clear();
@@ -5798,7 +5749,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
          int nxt = wizNextScreen(mPs3WizId, 0);
          if (nxt == WS_NONE) { mPs3WizExit = 1; mPs3WizActive = false; }
          else { mPs3WizStack.push_back(mPs3WizId); wizEnter(nxt, 1); }
-@@ -15508,6 +16003,11 @@ void NanoMenu::wizConfirm() {
+@@ -15508,6 +15987,11 @@ void NanoMenu::wizConfirm() {
          }
          return;
      }
@@ -5810,7 +5761,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      if (mPs3WizId == WS_BT_INBOUND_CONFIRM) {
          if (mPs3WizSel == 0) {   // Yes -> accept + wait for the bond
              mPs3WizStack.push_back(mPs3WizId); wizEnter(WS_BT_INBOUND_PAIRING, 1);
-@@ -15534,7 +16034,8 @@ void NanoMenu::wizConfirm() {
+@@ -15534,7 +16018,8 @@ void NanoMenu::wizConfirm() {
          // connect it, or delete it and register fresh - matching Android's behaviour
          // when you pick an already-paired device from "pair new device".
          if (scan[mPs3WizSel].bonded) { wizEnter(WS_BT_DEVICE_OPTS, 1); return; }
@@ -5820,7 +5771,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
          return;
      }
      if (mPs3WizId == WS_BT_REGISTER_DONE) {   // loop back to the Manage root (BD remote closes)
-@@ -15634,6 +16135,12 @@ void NanoMenu::wizBack() {
+@@ -15634,6 +16119,12 @@ void NanoMenu::wizBack() {
      if (mPs3WizId == WS_DT_SVI_DONE || mPs3WizId == WS_DT_SM_DONE) {
          mPs3WizExit = 1; mPs3WizActive = false; return;
      }
@@ -5833,7 +5784,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      if (mPs3WizStack.empty()) { mPs3WizExit = -1; mPs3WizActive = false; return; }
      int prev = mPs3WizStack.back(); mPs3WizStack.pop_back();
      // Don't land back on a transient progress/test screen (mirrors web wizBack). If
-@@ -15788,6 +16295,7 @@ int NanoMenu::wizNextScreen(int id, int sel) {
+@@ -15788,6 +16279,7 @@ int NanoMenu::wizNextScreen(int id, int sel) {
      // ---- Accessory: Bluetooth ----
      case WS_BT_REGISTER_INFO: return WS_BT_SCANNING;
      case WS_BT_PASSKEY:       return WS_BT_REGISTERING;
@@ -5841,7 +5792,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      case WS_BT_BD_REMOTE:     return WS_BT_SCANNING;
      case WS_BT_DEVICE_OPTS:
          return (sel == 0) ? WS_BT_CONNECTING
-@@ -15844,6 +16352,32 @@ void NanoMenu::renderNetWizard() {
+@@ -15844,6 +16336,32 @@ void NanoMenu::renderNetWizard() {
              wizDesc(mPs3WizId, d);
          }
      }
@@ -5874,7 +5825,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      // The receive screen advances when the BondStateMachine patch publishes a
      // remote-initiated pairing request to sys.gammaos.bt.inbound.
      if (mPs3WizId == WS_BT_INBOUND_WAIT) {
-@@ -16111,6 +16645,9 @@ void NanoMenu::renderNetWizard() {
+@@ -16111,6 +16629,9 @@ void NanoMenu::renderNetWizard() {
              if (!mBtWizInPasskey.empty()) cbody += "\n\nPass Key:  " + mBtWizInPasskey;
              cbody += "\n\nAccept this device?";
          }
@@ -5884,7 +5835,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
          std::vector<std::string> bl = wrap(cbody, fs);
          float ty = Y((innerTop + innerBot) * 0.5f) - (float)((int)bl.size() - 1) * lh * 0.5f - DS(50.0f);
          for (auto& ln : bl) { if (!ln.empty()) ps3DlgText(ln.c_str(), bodyCx, ty, fs, 0.95f, 0.95f, 0.95f, ap, 1); ty += lh; }
-@@ -16555,6 +17092,9 @@ void NanoMenu::renderNdsNetWizardBody(float rx, float ry, float rw, float rh) {
+@@ -16555,6 +17076,9 @@ void NanoMenu::renderNdsNetWizardBody(float rx, float ry, float rw, float rh) {
              if (!mBtWizInPasskey.empty()) cbody += "\n\nPass Key:  " + mBtWizInPasskey;
              cbody += "\n\nAccept this device?";
          }
@@ -5894,7 +5845,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
          auto lines = wrapDs(trDyn(cbody.c_str()), 12.0f, 224.0f);
          centeredBlock(lines, 80.0f, 15.0f, 12.0f, 0.93f, 0.93f, 0.93f);
          // Yes / No glossy buttons (dialog capsule geometry: h32 r4).
-@@ -16978,6 +17518,9 @@ void NanoMenu::renderMinimaNetWizardBody(float rx, float ry, float rw, float rh)
+@@ -16978,6 +17502,9 @@ void NanoMenu::renderMinimaNetWizardBody(float rx, float ry, float rw, float rh)
              if (!mBtWizInPasskey.empty()) cbody += "\n\nPass Key:  " + mBtWizInPasskey;
              cbody += "\n\nAccept this device?";
          }
@@ -5904,7 +5855,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
          auto lines = wrap(trDyn(cbody.c_str()), fsRow, rw - pad * 3.0f);
          centeredBlock(lines, g.bodyTop + (g.bodyBot - g.bodyTop) * 0.32f, rowH * 0.9f, fsRow, 0.90f, 0.90f, 0.92f);
          float pillH = rowH, by = g.footerTop - rowH - g.btnMg;
-@@ -17178,6 +17721,30 @@ float NanoMenu::ps3TzFadeAlpha() {
+@@ -17178,6 +17705,30 @@ float NanoMenu::ps3TzFadeAlpha() {
  // it opens already showing that location (web initGlobe sets tzGlobe lon/lat =
  // target = the selected zone, then renderGlobe; the fade only cross-fades the
  // composite, not the rotation).
@@ -5935,7 +5886,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
  void NanoMenu::beginTzGlobeFade() {
      // Warm up first: the globe textures load on the render thread on the first
      // render (GL has no context here on the input thread), which spikes one frame.
-@@ -17237,6 +17804,7 @@ void NanoMenu::tzGlobeNav(int dir) {
+@@ -17237,6 +17788,7 @@ void NanoMenu::tzGlobeNav(int dir) {
      int n = (int)mTzEntries.size();
      if (n <= 0) return;
      mTzSelected = (mTzSelected + dir + n) % n;
@@ -5943,7 +5894,7 @@ index c6a8e9c9dc1..b561817f4d2 100644
      const TimezoneEntry& z = mTzEntries[mTzSelected];
      ps3globe::setTarget(z.lon * (float)M_PI / 180.0f, z.lat * (float)M_PI / 180.0f);
  }
-@@ -17453,6 +18021,26 @@ void NanoMenu::renderTimezoneGlobe() {
+@@ -17453,6 +18005,26 @@ void NanoMenu::renderTimezoneGlobe() {
      // Caption "Select a time zone." (web XCF(V.W*0.04), yT+56, 24px, left).
      ps3DlgText("Select a time zone.", XC(VW * 0.04f), Y(innerTop + 56.0f), FS(24.0f),
                 1, 1, 1, 0.95f * ap, 0);
