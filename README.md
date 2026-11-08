@@ -368,6 +368,13 @@ The patched driver:
   and otherwise the largest mode that does (4K at 30 Hz on a 4K TV);
 - treats a missing buffer as RGB instead of crashing.
 
+When a display connects, Nano asks which of these modes to use, with the
+display's preferred mode (the first timing in its EDID) selected and the mode
+in use marked. The choice is saved for that display in Android's display
+settings and used whenever it reconnects; Cancel keeps the current mode. Nano
+asks once per connection, when it is on screen: connected during a game, the
+chooser opens the next time the Quick Menu or the home is shown.
+
 The build also grows the system partition by about 431 MB, into the
 unallocated space at the end of the `super` image (`scripts/lptool.py grow`);
 the other partitions don't move. The upstream system filesystem is built
