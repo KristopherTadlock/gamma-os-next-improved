@@ -6,20 +6,21 @@ Status: implemented. The per-emulator bindings come from each emulator's source 
 
 ## What it does
 
-Hold the **Anbernic button** in a game and press another button:
+Hold the **Anbernic button**, or **Start + Select**, in a game and press another button:
 
 | Action | Default chord | Kind |
 |---|---|---|
-| Save state | Anbernic + R1 | one shot |
-| Load state | Anbernic + L1 | one shot |
-| Fast forward | Anbernic + R2 | toggle |
-| Rewind | Anbernic + L2 | toggle |
-| Quit game | Anbernic + Start, held 1 s | one shot |
+| Save state | Anbernic + R1, or Start + Select + R1 | one shot |
+| Load state | Anbernic + L1, or Start + Select + L1 | one shot |
+| Fast forward | Anbernic + R2, or Start + Select + R2 | toggle |
+| Rewind | Anbernic + L2, or Start + Select + L2 | toggle |
+| Quit game | Anbernic, or Start + Select, held on its own for 3 s | one shot |
 
 - R is "forward" (save, fast forward) and L is "back" (load, rewind).
-- Quit needs a 1 s hold so it can't happen by accident.
-- The buttons can be changed under **Settings → Gamepad Settings → Hotkeys**.
-- The Anbernic button on its own opens the Quick Menu when it is **released**, over a game and in Nano's own menus alike.
+- Quit needs a 3 s hold with nothing else pressed, so it can't happen by accident. Any other key during the hold cancels it until every button is let go and the hold starts again.
+- The buttons can be changed under **Settings → Gamepad Settings → Hotkeys**. *Quit Game Button* adds a button chord for quit; it is off by default.
+- The Anbernic button on its own opens the Quick Menu when it is **released**, over a game and in Nano's own menus alike. Start + Select opens the Quick Menu only in Nano's own menus, never in a game.
+- The game still sees Start and Select: they can't be held back without delaying them. Start + Select is not a chord when another pad button is already held (A + B + Start + Select resets many games).
 
 Each emulator has its own hotkeys, or none. A per-emulator **profile** turns the five actions into whatever that emulator understands. Adding an emulator means adding a profile file, with no code change.
 
@@ -54,14 +55,18 @@ It runs while a game is in front (`app_launched`, overlay down, not in a drastic
    Buttons with no hotkey are swallowed too, so the game never sees half a chord.
 3. **Anbernic up:**
    - after a chord: nothing more;
-   - alone: the overlay rises on the Quick Menu.
+   - alone, within 3 s: the overlay rises on the Quick Menu.
+4. **Hold to quit:** the Anbernic button held on its own for 3 s runs quit, and its release opens nothing. Any other key pressed during the hold cancels it. A hold of 10 s is still the emergency recovery (now also from the RG Cube's `F10` Anbernic button), for an app that does not close.
+5. **Start + Select:** the second of the two pressed while the other is held, with no other pad button down, arms the chord. Both keys still reach the app.
+   - A hotkey button pressed while it is armed runs its hotkey and is swallowed like an Anbernic chord. Any other key reaches the app.
+   - Held for 3 s with nothing else pressed, it runs quit. Any other key, or Start or Select pressed again, cancels the hold until both are let go.
+   - It never opens the Quick Menu over a game.
+   - *Start + Select Hotkeys* (`persist.gammaos.hotkeys.startselect`) turns it off.
+6. **Quit button:** if *Quit Game Button* is set, that button must stay down for 1 s (*Hold to Quit*). Releasing it earlier cancels.
+7. **Order of presses:** only Anbernic first, then the button, is a chord. A button already held when Anbernic goes down passes through untouched.
+8. **A lost key-up:** if the Anbernic button's key-up goes missing, a later chord checks that it is physically down before acting. Start + Select reads both buttons' physical state.
 
-   A hold of 10 s or longer is the emergency recovery instead, and opens nothing.
-4. **Quit:** the quit button must stay down for 1 s (*Hold to Quit*). Releasing it earlier cancels.
-5. **Order of presses:** only Anbernic first, then the button, is a chord. A button already held when Anbernic goes down passes through untouched.
-6. **A lost key-up:** if the Anbernic button's key-up goes missing, a later chord checks that it is physically down before acting.
-
-Nano's own menus follow the same rule. The Quick Menu toggles on release, and a button pressed while the Anbernic button is held cancels it and is ignored.
+Nano's own menus follow the same rule. The Quick Menu toggles on release, and a button pressed while the Anbernic button is held cancels it and is ignored. Start and Select act when they are released, so pressing both together toggles the Quick Menu once both are up. A key pressed while either is held cancels its action (Select + Volume is brightness).
 
 ### GammaHotkeyController (system_server)
 
@@ -172,7 +177,8 @@ The user's own bindings are never replaced in `add` mode: a hotkey whose setting
 | Load State Button | `persist.gammaos.hotkeys.load` | L1 |
 | Fast Forward Button | `persist.gammaos.hotkeys.fastforward` | R2 |
 | Rewind Button | `persist.gammaos.hotkeys.rewind` | L2 |
-| Quit Game Button | `persist.gammaos.hotkeys.quit` | Start |
+| Start + Select Hotkeys | `persist.gammaos.hotkeys.startselect` | On |
+| Quit Game Button | `persist.gammaos.hotkeys.quit` | Off |
 | Hold to Quit | `persist.gammaos.hotkeys.quithold` | On |
 | Emulator Support | read-only: each profile, what works and its note | — |
 
@@ -181,7 +187,7 @@ The user's own bindings are never replaced in `add` mode: a hotkey whose setting
 
 ### drastic-nano (Nano's DS player)
 
-drastic-nano reads the pad itself, so PhoneWindowManager leaves the Anbernic button to it. Its input loop has the same chord rule and reads the same properties:
+drastic-nano reads the pad itself, so PhoneWindowManager leaves the Anbernic button to it. Its input loop has the same chord rule, including Start + Select and the 3 s hold to quit, and reads the same properties:
 
 | Action | What drastic-nano does |
 |---|---|
@@ -245,6 +251,8 @@ On the device, for each emulator:
 3. **Watch the log:** `adb logcat -s GammaHotkeys` shows each action, the profile and the driver, and Nano logs `hotkeys: bound keys in <file>`.
 4. **Check the edge cases:**
    - Anbernic alone opens the Quick Menu on release;
+   - Anbernic, or Start + Select, held 3 s quits; a key pressed during the hold cancels it;
+   - Start + Select + R1 saves, and Start + Select released opens nothing in a game;
    - Anbernic + an unmapped button does nothing;
    - the 10 s emergency hold still recovers;
    - rewind released when the Quick Menu opens.

@@ -206,6 +206,22 @@ It also changes Nano:
   Auto (the centred 4:3 area, for emulators that letterbox) or Full Picture
   (for emulators set to stretch). RetroArch is left alone, as it has its own
   shaders.
+- **Start + Select:** in Nano's menus Start and Select act when released, and
+  both pressed together open or close the Quick Menu. In a game, Start +
+  Select works like the Anbernic button for hotkeys (Start + Select + R1
+  saves), but never opens the Quick Menu, and the game still sees both
+  buttons. **Start + Select Hotkeys** (Gamepad Settings → Hotkeys) turns it
+  off. See [HOTKEYS.md](HOTKEYS.md).
+- **Hold to quit:** holding the Anbernic button, or Start + Select, on its own
+  for 3 seconds closes the game; any other button pressed during the hold
+  cancels it. This replaces Anbernic + Start (the Quit Game Button is now off
+  by default). The 10-second emergency recovery hold now also works from the
+  RG Cube's Anbernic button.
+- **Quick Menu Bluetooth:** choosing On keeps the chooser open on Pair Device,
+  and the connected devices appear as the radio comes up; Off closes it.
+- **Kiosk Mode:** Start opens and closes Applications instead of the ES-DE
+  menu.
+- **ES-DE menu:** B at the top of the menu closes it.
 
 1.4.4 adds GammaOS Nano, a console-style home. The build makes the device
 boot into it from the first boot, where Nano's setup wizard runs first-boot
