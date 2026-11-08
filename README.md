@@ -372,8 +372,9 @@ When a display connects, Nano asks which of these modes to use, with the
 display's preferred mode (the first timing in its EDID) selected and the mode
 in use marked. The choice is saved for that display in Android's display
 settings and used whenever it reconnects; Cancel keeps the current mode. Nano
-asks once per connection, when it is on screen: connected during a game, the
-chooser opens the next time the Quick Menu or the home is shown.
+asks once per connection. Connected during a game, it opens the Quick Menu over
+the game (pausing it) with the chooser on top, and goes back to the game once
+a mode is chosen or the chooser is cancelled.
 
 The build also grows the system partition by about 431 MB, into the
 unallocated space at the end of the `super` image (`scripts/lptool.py grow`);
