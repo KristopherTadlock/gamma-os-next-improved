@@ -154,6 +154,13 @@ It also changes Nano:
   and lists what each emulator supports). [HOTKEYS.md](HOTKEYS.md) describes
   it; `mods/55-hotkeys.sh` installs the emulator profiles from `mods/hotkeys`.
 - **Power button:** held for 7 seconds, it shuts the console down.
+- **Setup's time zone step:** with an internet connection, the clock is set
+  from the internet and the time zone is looked up from the connection's IP
+  address (ipapi.co, or ip-api.com if that fails) and selected on the globe,
+  to confirm or change. A US time zone defaults to MM/DD/YYYY dates and the
+  12-hour clock; elsewhere the defaults stay DD/MM/YYYY and 24-hour.
+  **Daylight Saving** shows On for a zone that follows daylight saving, all
+  year round.
 - **USB Settings:** the mode you choose (Charging Only, File Transfer (MTP),
   Photo Transfer (PTP) or USB Ethernet (RNDIS)) stays on and is applied each
   time a computer is connected, from boot onwards. File Transfer is the default.
