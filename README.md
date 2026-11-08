@@ -229,6 +229,9 @@ It also changes Nano:
 - **ES-DE boot:** the cold-boot intro ends in black after the warning instead
   of revealing the XMB menu, the ES-DE theme loads while the warning is up,
   and the ES-DE home fades in.
+- **ES-DE menu → Applications** no longer locks the console up when it starts
+  an app from the boot home: it hands off like every other launch instead of
+  starting the app behind the home, which kept the screen and the controls.
 - **Back to the right game list after the first game:** the overlay home,
   which starts at the first launch, returns to the system and game the
   launch came from, as it already did for later launches.

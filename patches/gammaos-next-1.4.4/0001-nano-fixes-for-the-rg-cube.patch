@@ -1684,7 +1684,7 @@ index 88e7cae6699..d11912b8d11 100644
      // System Language picker (Settings -> System Settings -> System Language).
      bool mPs3LangActive = false;  // gates the XMB fullscreen language picker
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuEsdeMenu.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuEsdeMenu.cpp
-index 2d621760914..7dd5b5285b5 100644
+index 2d621760914..5a423893ad3 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuEsdeMenu.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuEsdeMenu.cpp
 @@ -12,6 +12,7 @@
@@ -1795,6 +1795,15 @@ index 2d621760914..7dd5b5285b5 100644
          } else if (mEsdeMenuSel == kEsdeRowApps) {   // APPLICATIONS: open the app launcher list
              if (mAppEntries.empty()) loadInstalledApps();
              mEsdeMenuPage = ESDE_PG_APPS;
+@@ -280,7 +330,7 @@ void NanoMenu::esdeMenuSelect() {
+         if (mEsdeMenuSel >= 0 && mEsdeMenuSel < (int)mAppEntries.size()) {
+             std::string pkg = mAppEntries[mEsdeMenuSel].packageName;
+             esdeMenuClose();                         // dismiss the overlay before launching
+-            overlayLaunchPackage(pkg);
++            launchInstalledApp(pkg, false);          // the cold-boot home must hand off, not just start it
+         }
+         return;
+     } else {                                         // picker: commit the choice
 @@ -297,7 +347,7 @@ void NanoMenu::esdeMenuSelect() {
      mDisplayDirty = true;
  }
