@@ -13132,7 +13132,7 @@ index cdc7ffd34cd..7fc47c550ce 100644
      bool useFiltering = targetSettings.needsFiltering ||
                          mSnapshot->geomLayerTransform.needsBilinearFiltering();
 diff --git a/frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp b/frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp
-index ec930abfc68..7bed50092ab 100644
+index ec930abfc68..568558c5637 100644
 --- a/frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp
 +++ b/frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp
 @@ -76,6 +76,7 @@
@@ -13171,7 +13171,7 @@ index ec930abfc68..7bed50092ab 100644
          refreshArgs.devOptForceClientComposition = true;
      }
  
-@@ -10728,10 +10728,139 @@ void SurfaceFlinger::moveSnapshotsFromCompositionArgs(
+@@ -10728,10 +10728,137 @@ void SurfaceFlinger::moveSnapshotsFromCompositionArgs(
      }
  }
  
@@ -13180,6 +13180,7 @@ index ec930abfc68..7bed50092ab 100644
 +struct GammaSurfaceFilterTarget {
 +    renderengine::GammaSurfaceFilter filter;
 +    gui::Uid appUid = gui::Uid::INVALID;
++    bool windowGame = false;   // the app draws its game into its window, not a SurfaceView
 +};
 +
 +// GammaOS: RetroArch has its own shader pipeline, so 4:3 Cropped never applies to it.
@@ -13239,25 +13240,25 @@ index ec930abfc68..7bed50092ab 100644
 +    });
 +    if (target.appUid == gui::Uid::INVALID) return std::nullopt;
 +    target.filter = gammaSurfaceFilterProfile(pkg);
++    target.windowGame =
++            base::GetBoolProperty("persist.gammaos.shader.4x3.window." + pkg, false);
 +    return target;
 +}
 +
 +// Marks the emulator's game layer for the filter and clears every other layer. Emulators draw the
-+// game into a SurfaceView and their menus into windows, so a SurfaceView wins, then an opaque
-+// layer (a window drawn over a SurfaceView has to be translucent), then the largest. Once the
-+// emulator has shown a SurfaceView, only a SurfaceView is filtered, so a full-screen settings
-+// window is left alone; one that never does (a NativeActivity) draws the game into its window.
++// game into a SurfaceView and their menus, launchers and settings into windows, so only a
++// SurfaceView is filtered. An app set to draw its game into its window (persist.gammaos.shader.
++// 4x3.window.<package>) has its windows filtered too, a SurfaceView still first. Then an opaque
++// layer wins (a window drawn over a SurfaceView has to be translucent), then the largest.
 +void gammaSelectSurfaceFilterLayer(compositionengine::CompositionRefreshArgs& refreshArgs,
 +                                   const std::vector<std::pair<Layer*, LayerFE*>>& layers,
 +                                   const std::optional<GammaSurfaceFilterTarget>& target) {
 +    static int32_t sSelectedSequence = -1;
 +    static std::optional<renderengine::GammaSurfaceFilter> sSelectedFilter;
-+    static gui::Uid sSurfaceViewUid = gui::Uid::INVALID;
 +
 +    LayerFE* selected = nullptr;
-+    bool selectedSurfaceView = false;
 +    if (target) {
-+        if (sSurfaceViewUid != target->appUid) sSurfaceViewUid = gui::Uid::INVALID;
++        bool selectedSurfaceView = false;
 +        bool selectedOpaque = false;
 +        float selectedArea = 0.f;
 +        for (const auto& [_, layerFE] : layers) {
@@ -13267,7 +13268,7 @@ index ec930abfc68..7bed50092ab 100644
 +                continue;
 +            }
 +            const bool surfaceView = snapshot.name.find("SurfaceView[") != std::string::npos;
-+            if (!surfaceView && sSurfaceViewUid == target->appUid) continue;
++            if (!surfaceView && !target->windowGame) continue;
 +            const float area =
 +                    snapshot.transformedBounds.getWidth() * snapshot.transformedBounds.getHeight();
 +            if (area <= 0.f) continue;
@@ -13281,9 +13282,6 @@ index ec930abfc68..7bed50092ab 100644
 +                selectedArea = area;
 +            }
 +        }
-+        if (selectedSurfaceView) sSurfaceViewUid = target->appUid;
-+    } else {
-+        sSurfaceViewUid = gui::Uid::INVALID;
 +    }
 +
 +    std::optional<renderengine::GammaSurfaceFilter> filter;
@@ -13311,7 +13309,7 @@ index ec930abfc68..7bed50092ab 100644
          nsecs_t currentTime = systemTime();
          mLayerSnapshotBuilder.forEachVisibleSnapshot(
                  [&](std::unique_ptr<frontend::LayerSnapshot>& snapshot) {
-@@ -10756,6 +10885,9 @@ std::vector<std::pair<Layer*, LayerFE*>> SurfaceFlinger::moveSnapshotsToComposit
+@@ -10756,6 +10883,9 @@ std::vector<std::pair<Layer*, LayerFE*>> SurfaceFlinger::moveSnapshotsToComposit
                      refreshArgs.layers.push_back(layerFE);
                      layers.emplace_back(legacyLayer.get(), layerFE.get());
                  });
