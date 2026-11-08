@@ -611,7 +611,7 @@ index 00000000000..69a466875bb
 +}  // namespace nanohotkeys
 +}  // namespace android
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenu.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenu.cpp
-index dcd7bbaf475..0771ffb72a8 100644
+index dcd7bbaf475..947dab961be 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenu.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenu.cpp
 @@ -75,6 +75,7 @@ extern "C" uint32_t __system_property_serial(const prop_info* __pi);
@@ -662,16 +662,17 @@ index dcd7bbaf475..0771ffb72a8 100644
          if (!ndsIdleSkip) {
          mMinimaWantsFrame = false;   // the Minima renderer re-arms it while anything animates
          render();
-@@ -5830,6 +5834,8 @@ if (sRingPrimedCount >= 2) {
+@@ -5830,6 +5834,9 @@ if (sRingPrimedCount >= 2) {
                  // the media drains below) because a scrape runs while the user is
                  // deep in the Settings submenu with the progress modal up.
                  scraperDrainResults();
 +                ps3DlgBtSync();
 +                btQuickReturnTick();
++                if (mFavResortSys >= 0) { favoritesResort(mFavResortSys, std::string()); mFavResortSys = -1; }
  
                  // IPTV: rebuild the open channel-groups screen when the background fetch/
                  // parse finishes. Must run every frame (not only at the settled XMB root)
-@@ -5996,6 +6002,7 @@ if (sRingPrimedCount >= 2) {
+@@ -5996,6 +6003,7 @@ if (sRingPrimedCount >= 2) {
          // wallpaper so the app (or a later video clip) can use it, and stop burning power decoding a
          // background the user cannot see.
          if (mWpVideoTop) wpVideoStop();
@@ -680,7 +681,7 @@ index dcd7bbaf475..0771ffb72a8 100644
          if (!mDrmBootPath) {
              setupSecondaryEglSurfaces();
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenu.h b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
-index 88e7cae6699..7dbe475cc1b 100644
+index 88e7cae6699..fb2ea2c7900 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 @@ -484,6 +484,9 @@ private:
@@ -755,7 +756,7 @@ index 88e7cae6699..7dbe475cc1b 100644
      void esdeReloadForSystem(int sysIdx);         // re-parse per-system data (systeminfo/colours) on
                                                    // a settled system change (XML only, no GL reload)
      int  mEsdeSysSel = 0;                         // selected system (system view)
-@@ -1676,6 +1695,71 @@ private:
+@@ -1676,6 +1695,83 @@ private:
          bool installed = false;
      };
      bool         mEsdeMenuActive = false;         // menu open
@@ -787,6 +788,18 @@ index 88e7cae6699..7dbe475cc1b 100644
 +    bool  mEsdeInfoActive = false;
 +    std::string mEsdeInfoRom;
 +    float mEsdeInfoScroll = 0.0f, mEsdeInfoMaxScroll = 0.0f, mEsdeInfoAnim = 0.0f;
++    // The information panel's text lines (top, bottom of the glyphs, from the top of the content)
++    // and the height of its window, for L1/R1 paging.
++    std::vector<std::pair<float, float>> mEsdeInfoLines;
++    float mEsdeInfoViewH = 0.0f;
++    float esdeInfoPageScroll(int dir) const;
++    // Paged text where each page starts with the previous page's last line.
++    static int overlapPageCount(int total, int perPage) {
++        if (total <= perPage) return 1;
++        const int step = perPage > 1 ? perPage - 1 : 1;
++        return 1 + (total - perPage + step - 1) / step;
++    }
++    static int overlapPageFirst(int page, int perPage) { return page * (perPage > 1 ? perPage - 1 : 1); }
 +    void esdeInfoOpen(int sysIdx, int romIdx);
 +    void renderEsdeInfo();
 +    void drawEsdeInfoPanel(float a, bool inViewer);   // mEsdeInfoRom's details (the viewer's first page too)
@@ -827,7 +840,7 @@ index 88e7cae6699..7dbe475cc1b 100644
      bool         mEsdeMenuClosing = false;        // fade-out in progress
      float        mEsdeMenuAnim = 0.0f;            // 0..1 open ease
      EsdeMenuPage mEsdeMenuPage = ESDE_PG_ROOT;
-@@ -1781,6 +1865,12 @@ private:
+@@ -1781,6 +1877,12 @@ private:
      void esdeNav(int dx, int dy);
      bool esdeSelect();
      bool esdeBack();
@@ -840,7 +853,7 @@ index 88e7cae6699..7dbe475cc1b 100644
      bool mPs3BottomClock = false; // persist.gammaos.nano.ps3xmb.bottomclock (PSP clock on the bottom panel, dual-screen XMB)
      // Half Resolution (XMB theme only, three INDEPENDENT Theme Settings toggles). Each renders only its
      // subsystem at half resolution and sharp-linear upscales it; the rest stays full-res. Perf for weak
-@@ -2296,6 +2386,7 @@ private:
+@@ -2296,6 +2398,7 @@ private:
      struct VidPending { bool isStream = false; std::string file; std::string url; int w = 0, h = 0;
                          int resumeChoice = -1; double resumeSec = 0.0; int vidIdx = 0; };
      VidPending mVidPending;                         // params captured at vidBeginOpen, applied on adopt
@@ -848,7 +861,7 @@ index 88e7cae6699..7dbe475cc1b 100644
      void   vidBeginOpen(const VidPending& p);       // render: GL alloc + spawn the open worker
      bool   vidOpenTitleRun();                       // worker: blocking title open (reads mVidPending)
      bool   vidOpenStreamRun();                      // worker: blocking IPTV stream open
-@@ -2427,9 +2518,28 @@ private:
+@@ -2427,9 +2530,28 @@ private:
      std::atomic<bool> mEsdeBgVideoOpenDone{false};
      std::atomic<bool> mEsdeBgVideoOpenOk{false};
      bool   mEsdeBgVideoAdopted = false;
@@ -879,7 +892,7 @@ index 88e7cae6699..7dbe475cc1b 100644
      // Live hover preview in the Video Wallpaper picker: decode the currently-focused video and draw it
      // into its grid cell. Only ONE decoder runs at a time (the single HW decoder), so the tick stops the
      // video wallpaper while previewing and lets wpVideoTick re-adopt it on leaving the picker. Mirrors
-@@ -2809,15 +2919,48 @@ private:
+@@ -2809,15 +2931,48 @@ private:
      // performance-mode side-panel chooser, and the kill-apps backend.
      void buildQuickPowerSubmenu(Ps3Level& out);
      void openQuickPowerMenu();   // power-hold (menu visible) -> Quick Menu Power submenu, all themes
@@ -934,7 +947,7 @@ index 88e7cae6699..7dbe475cc1b 100644
      void buildGamepadSubmenu(Ps3Level& out);         // top-level Gamepad Settings section list
      // Gamepad Settings sub-sections (grouped for readability) + shared row helpers.
      void gpLeaf(Ps3Level& out, const char* label, const char* bindLabel, int icon);
-@@ -2829,6 +2972,9 @@ private:
+@@ -2829,6 +2984,9 @@ private:
      void buildGpRumble(Ps3Level& out);
      void buildGpMapping(Ps3Level& out);
      void buildGpTouch(Ps3Level& out);
@@ -944,7 +957,7 @@ index 88e7cae6699..7dbe475cc1b 100644
      void gamepadTestOpen();                          // enter the live controller test screen
      void gamepadCalibOpen();                         // enter the analog calibration wizard
      void gpCaptureEvent(int fd, int type, int code, int value); // mirror a raw event -> maps
-@@ -2839,7 +2985,7 @@ private:
+@@ -2839,7 +2997,7 @@ private:
      void gpDialogHeader(const char* title, int iconIdx, float ap); // icon + title + top/bottom dividers
      float gpAxisNorm(int absCode);                   // latest axis value normalised to [-1,1]
      // Full-screen HSV colour picker (all themes) - see the mCp* state block above.
@@ -953,7 +966,7 @@ index 88e7cae6699..7dbe475cc1b 100644
      void renderColorPicker();                        // draw the Hue/Brightness field + preview + hints
      bool colorPickerHandleKey(int code, int value);  // confirm / cancel / saturation / hold-exit (press edges)
      void colorPickerTick();                          // per-frame cursor move from held d-pad / stick / hat
-@@ -2955,7 +3101,7 @@ private:
+@@ -2955,7 +3113,7 @@ private:
      void buildShaderBrowser(const std::string& path, Ps3Level& out);  // custom-preset file browser
      void shaderOpenBrowserDefault();                  // open the browser at the RetroArch subfolder for the active type (still traversable up)
      void shaderSelectPreset(const std::string& path);                 // point the shader loader at a custom preset (SF reads it in place) + arm meta poll
@@ -962,7 +975,7 @@ index 88e7cae6699..7dbe475cc1b 100644
      void openShaderOptChooser(const std::string& spec); // discrete-option chooser (key|opts|title)
      std::string shaderOptCurrentLabel(const std::string& spec); // display label of a shader-opt row's current value
      void openShaderParamSlider(int idx);             // live slider for mShaderParams[idx]
-@@ -3038,10 +3184,40 @@ private:
+@@ -3038,10 +3196,40 @@ private:
      void loadEmuCatalog();                     // parse the bundled Daijishou JSONs once
      void buildEmulatorPicker(Ps3Level& out);   // build the filtered emulator list screen
      void gsOpenEmulatorPicker();               // open the emulator chooser for mGsEditIdx
@@ -1003,7 +1016,7 @@ index 88e7cae6699..7dbe475cc1b 100644
  
      // ---- Add / remove custom systems ----
      void gsAddSystem();                        // "Add New System" -> emulator picker in add mode
-@@ -3073,6 +3249,28 @@ private:
+@@ -3073,6 +3261,28 @@ private:
      std::vector<std::string> mountedShareNames() const;
      void gsFolderSelect(const std::string& path); // add a folder as a rawpath scan source
      void drasticDataFolderSelect(const std::string& path); // #90: set persist.gammaos.drastic.data_dir (folder-picker target 5)
@@ -1032,7 +1045,7 @@ index 88e7cae6699..7dbe475cc1b 100644
      void drasticCheatsFolderSelect(const std::string& path); // persist.gammaos.drastic.cheats_dir (folder-picker target 8)
      void drasticPerfRestoreCheck();            // put back the global performance mode a per-game one parked
      void mouseModeHomeGuard();                 // gammapad mouse mode off whenever the home is the foreground
-@@ -3251,7 +3449,7 @@ private:
+@@ -3251,7 +3461,7 @@ private:
          std::string m3uPath;              // non-empty: derived from this .m3u (regenerated on scan);
                                            // empty: user-created (preserved across scans)
      };
@@ -1041,7 +1054,7 @@ index 88e7cae6699..7dbe475cc1b 100644
      std::vector<std::string> mMusicFolders;
      std::vector<MusicTrack>  mMusicTracks;
      std::vector<MusicPlaylist> mMusicPlaylists;
-@@ -3303,6 +3501,13 @@ private:
+@@ -3303,6 +3513,13 @@ private:
          // altemulator string enables the altemulator badge when non-empty.
          bool favorite = false, completed = false, kidgame = false, broken = false;
          std::string controller, altemulator;
@@ -1055,7 +1068,7 @@ index 88e7cae6699..7dbe475cc1b 100644
      };
      std::unordered_map<std::string, ScrapeEntry> mScrapeIndex;
      bool mScrapeIndexLoaded = false;
-@@ -3332,9 +3537,22 @@ private:
+@@ -3332,9 +3549,26 @@ private:
      // scrape store which can differ (e.g. a timezone-shifted release date). Loaded lazily per system
      // and merged with the scrape store's cover paths; absent gamelist.xml -> falls back to the store.
      std::unordered_map<std::string, ScrapeEntry> mEsdeGamelistMeta;  // full romPath -> gamelist metadata
@@ -1075,11 +1088,15 @@ index 88e7cae6699..7dbe475cc1b 100644
      void esdeEnsureGamelistLoaded(int sysIdx);                       // parse gamelists/<system>/gamelist.xml once
      const ScrapeEntry* esdeMetaFor(const std::string& romPath);      // gamelist entry, else scrapeEntryFor
 +    bool esdeIsFavorite(const std::string& romPath, const ScrapeEntry* meta) const;
++    void favoritesFirst(std::vector<std::string>& roms, std::vector<std::string>& displayNames);
++    void favoritesResort(const std::string& romPath);
++    void favoritesResort(int sysIdx, std::string keepRom);
++    int mFavResortSys = -1;   // a system whose ES-DE gamelist was re-read: re-order it next frame
 +    bool mRomInfoEsdeMeta = false;   // the next "rominfo" page reads esdeMetaFor (ES-DE's X)
      // Per-game title override (Rename / Edit Title). A user-typed name that overrides
      // the basename-minus-extension display name everywhere (columns / recents / search /
      // Info) AND becomes the scraper search query so a corrected title can match. Stored
-@@ -3400,30 +3618,32 @@ private:
+@@ -3400,30 +3634,32 @@ private:
          int engine = 0;                    // nanoscraper::Engine
          nanoscraper::Credentials cred;
          nanoscraper::PlatformIds plat;
@@ -1129,7 +1146,7 @@ index 88e7cae6699..7dbe475cc1b 100644
      // scrape worker state
      std::mutex mScrapeMutex;
      bool mScrapeRunning = false;           // worker alive
-@@ -3432,6 +3652,8 @@ private:
+@@ -3432,6 +3668,8 @@ private:
      bool mScrapeDoneFlag = false;          // worker finished -> show summary
      int  mScrapeDone = 0, mScrapeTotal = 0, mScrapeHits = 0, mScrapeFail = 0;
      std::string mScrapeStatus;             // "System / Game" current line (under mutex)
@@ -1138,7 +1155,7 @@ index 88e7cae6699..7dbe475cc1b 100644
      std::string mScrapeError;              // terminal message (creds missing / network)
      std::vector<std::pair<std::string, ScrapeEntry>> mScrapePending;  // finished -> merge on drain
      bool mScrapeBox = true, mScrapeFan = true;   // snapshot of the enabled-media toggles for the worker
-@@ -3445,10 +3667,14 @@ private:
+@@ -3445,10 +3683,14 @@ private:
      int64_t mScrapeDirPollMs = 0;          // availability probe throttle (once a second, uptime)
      std::string mScrapeMoveSrc, mScrapeMoveDst;   // relocation in flight: old/new folder ("" = none)
      bool mScrapeMoveMode = false;          // the progress modal fronts a relocation (wording), until the next scrape
@@ -1153,7 +1170,7 @@ index 88e7cae6699..7dbe475cc1b 100644
      void scrapeMoveThreadFunc(std::vector<std::pair<std::string, ScrapeEntry>> entries,
                                std::string src, std::string dst);
      void gsOpenClearArtConfirm();          // Game Systems editor: Clear Boxart confirm (theme key 49)
-@@ -3457,8 +3683,11 @@ private:
+@@ -3457,8 +3699,11 @@ private:
      // cartridge icon, freed when leaving the Game category and on sleep/occlusion.
      // ar = width/height. pixel = a PICO-8 cart label: 128x128 pixel art uploaded NEAREST, drawn at an
      // integer multiple of its size (cartPixelSize) so every cart pixel stays square.
@@ -1166,7 +1183,7 @@ index 88e7cae6699..7dbe475cc1b 100644
      bool mScrapeBoxartOn = false;        // per-frame cache of scraperBoxartEnabled()
      bool mNdsTileIcon = false;           // per-frame cache of persist.gammaos.nano.nds.tileicon (DS Icons On Tiles)
      // Data-loss guards: a loader sets its flag true when the on-disk file EXISTS but could not be
-@@ -4915,6 +5144,9 @@ private:
+@@ -4915,6 +5160,9 @@ private:
      // it red) and beveled into a normal map for the XMB glass relight. Lazily built + cached.
      GLuint mHeartIconTex = 0, mHeartNmapTex = 0;
      void   ensureHeartIcon();               // build mHeartIconTex + mHeartNmapTex once
@@ -1176,7 +1193,7 @@ index 88e7cae6699..7dbe475cc1b 100644
      GLuint gpGlassNmap(bool round, float wpx, float hpx);    // cached bevel nmap for a gamepad-tester button shape
      // Resolve a system iconRef (builtin:/retroarch:/core:/file:) to a (colour
      // tex, glass bevel nmap) pair, cached by ref string. See NanoMenuPS3Icons.cpp.
-@@ -5086,6 +5318,7 @@ private:
+@@ -5086,6 +5334,7 @@ private:
      std::string mBtWizInPasskey;              // inbound passkey to display for confirmation
      std::atomic<bool> mBtWizRadioOn{true};    // cached real radio state (dumpsys enabled:)
      std::atomic<bool> mBtWizToggling{false};  // a radio enable/disable is settling
@@ -1184,7 +1201,7 @@ index 88e7cae6699..7dbe475cc1b 100644
      float mBtWizManageRefreshT = -999.0f;     // last live-refresh time while sitting on Manage
      void btWizToggleRadioAsync(bool on);      // enable/disable the radio + settle + refresh
  
-@@ -5176,6 +5409,7 @@ private:
+@@ -5176,6 +5425,7 @@ private:
      bool    mCursorVisible = false;             // shown while recently moved/clicked
      int64_t mLastPointerMs = 0;                 // last pointer activity (auto-hide timer)
      bool    mTouchFromPointer = false;          // current touch frame is a mouse click, not a finger
@@ -1192,7 +1209,7 @@ index 88e7cae6699..7dbe475cc1b 100644
      bool    mKbdShiftHeld = false;              // physical-keyboard shift state (for OSK typing)
      void    drawPointerCursor();                // draw the mouse cursor overlay (NanoMenuRender.cpp)
      int     kbdCodeToCp(int code, bool shift);  // USB-keyboard keycode -> printable codepoint (0 = none)
-@@ -5400,6 +5634,22 @@ private:
+@@ -5400,6 +5650,22 @@ private:
                                    // globe on black until ready so the one-time texture
                                    // load spike isn't charged against the 360ms fade
      int mTzSelOnOpen = 0;         // mTzSelected when the globe opened (restore on cancel)
@@ -1216,7 +1233,7 @@ index 88e7cae6699..7dbe475cc1b 100644
      // System Language picker (Settings -> System Settings -> System Language).
      bool mPs3LangActive = false;  // gates the XMB fullscreen language picker
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuEsdeMenu.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuEsdeMenu.cpp
-index 2d621760914..c1c4412619a 100644
+index 2d621760914..806e792f4ec 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuEsdeMenu.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuEsdeMenu.cpp
 @@ -12,6 +12,7 @@
@@ -1427,9 +1444,9 @@ index 2d621760914..c1c4412619a 100644
 +    if (mPs3Stack.empty()) mEsdeMenuReturn = false;   // left the screen some other way
 +    if (mEsdeSettingsMinima && mPs3Stack.empty() && !ndsInModal()) esdeApplySettingsTheme();
 +}
-+
-+// ------------------------------------------------------------------ render
  
++// ------------------------------------------------------------------ render
++
 +void NanoMenu::esdeDrawMenuBackdrop(float a) {
 +    const float W = (float)mWidth, H = (float)mHeight;
      // Background behind the options panel. ES-DE (Window.cpp) snapshots the home on
@@ -1551,7 +1568,7 @@ index 2d621760914..c1c4412619a 100644
      } else if (mEsdeMenuPage == ESDE_PG_DOWNLOADER) {
          out.push_back({"a", "install"});
          out.push_back({"up/down", "choose"});
-@@ -824,4 +919,384 @@ void NanoMenu::esdeDlTick() {
+@@ -824,4 +919,409 @@ void NanoMenu::esdeDlTick() {
      mDisplayDirty = true;
  }
  
@@ -1786,6 +1803,16 @@ index 2d621760914..c1c4412619a 100644
 +    const float bodyH = std::max(rowH, std::min(contentH, maxBodyH));
 +    mEsdeInfoMaxScroll = std::max(0.0f, contentH - bodyH);
 +    mEsdeInfoScroll = std::max(0.0f, std::min(mEsdeInfoScroll, mEsdeInfoMaxScroll));
++    mEsdeInfoViewH = bodyH;
++    mEsdeInfoLines.clear();
++    for (size_t i = 0; i < rows.size(); i++) {
++        const float t = i * rowH + (rowH - glyphH) * 0.5f;
++        mEsdeInfoLines.push_back({t, t + glyphH});
++    }
++    for (size_t i = 0; i < lines.size(); i++) {
++        const float t = rows.size() * rowH + unit * 0.02f + i * descLineH;
++        mEsdeInfoLines.push_back({t, t + unit * 0.030f});
++    }
 +    const float menuH = titleH + bodyH + footerH;
 +    const float menuX = (W - menuW) * 0.5f;
 +    const float menuY = H * 0.13f + (1.0f - a) * unit * 0.03f;
@@ -1897,6 +1924,24 @@ index 2d621760914..c1c4412619a 100644
 +    return false;
 +}
 +
++// A page of the information panel: the last line on screen (whole, or cut by the bottom edge) moves
++// to the top, a small gap above it so no glyph is clipped; back, the first line moves to the bottom.
++float NanoMenu::esdeInfoPageScroll(int dir) const {
++    const float s = mEsdeInfoScroll, view = mEsdeInfoViewH;
++    const float gap = std::min((float)mWidth, (float)mHeight) * 0.006f;
++    float t = s + dir * view;
++    if (dir > 0) {
++        for (auto it = mEsdeInfoLines.rbegin(); it != mEsdeInfoLines.rend(); ++it)
++            if (it->first < s + view - 0.5f) { t = it->first - gap; break; }
++        if (t <= s + 0.5f) t = s + view - gap;           // a line taller than the window
++    } else {
++        for (const auto& l : mEsdeInfoLines)
++            if (l.second > s + 0.5f) { t = l.second + gap - view; break; }
++        if (t >= s - 0.5f) t = s - view + gap;
++    }
++    return std::max(0.0f, std::min(mEsdeInfoMaxScroll, t));
++}
++
 +bool NanoMenu::esdeOverlayKey(int code) {
 +    if (mPdfActive) return pdfKey(code);
 +    if (!mEsdeViewerActive && !mEsdeInfoActive) return false;
@@ -1910,10 +1955,7 @@ index 2d621760914..c1c4412619a 100644
 +    case KEY_UP: case KEY_DOWN: case KEY_LEFT: case KEY_RIGHT:
 +        return false;                                   // navPress -> esdeOverlayNav
 +    case BTN_TL: case BTN_TR:                           // scroll the information a page
-+        if (mEsdeInfoActive || mEsdeViewerIdx == 0) {
-+            const float page = std::min((float)mWidth, (float)mHeight) * 0.4f;
-+            mEsdeInfoScroll = std::max(0.0f, std::min(mEsdeInfoMaxScroll, mEsdeInfoScroll + (code == BTN_TL ? -page : page)));
-+        }
++        if (mEsdeInfoActive || mEsdeViewerIdx == 0) mEsdeInfoScroll = esdeInfoPageScroll(code == BTN_TL ? -1 : 1);
 +        break;
 +    case BTN_TL2: case BTN_TR2:                         // first / last image, top / bottom
 +        if (mEsdeViewerActive) mEsdeViewerIdx = code == BTN_TL2 ? 0 : (int)mEsdeViewerFiles.size();
@@ -2319,7 +2361,7 @@ index 4af4ff27eea..f5e171c2d42 100644
                      }
                  }
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuMinima.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuMinima.cpp
-index 38089f122b6..f2491964cb0 100644
+index 38089f122b6..a50b9709961 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuMinima.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuMinima.cpp
 @@ -22,6 +22,7 @@
@@ -2418,6 +2460,23 @@ index 38089f122b6..f2491964cb0 100644
          }
      }
      mTextOutlineMode = minPrevOutline;
+@@ -1177,14 +1214,14 @@ void NanoMenu::renderMinimaInfoPage(float rx, float ry, float rw, float rh) {
+     }
+     int linesPerPage = (int)((bodyBot - bodyTop) / lineH); if (linesPerPage < 1) linesPerPage = 1;
+     int total = (int)lines.size();
+-    int pages = (total + linesPerPage - 1) / linesPerPage; if (pages < 1) pages = 1;
++    int pages = overlapPageCount(total, linesPerPage);
+     mNdsInfoPageCount = pages;
+     if (mNdsInfoPage < 0) mNdsInfoPage = 0;
+     if (mNdsInfoPage > pages - 1) mNdsInfoPage = pages - 1;
+     if (mPs3DlgRomInfo && total > 0)
+         drawText("Description", bodyLeft, capY, (11.0f * sc) / FCH, ar, ag, ab, 0.9f * ap);
+     float ly = bodyTop;
+-    int firstL = mNdsInfoPage * linesPerPage, lastL = firstL + linesPerPage; if (lastL > total) lastL = total;
++    int firstL = overlapPageFirst(mNdsInfoPage, linesPerPage), lastL = firstL + linesPerPage; if (lastL > total) lastL = total;
+     for (int i = firstL; i < lastL; i++) {
+         if (!lines[i].empty()) drawText(lines[i].c_str(), bodyLeft, ly, bodyFs, 0.90f, 0.90f, 0.92f, ap);
+         ly += lineH;
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuMtp.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuMtp.cpp
 index 8c9eff8851b..8cc02e6e293 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuMtp.cpp
@@ -3931,7 +3990,7 @@ index a778ea7da0d..638c4463dd0 100644
  // aspect bucket so the Test Controller / Calibration buttons get the identical glass
  // relight as the console icons (bevelFromRGBA), refracting the live XMB wave. round =
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
-index c6a8e9c9dc1..426820eac8a 100644
+index c6a8e9c9dc1..2c9ac97dc81 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 @@ -25,6 +25,7 @@
@@ -5441,7 +5500,15 @@ index c6a8e9c9dc1..426820eac8a 100644
      mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false;
      mPs3DlgTitle = "Copy";
      mPs3DlgBody = std::string("Copied \"") + name +
-@@ -13511,7 +13885,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13338,6 +13712,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+         if (romPath.empty()) return;
+         bool wasFav = isFavorite(romPath);
+         toggleFavorite(romPath);
++        favoritesResort(romPath);
+         // If we just un-starred a game while viewing the Favorites list itself, rebuild it in place
+         // so the row disappears immediately (title is set only by buildFavoritesSubmenu).
+         if (wasFav && !mPs3Stack.empty() && mPs3Stack.back().title == "Favorites") {
+@@ -13511,7 +13886,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              body = mPs3OptCtxDesc.empty() ? std::string("No information is available.") : mPs3OptCtxDesc;
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5450,7 +5517,7 @@ index c6a8e9c9dc1..426820eac8a 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false; mPs3DlgAppInfo = false;
          mPs3DlgTitle = title;
          mPs3DlgBody  = body;
-@@ -13584,6 +13958,21 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13584,6 +13959,21 @@ void NanoMenu::xmbOptAction(const std::string& act) {
          }
          return;
      }
@@ -5472,7 +5539,7 @@ index c6a8e9c9dc1..426820eac8a 100644
      if (act == "romrename") {
          // Per-game title override. Resolve the focused ROM path + current display name
          // exactly the way "rominfo" does, then open the OSK prefilled with the current
-@@ -13640,6 +14029,16 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13640,6 +14030,16 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              // tops, not open stack levels), with the highlight kept on the renamed game:
              // the new title re-sorts the list, so its old index points at another game.
              if (owner >= 0) rebuildOpenRomLevels(owner, romPath);
@@ -5489,7 +5556,7 @@ index c6a8e9c9dc1..426820eac8a 100644
              // Also rebuild an open Recently Played list in place (it is not sysIdx-tagged;
              // identify it by its first item being a PS3_RECENT row).
              for (auto& lvl : mPs3Stack) {
-@@ -13765,7 +14164,10 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13765,7 +14165,10 @@ void NanoMenu::xmbOptAction(const std::string& act) {
          if (mPs3DlgBoxTex) { glDeleteTextures(1, &mPs3DlgBoxTex); mPs3DlgBoxTex = 0; }
          mPs3DlgFanW = mPs3DlgFanH = 0; mPs3DlgBoxW = mPs3DlgBoxH = 0;
  
@@ -5501,7 +5568,7 @@ index c6a8e9c9dc1..426820eac8a 100644
          bool rich = se && (!se->box.empty() || !se->fan.empty() ||
                             !se->synopsis.empty() || !se->genre.empty() ||
                             !se->developer.empty() || !se->publisher.empty() ||
-@@ -13773,7 +14175,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13773,7 +14176,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
                             !se->releaseDate.empty());
  
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5510,7 +5577,7 @@ index c6a8e9c9dc1..426820eac8a 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear();
          mPs3DlgTitle = name.empty() ? std::string("Information") : name;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14042,7 +14444,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -14042,7 +14445,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              row("Path", dir);
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5519,7 +5586,7 @@ index c6a8e9c9dc1..426820eac8a 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false;
          mPs3DlgTitle = title; mPs3DlgBody = body;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14117,7 +14519,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -14117,7 +14520,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              body = b;
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5528,7 +5595,7 @@ index c6a8e9c9dc1..426820eac8a 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear();
          mPs3DlgTitle = title; mPs3DlgBody = body;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14138,7 +14540,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -14138,7 +14541,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              body = b;
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5537,7 +5604,7 @@ index c6a8e9c9dc1..426820eac8a 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear();
          mPs3DlgTitle = title; mPs3DlgBody = body;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14530,9 +14932,15 @@ void NanoMenu::renderPs3Dialog() {
+@@ -14530,9 +14933,15 @@ void NanoMenu::renderPs3Dialog() {
              float fs = ps3::fontScale((sel ? 26.0f : 22.0f) * fb);
              float ty = cyDev - 0.45f * ps3::emPx(fs);   // web textBaseline='middle'
              const char* optTxt = trDyn(mPs3DlgOptions[i].c_str());
@@ -5555,7 +5622,7 @@ index c6a8e9c9dc1..426820eac8a 100644
          }
  
          // (4) Up/down scroll arrows at the text x when items scroll off-window.
-@@ -14894,7 +15302,7 @@ enum WizScr {
+@@ -14894,7 +15303,7 @@ enum WizScr {
      // the real gammaos-net bt scan/pair/connect/disconnect/unpair), BD Remote
      // Control Registration, and Audio Device Settings.
      WS_BT_MANAGE, WS_BT_REGISTER_INFO, WS_BT_SCANNING, WS_BT_DEVICE_LIST,
@@ -5564,7 +5631,7 @@ index c6a8e9c9dc1..426820eac8a 100644
      WS_BT_DEVICE_OPTS, WS_BT_CONNECTING, WS_BT_DISCONNECTING,
      WS_BT_DELETE_CONFIRM, WS_BT_DELETING, WS_BT_INFO,
      WS_BT_BD_REMOTE,
-@@ -14939,9 +15347,6 @@ static const char* btTypeLabel(int cod) {
+@@ -14939,9 +15348,6 @@ static const char* btTypeLabel(int cod) {
          default:     return "Bluetooth Device";
      }
  }
@@ -5574,7 +5641,7 @@ index c6a8e9c9dc1..426820eac8a 100644
  // Build the pass-key instruction shown while pairing. gammaos-net publishes the
  // system-generated code in sys.gammaos.bt.passkey and the SSP variant in
  // sys.gammaos.bt.pk_variant (2=numeric compare, 4=display passkey, 5=display PIN).
-@@ -15119,7 +15524,10 @@ static void wizDesc(int id, WizDesc& d) {
+@@ -15119,7 +15525,10 @@ static void wizDesc(int id, WizDesc& d) {
      case WS_BT_DEVICE_LIST: d.kind = WK_SCANLIST; d.title = "Register Bluetooth® Device";
          d.body = "Select the Bluetooth® device to register."; break;
      case WS_BT_PASSKEY: d.kind = WK_TEXT; d.title = "Register Bluetooth® Device";
@@ -5586,7 +5653,7 @@ index c6a8e9c9dc1..426820eac8a 100644
      case WS_BT_REGISTERING: d.kind = WK_PROGRESS; d.title = "Register Bluetooth® Device";
          d.body = "Registering...\nPlease wait."; d.autoNext = WS_BT_REGISTER_DONE; break;
      case WS_BT_REGISTER_DONE: d.kind = WK_RESULT; d.title = "Register Bluetooth® Device";
-@@ -15178,6 +15586,89 @@ void NanoMenu::startNetWizard() {
+@@ -15178,6 +15587,89 @@ void NanoMenu::startNetWizard() {
      wizEnter(WS_INTRO, 1);
  }
  
@@ -5676,7 +5743,7 @@ index c6a8e9c9dc1..426820eac8a 100644
  // First-run setup only: bring up the XMB "waiting for services" progress screen (a WK_PROGRESS
  // net-wizard page) while the setup wizard holds before the Wi-Fi step until sys.boot_completed.
  // Lives here because the WizScr enum is file-local to this translation unit; the setup wizard
-@@ -15257,6 +15748,13 @@ void NanoMenu::btWizStopReceive() {
+@@ -15257,6 +15749,13 @@ void NanoMenu::btWizStopReceive() {
  }
  
  void NanoMenu::wizEnter(int id, int dir) {
@@ -5690,7 +5757,7 @@ index c6a8e9c9dc1..426820eac8a 100644
      mPs3WizId = id;
      mPs3WizSel = 0;
      mPs3WizScroll = 0;
-@@ -15280,7 +15778,9 @@ void NanoMenu::wizEnter(int id, int dir) {
+@@ -15280,7 +15779,9 @@ void NanoMenu::wizEnter(int id, int dir) {
          std::lock_guard<std::mutex> lk(mBtWizMutex); mBtWizScan.clear(); mBtWizPin.clear();
      }
      if (id == WS_BT_SCANNING)      btWizScanAsync();                    // real inquiry -> device list (accumulates)
@@ -5701,7 +5768,7 @@ index c6a8e9c9dc1..426820eac8a 100644
      if (id == WS_BT_CONNECTING)    btWizConnectAsync(mBtWizSelAddr);    // real profile connect
      if (id == WS_BT_DISCONNECTING) btWizDisconnectAsync(mBtWizSelAddr); // real profile disconnect
      if (id == WS_BT_DELETING)      btWizUnpairAsync(mBtWizSelAddr);     // real removeBond
-@@ -15305,34 +15805,8 @@ void NanoMenu::wizEnter(int id, int dir) {
+@@ -15305,34 +15806,8 @@ void NanoMenu::wizEnter(int id, int dir) {
      // (NTP) and nudge a refresh on a background thread (the 2.6s dwell is real work).
      if (id == WS_DT_SVI_PROGRESS) {
          std::thread([]{
@@ -5737,7 +5804,7 @@ index c6a8e9c9dc1..426820eac8a 100644
          }).detach();
          // auto_time_zone is now on; the Olson tz captures DST automatically and the
          // "Daylight Saving" row reflects it live (drawPs3Clock -> mPs3DstNow).
-@@ -15411,6 +15885,11 @@ void NanoMenu::wizOpenTextField(int field) {
+@@ -15411,6 +15886,11 @@ void NanoMenu::wizOpenTextField(int field) {
          std::string err = validateWizField(field, val);
          if (!err.empty()) { mPs3WizFieldError = err; mPs3WizPendingTextField = field; return; }
          mPs3WizFieldError.clear();
@@ -5749,7 +5816,7 @@ index c6a8e9c9dc1..426820eac8a 100644
          int nxt = wizNextScreen(mPs3WizId, 0);
          if (nxt == WS_NONE) { mPs3WizExit = 1; mPs3WizActive = false; }
          else { mPs3WizStack.push_back(mPs3WizId); wizEnter(nxt, 1); }
-@@ -15508,6 +15987,11 @@ void NanoMenu::wizConfirm() {
+@@ -15508,6 +15988,11 @@ void NanoMenu::wizConfirm() {
          }
          return;
      }
@@ -5761,7 +5828,7 @@ index c6a8e9c9dc1..426820eac8a 100644
      if (mPs3WizId == WS_BT_INBOUND_CONFIRM) {
          if (mPs3WizSel == 0) {   // Yes -> accept + wait for the bond
              mPs3WizStack.push_back(mPs3WizId); wizEnter(WS_BT_INBOUND_PAIRING, 1);
-@@ -15534,7 +16018,8 @@ void NanoMenu::wizConfirm() {
+@@ -15534,7 +16019,8 @@ void NanoMenu::wizConfirm() {
          // connect it, or delete it and register fresh - matching Android's behaviour
          // when you pick an already-paired device from "pair new device".
          if (scan[mPs3WizSel].bonded) { wizEnter(WS_BT_DEVICE_OPTS, 1); return; }
@@ -5771,7 +5838,7 @@ index c6a8e9c9dc1..426820eac8a 100644
          return;
      }
      if (mPs3WizId == WS_BT_REGISTER_DONE) {   // loop back to the Manage root (BD remote closes)
-@@ -15634,6 +16119,12 @@ void NanoMenu::wizBack() {
+@@ -15634,6 +16120,12 @@ void NanoMenu::wizBack() {
      if (mPs3WizId == WS_DT_SVI_DONE || mPs3WizId == WS_DT_SM_DONE) {
          mPs3WizExit = 1; mPs3WizActive = false; return;
      }
@@ -5784,7 +5851,7 @@ index c6a8e9c9dc1..426820eac8a 100644
      if (mPs3WizStack.empty()) { mPs3WizExit = -1; mPs3WizActive = false; return; }
      int prev = mPs3WizStack.back(); mPs3WizStack.pop_back();
      // Don't land back on a transient progress/test screen (mirrors web wizBack). If
-@@ -15788,6 +16279,7 @@ int NanoMenu::wizNextScreen(int id, int sel) {
+@@ -15788,6 +16280,7 @@ int NanoMenu::wizNextScreen(int id, int sel) {
      // ---- Accessory: Bluetooth ----
      case WS_BT_REGISTER_INFO: return WS_BT_SCANNING;
      case WS_BT_PASSKEY:       return WS_BT_REGISTERING;
@@ -5792,7 +5859,7 @@ index c6a8e9c9dc1..426820eac8a 100644
      case WS_BT_BD_REMOTE:     return WS_BT_SCANNING;
      case WS_BT_DEVICE_OPTS:
          return (sel == 0) ? WS_BT_CONNECTING
-@@ -15844,6 +16336,32 @@ void NanoMenu::renderNetWizard() {
+@@ -15844,6 +16337,32 @@ void NanoMenu::renderNetWizard() {
              wizDesc(mPs3WizId, d);
          }
      }
@@ -5825,7 +5892,7 @@ index c6a8e9c9dc1..426820eac8a 100644
      // The receive screen advances when the BondStateMachine patch publishes a
      // remote-initiated pairing request to sys.gammaos.bt.inbound.
      if (mPs3WizId == WS_BT_INBOUND_WAIT) {
-@@ -16111,6 +16629,9 @@ void NanoMenu::renderNetWizard() {
+@@ -16111,6 +16630,9 @@ void NanoMenu::renderNetWizard() {
              if (!mBtWizInPasskey.empty()) cbody += "\n\nPass Key:  " + mBtWizInPasskey;
              cbody += "\n\nAccept this device?";
          }
@@ -5835,7 +5902,7 @@ index c6a8e9c9dc1..426820eac8a 100644
          std::vector<std::string> bl = wrap(cbody, fs);
          float ty = Y((innerTop + innerBot) * 0.5f) - (float)((int)bl.size() - 1) * lh * 0.5f - DS(50.0f);
          for (auto& ln : bl) { if (!ln.empty()) ps3DlgText(ln.c_str(), bodyCx, ty, fs, 0.95f, 0.95f, 0.95f, ap, 1); ty += lh; }
-@@ -16555,6 +17076,9 @@ void NanoMenu::renderNdsNetWizardBody(float rx, float ry, float rw, float rh) {
+@@ -16555,6 +17077,9 @@ void NanoMenu::renderNdsNetWizardBody(float rx, float ry, float rw, float rh) {
              if (!mBtWizInPasskey.empty()) cbody += "\n\nPass Key:  " + mBtWizInPasskey;
              cbody += "\n\nAccept this device?";
          }
@@ -5845,7 +5912,7 @@ index c6a8e9c9dc1..426820eac8a 100644
          auto lines = wrapDs(trDyn(cbody.c_str()), 12.0f, 224.0f);
          centeredBlock(lines, 80.0f, 15.0f, 12.0f, 0.93f, 0.93f, 0.93f);
          // Yes / No glossy buttons (dialog capsule geometry: h32 r4).
-@@ -16978,6 +17502,9 @@ void NanoMenu::renderMinimaNetWizardBody(float rx, float ry, float rw, float rh)
+@@ -16978,6 +17503,9 @@ void NanoMenu::renderMinimaNetWizardBody(float rx, float ry, float rw, float rh)
              if (!mBtWizInPasskey.empty()) cbody += "\n\nPass Key:  " + mBtWizInPasskey;
              cbody += "\n\nAccept this device?";
          }
@@ -5855,7 +5922,7 @@ index c6a8e9c9dc1..426820eac8a 100644
          auto lines = wrap(trDyn(cbody.c_str()), fsRow, rw - pad * 3.0f);
          centeredBlock(lines, g.bodyTop + (g.bodyBot - g.bodyTop) * 0.32f, rowH * 0.9f, fsRow, 0.90f, 0.90f, 0.92f);
          float pillH = rowH, by = g.footerTop - rowH - g.btnMg;
-@@ -17178,6 +17705,30 @@ float NanoMenu::ps3TzFadeAlpha() {
+@@ -17178,6 +17706,30 @@ float NanoMenu::ps3TzFadeAlpha() {
  // it opens already showing that location (web initGlobe sets tzGlobe lon/lat =
  // target = the selected zone, then renderGlobe; the fade only cross-fades the
  // composite, not the rotation).
@@ -5886,7 +5953,7 @@ index c6a8e9c9dc1..426820eac8a 100644
  void NanoMenu::beginTzGlobeFade() {
      // Warm up first: the globe textures load on the render thread on the first
      // render (GL has no context here on the input thread), which spikes one frame.
-@@ -17237,6 +17788,7 @@ void NanoMenu::tzGlobeNav(int dir) {
+@@ -17237,6 +17789,7 @@ void NanoMenu::tzGlobeNav(int dir) {
      int n = (int)mTzEntries.size();
      if (n <= 0) return;
      mTzSelected = (mTzSelected + dir + n) % n;
@@ -5894,7 +5961,7 @@ index c6a8e9c9dc1..426820eac8a 100644
      const TimezoneEntry& z = mTzEntries[mTzSelected];
      ps3globe::setTarget(z.lon * (float)M_PI / 180.0f, z.lat * (float)M_PI / 180.0f);
  }
-@@ -17453,6 +18005,26 @@ void NanoMenu::renderTimezoneGlobe() {
+@@ -17453,6 +18006,26 @@ void NanoMenu::renderTimezoneGlobe() {
      // Caption "Select a time zone." (web XCF(V.W*0.04), yT+56, 24px, left).
      ps3DlgText("Select a time zone.", XC(VW * 0.04f), Y(innerTop + 56.0f), FS(24.0f),
                 1, 1, 1, 0.95f * ap, 0);
@@ -6318,7 +6385,7 @@ index 00000000000..8a5a3eb1017
 +
 +}  // namespace android
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuRender.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuRender.cpp
-index b0e278f3bc0..b8e9ba9412c 100644
+index b0e278f3bc0..07e35432850 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuRender.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuRender.cpp
 @@ -864,7 +864,7 @@ void NanoMenu::ndsCommitSelect(int slot) {
@@ -6356,6 +6423,24 @@ index b0e278f3bc0..b8e9ba9412c 100644
              if (rows[i].hasSub) { float afs = S(13.0f) / (float)FONT_CHAR_H, aw = measureText(">", afs);
                  drawText(">", X(bx + bw - 14.0f) - aw * 0.5f, Y(rowY + 6.5f), afs, ic, ic, ic, 1.0f); }
              if (rows[i].start) { float pfs = S(9.0f) / (float)FONT_CHAR_H; const char* pill = "START";
+@@ -3004,7 +3008,7 @@ void NanoMenu::renderNdsInfoPage(float rx, float ry, float rw, float rh, int par
+         }
+         int linesPerPage = (int)((bodyBot - bodyTop) / lineH); if (linesPerPage < 1) linesPerPage = 1;
+         int total = (int)lines.size();
+-        int descPages = (total > 0) ? ((total + linesPerPage - 1) / linesPerPage) : 0;
++        int descPages = (total > 0) ? overlapPageCount(total, linesPerPage) : 0;
+         // Page model: single screen (part 0) = [summary][desc pages...]; dual bottom (part 2) = [desc...].
+         if (part == 0) mNdsInfoPageCount = 1 + descPages;                 // page 0 is the summary
+         else           mNdsInfoPageCount = (descPages > 0) ? descPages : 1;
+@@ -3015,7 +3019,7 @@ void NanoMenu::renderNdsInfoPage(float rx, float ry, float rw, float rh, int par
+         if (descPage >= 0 && total > 0) {
+             drawText("Description", X(bodyLeft), Y(capY), S(9.0f) / FCH, hR, hG, hB, 0.85f * ap);
+             float ly = bodyTop;
+-            int firstL = descPage * linesPerPage, lastL = firstL + linesPerPage; if (lastL > total) lastL = total;
++            int firstL = overlapPageFirst(descPage, linesPerPage), lastL = firstL + linesPerPage; if (lastL > total) lastL = total;
+             for (int i = firstL; i < lastL; i++) { if (!lines[i].empty()) drawText(lines[i].c_str(), X(bodyLeft), Y(ly), bodyFs, vR, vG, vB, ap); ly += lineH; }
+         }
+ 
 @@ -5594,6 +5598,9 @@ void NanoMenu::render() {
      // while the wizard runs, so we can see nano's per-frame CPU cost while setup.sh provisions.
      const int64_t sSetupRenderT0 = systemTime(SYSTEM_TIME_MONOTONIC);
@@ -7469,10 +7554,82 @@ index 0fa4e98c671..e862ce44b27 100644
          if (!mVidPlaying) title += trDyn("   (Paused)");
          float tfs = ps3::fontScale(26.0f);
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp
-index a0824b29e6e..34445fbd0c1 100644
+index a0824b29e6e..b3fc61d9430 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp
-@@ -2090,32 +2090,52 @@ void NanoMenu::collectionRemoveRom(int colIdx, const std::string& romPath) {
+@@ -469,6 +469,7 @@ void NanoMenu::applyRomNameOverrides(std::vector<std::string>& roms,
+     if (!mShowDisplayNames) {
+         buildRomDisplayNames(roms, displayNames);
+         sortRomEntriesByDisplayName(roms, displayNames);
++        favoritesFirst(roms, displayNames);
+         return;
+     }
+     if (displayNames.empty()) buildRomDisplayNames(roms, displayNames);
+@@ -489,6 +490,63 @@ void NanoMenu::applyRomNameOverrides(std::vector<std::string>& roms,
+         }
+     }
+     sortRomEntriesByDisplayName(roms, displayNames);
++    favoritesFirst(roms, displayNames);
++}
++
++// Favourites lead the list, each group keeping its name order. The ES-DE theme also counts the
++// favourites imported from ES-DE's gamelist (esdeIsFavorite).
++void NanoMenu::favoritesFirst(std::vector<std::string>& roms, std::vector<std::string>& displayNames) {
++    if (roms.size() != displayNames.size()) return;
++    if (mXmbFavorites.empty() && (!mEsdeTheme || mEsdeGamelistMeta.empty())) return;
++    const std::unordered_set<std::string> favs(mXmbFavorites.begin(), mXmbFavorites.end());
++    std::vector<size_t> order, rest;
++    for (size_t i = 0; i < roms.size(); i++) {
++        bool fav = favs.count(roms[i]) > 0;
++        if (!fav && mEsdeTheme && mEsdeGamelistMeta.count(roms[i])) fav = esdeIsFavorite(roms[i], esdeMetaFor(roms[i]));
++        (fav ? order : rest).push_back(i);
++    }
++    if (order.empty() || rest.empty()) return;
++    order.insert(order.end(), rest.begin(), rest.end());
++    std::vector<std::string> r2, d2;
++    r2.reserve(roms.size()); d2.reserve(roms.size());
++    for (size_t i : order) { r2.push_back(std::move(roms[i])); d2.push_back(std::move(displayNames[i])); }
++    roms.swap(r2); displayNames.swap(d2);
++}
++
++// Re-order a system after one of its games is starred or un-starred, keeping the open lists, the
++// ES-DE gamelist and an open option menu on the same game.
++void NanoMenu::favoritesResort(const std::string& romPath) {
++    for (size_t s = 0; s < mXmbSystems.size(); s++)
++        for (const auto& rp : mXmbSystems[s].roms)
++            if (rp == romPath) { favoritesResort((int)s, romPath); return; }
++}
++
++void NanoMenu::favoritesResort(int owner, std::string keepRom) {
++    if (owner < 0 || owner >= (int)mXmbSystems.size()) return;
++    const auto& roms = mXmbSystems[owner].roms;
++    if (keepRom.empty()) {
++        for (const auto& lvl : mPs3Stack) {
++            if (lvl.sysIdx != owner || lvl.sel < 0 || lvl.sel >= (int)lvl.items.size()) continue;
++            const Ps3Item& it = lvl.items[lvl.sel];
++            if (it.kind == PS3_ROM && it.b >= 0 && it.b < (int)roms.size()) keepRom = roms[it.b];
++        }
++    }
++    const bool esdeHere = mEsdeSysSel >= 0 && mEsdeSysSel < (int)mEsdeSysList.size() && mEsdeSysList[mEsdeSysSel] == owner;
++    const std::string esdeRom = (esdeHere && mEsdeGameSel >= 0 && mEsdeGameSel < (int)roms.size()) ? roms[mEsdeGameSel] : std::string();
++    const std::string ctxRom = (mPs3OptCtxKind == PS3_ROM && mPs3OptCtxA == owner && mPs3OptCtxB >= 0 && mPs3OptCtxB < (int)roms.size())
++                               ? roms[mPs3OptCtxB] : std::string();
++    applyRomNameOverrides(mXmbSystems[owner]);
++    rebuildOpenRomLevels(owner, keepRom);
++    if (!esdeRom.empty()) {
++        auto ri = std::find(roms.begin(), roms.end(), esdeRom);
++        if (ri != roms.end()) mEsdeGameSel = (int)(ri - roms.begin());
++    }
++    if (!ctxRom.empty()) {
++        auto ri = std::find(roms.begin(), roms.end(), ctxRom);
++        if (ri != roms.end()) mPs3OptCtxB = (int)(ri - roms.begin());
++    }
++    mPs3CatsStale = true;
++    mDisplayDirty = true;
+ }
+ 
+ void NanoMenu::applyRomNameOverrides(XmbSystem& sys) {
+@@ -2090,32 +2148,52 @@ void NanoMenu::collectionRemoveRom(int colIdx, const std::string& romPath) {
  
  // ---- Favourites (a single global, cross-system starred-games list) --------------------------
  static const char* kFavoritesFile = "/data/system/nano_favorites.txt";
@@ -7533,7 +7690,7 @@ index a0824b29e6e..34445fbd0c1 100644
  bool NanoMenu::isFavorite(const std::string& romPath) const {
      if (romPath.empty()) return false;
      for (const auto& r : mXmbFavorites) if (r == romPath) return true;
-@@ -2504,6 +2524,12 @@ void NanoMenu::addXmbRecent(int sysIdx, int gameIdx) {
+@@ -2504,6 +2582,12 @@ void NanoMenu::addXmbRecent(int sysIdx, int gameIdx) {
      e.systemName = sys.shortname;
      e.romDir = sys.romDir;
      e.standalone = sys.isStandalone();
@@ -7546,7 +7703,7 @@ index a0824b29e6e..34445fbd0c1 100644
  
      // Remove duplicate if already in list
      for (auto it = mXmbRecent.begin(); it != mXmbRecent.end(); ++it) {
-@@ -2526,7 +2552,8 @@ void NanoMenu::addXmbRecent(int sysIdx, int gameIdx) {
+@@ -2526,7 +2610,8 @@ void NanoMenu::addXmbRecent(int sysIdx, int gameIdx) {
  // ---------------------------------------------------------------------------
  
  void NanoMenu::handleLeft() {
@@ -7556,7 +7713,7 @@ index a0824b29e6e..34445fbd0c1 100644
      // GammaOS Nano: navigating cancels any queued launch.
      cancelPendingLaunch();
      if (mOskActive) {
-@@ -2564,7 +2591,8 @@ void NanoMenu::handleLeft() {
+@@ -2564,7 +2649,8 @@ void NanoMenu::handleLeft() {
  }
  
  void NanoMenu::handleRight() {
@@ -7566,7 +7723,7 @@ index a0824b29e6e..34445fbd0c1 100644
      // GammaOS Nano: navigating cancels any queued launch.
      cancelPendingLaunch();
      if (mOskActive) {
-@@ -2602,6 +2630,100 @@ void NanoMenu::handleRight() {
+@@ -2602,6 +2688,100 @@ void NanoMenu::handleRight() {
      }
  }
  
@@ -7667,7 +7824,7 @@ index a0824b29e6e..34445fbd0c1 100644
  void NanoMenu::launchXmbGame() {
      // Overlay: the home exit-to-launch handshake (set launch_* props + exit so the framework starts
      // the app) does not apply to the resident overlay - running it would make the overlay
-@@ -2613,6 +2735,7 @@ void NanoMenu::launchXmbGame() {
+@@ -2613,6 +2793,7 @@ void NanoMenu::launchXmbGame() {
      // first was a dead no-op: once an app is behind it the home runs as the resident overlay, so
      // launching from the overlay or after returning to the theme did nothing.
      if (mOverlayMode) { overlayLaunchGame(); return; }
@@ -7675,7 +7832,7 @@ index a0824b29e6e..34445fbd0c1 100644
      int sysIdx, gameIdx;
  
      // GammaOS Nano: gate the entire XMB launch path until the system
-@@ -2635,6 +2758,12 @@ void NanoMenu::launchXmbGame() {
+@@ -2635,6 +2816,12 @@ void NanoMenu::launchXmbGame() {
          if (mXmbGameIndex < 0 || mXmbGameIndex >= (int)mXmbRecent.size()) return;
          // Take a copy -- the vector reorder below invalidates references.
          XmbRecentEntry re = mXmbRecent[mXmbGameIndex];
@@ -7688,7 +7845,7 @@ index a0824b29e6e..34445fbd0c1 100644
  
          // A recent entry outlives the file it points at (game deleted, card removed). Refuse the
          // launch and drop the dead row rather than starting an emulator that cannot open it.
-@@ -2800,8 +2929,17 @@ void NanoMenu::launchXmbGame() {
+@@ -2800,8 +2987,17 @@ void NanoMenu::launchXmbGame() {
      }
  
      if (sysIdx < 0 || sysIdx >= (int)mXmbSystems.size()) return;
@@ -8418,7 +8575,7 @@ index 7b4e9412c26..eaf7e0dd3b0 100644
  } // namespace android
  
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoThemeEngine.cpp b/frameworks/base/cmds/gammaos-nano/NanoThemeEngine.cpp
-index 857edadb1e6..1fc8109f753 100644
+index 857edadb1e6..00b126482c6 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoThemeEngine.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoThemeEngine.cpp
 @@ -30,6 +30,10 @@
@@ -8710,7 +8867,7 @@ index 857edadb1e6..1fc8109f753 100644
      auto dit = mEsdePngDims.find(found);
      if (dit != mEsdePngDims.end() && dit->second.second > 0 && outAR)
          *outAR = (float)dit->second.first / (float)dit->second.second;
-@@ -1057,21 +1157,38 @@ GLuint NanoMenu::esdeGameMediaTex(const std::string& romPath, const std::string&
+@@ -1057,21 +1157,48 @@ GLuint NanoMenu::esdeGameMediaTex(const std::string& romPath, const std::string&
  // and esdeMetaFor falls back to the scrape store, so nano still works with no ES-DE data present.
  void NanoMenu::esdeEnsureGamelistLoaded(int sysIdx) {
      if (sysIdx < 0 || sysIdx >= (int)mXmbSystems.size()) return;
@@ -8731,6 +8888,16 @@ index 857edadb1e6..1fc8109f753 100644
 +    if (stat(path.c_str(), &sb) == 0) { mtime = (long long)sb.st_mtim.tv_sec * 1000000000LL + sb.st_mtim.tv_nsec; size = (long long)sb.st_size; }
 +    if (mtime == st.mtime && size == st.size && st.roms == sys.roms.size()) return;
 +    st.mtime = mtime; st.size = size; st.roms = sys.roms.size();
++    // A change to ES-DE's favourites re-orders the list (favoritesFirst), next frame.
++    auto metaFavs = [&]() {
++        std::vector<std::string> v;
++        for (const auto& r : sys.roms) { auto it = mEsdeGamelistMeta.find(r); if (it != mEsdeGamelistMeta.end() && it->second.favorite) v.push_back(r); }
++        return v;
++    };
++    struct FavCheck {
++        NanoMenu* m; int sys; std::vector<std::string> before; std::function<std::vector<std::string>()> now;
++        ~FavCheck() { if (now() != before) m->mFavResortSys = sys; }
++    } favCheck{this, sysIdx, metaFavs(), metaFavs};
 +    for (const auto& r : sys.roms) mEsdeGamelistMeta.erase(r);
 +    if (mtime < 0) return;
      tinyxml2::XMLDocument doc;
@@ -8754,7 +8921,7 @@ index 857edadb1e6..1fc8109f753 100644
      }
      auto childText = [](tinyxml2::XMLElement* g, const char* k) -> std::string {
          tinyxml2::XMLElement* c = g->FirstChildElement(k);
-@@ -1081,10 +1198,14 @@ void NanoMenu::esdeEnsureGamelistLoaded(int sysIdx) {
+@@ -1081,10 +1208,14 @@ void NanoMenu::esdeEnsureGamelistLoaded(int sysIdx) {
      for (tinyxml2::XMLElement* g = root->FirstChildElement("game"); g; g = g->NextSiblingElement("game")) {
          std::string p = childText(g, "path");
          if (p.empty()) continue;
@@ -8773,7 +8940,7 @@ index 857edadb1e6..1fc8109f753 100644
          ScrapeEntry e;
          if (const ScrapeEntry* s = scrapeEntryFor(bi->second)) { e.box = s->box; e.fan = s->fan; }
          e.title      = childText(g, "name");
-@@ -1112,10 +1233,72 @@ void NanoMenu::esdeEnsureGamelistLoaded(int sysIdx) {
+@@ -1112,10 +1243,72 @@ void NanoMenu::esdeEnsureGamelistLoaded(int sysIdx) {
  
  const NanoMenu::ScrapeEntry* NanoMenu::esdeMetaFor(const std::string& romPath) {
      auto it = mEsdeGamelistMeta.find(romPath);
@@ -8847,7 +9014,7 @@ index 857edadb1e6..1fc8109f753 100644
  // ES-DE lastplayed: a <datetime metadata="lastplayed"> auto-enables displayRelative, so a set time
  // reads the relative age "N days/hours/minutes/seconds ago" (DateTimeComponent::getDisplayString).
  // The gamelist value is ISO basic YYYYMMDDThhmmss; parse it as UTC (timegm) and compare to now so the
-@@ -1218,6 +1401,7 @@ std::string NanoMenu::esdeDefaultStarPath(bool filled) {
+@@ -1218,6 +1411,7 @@ std::string NanoMenu::esdeDefaultStarPath(bool filled) {
  void NanoMenu::renderEsde() {
      ensureEsdeTheme();
      esdeRebuildSysList();
@@ -8855,7 +9022,7 @@ index 857edadb1e6..1fc8109f753 100644
  
      // Clear the deferred menu-help cache each frame; esdeDrawHelp re-sets it if a helpsystem
      // matching the current view exists, so a theme without one leaves renderEsdeMenu no stale
-@@ -1548,7 +1732,7 @@ void NanoMenu::renderEsde() {
+@@ -1548,7 +1742,7 @@ void NanoMenu::renderEsde() {
                  // shows it (GamelistBase), never the carousel/grid, and never in a favourites
                  // collection (nano has none). The star renders through nano's FA fallback face.
                  if (haveRom && !isCarousel && !isGrid &&
@@ -8864,7 +9031,7 @@ index 857edadb1e6..1fc8109f753 100644
                      std::string ind = primary->getS("indicators", std::string("symbols"));
                      if (ind == "ascii")     nm = "* " + nm;
                      else if (ind != "none") nm = "\xEF\x80\x85  " + nm;   // U+F005 + two spaces
-@@ -3115,7 +3299,7 @@ void NanoMenu::renderEsde() {
+@@ -3115,7 +3309,7 @@ void NanoMenu::renderEsde() {
                  // metadata, so the counter matches the control and the textlist star indicator.
                  for (const auto& r : sys.roms) {
                      const ScrapeEntry* se = esdeMetaFor(r);
@@ -8873,7 +9040,7 @@ index 857edadb1e6..1fc8109f753 100644
                  }
                  s = "\xEF\x84\x9B " + std::to_string(total) +      // U+F11B controller
                      "  \xEF\x80\x85 " + std::to_string(favs);      // U+F005 star
-@@ -3200,7 +3384,7 @@ void NanoMenu::renderEsde() {
+@@ -3200,7 +3394,7 @@ void NanoMenu::renderEsde() {
                      int favs = 0;
                      for (const auto& r : sys.roms) {
                          const ScrapeEntry* se = esdeMetaFor(r);
@@ -8882,7 +9049,7 @@ index 857edadb1e6..1fc8109f753 100644
                      }
                      auto plural = [](int n, const char* one, const char* many) {
                          return std::to_string(n) + " " + (n == 1 ? one : many);
-@@ -3418,16 +3602,19 @@ void NanoMenu::renderEsde() {
+@@ -3418,16 +3612,19 @@ void NanoMenu::renderEsde() {
              if (noImageType) {
                  float vsx = e->getPair("size", 0, 0.0f), vsy = e->getPair("size", 1, 0.0f);
                  if (vsx * vsy >= 0.2f) {
@@ -8909,7 +9076,7 @@ index 857edadb1e6..1fc8109f753 100644
                      }
                  }
              }
-@@ -3476,11 +3663,6 @@ void NanoMenu::renderEsde() {
+@@ -3476,11 +3673,6 @@ void NanoMenu::renderEsde() {
              // than standing in with the scraped cover, matching what the control shows when a game
              // has no video (aura/xmb-menu/ps5-menu game-video regions). A mixed list keeps its
              // cover-family fallback below; only the whole-string "none" is suppressed.
@@ -8921,7 +9088,7 @@ index 857edadb1e6..1fc8109f753 100644
              std::string vRom = curRom;
              if (vRom.empty()) {
                  std::string gs = e->getS("gameselector", std::string());
-@@ -3491,7 +3673,69 @@ void NanoMenu::renderEsde() {
+@@ -3491,7 +3683,69 @@ void NanoMenu::renderEsde() {
              const bool fullBg = (boxW <= 1.0f || boxH <= 1.0f);
              if (fullBg) { boxW = (float)mWidth; boxH = (float)mHeight; }
              bool drewVideo = false;
@@ -8992,7 +9159,7 @@ index 857edadb1e6..1fc8109f753 100644
                  float ar = 1.0f;
                  GLuint tex = esdeGameMediaTex(vRom, vImgType, &ar);
                  if (tex && ar > 0.0f) {
-@@ -3811,12 +4055,12 @@ void NanoMenu::renderEsde() {
+@@ -3811,12 +4065,12 @@ void NanoMenu::renderEsde() {
              std::vector<ActiveBadge> active;
              for (auto& slot : slots) {
                  bool on = false; std::string ctrl;
@@ -9007,7 +9174,7 @@ index 857edadb1e6..1fc8109f753 100644
                  else if (slot == "controller") { if (meta && !meta->controller.empty()) { on = true; ctrl = meta->controller; } }
                  // folder / collection: nano's ES-DE gamelist has no folder entries or collection
                  // editing, so those slots never activate (matches an empty-metadata game).
-@@ -3991,6 +4235,7 @@ std::string NanoMenu::esdeHelpIconPath(const std::string& id) {
+@@ -3991,6 +4245,7 @@ std::string NanoMenu::esdeHelpIconPath(const std::string& id) {
          {"x", "button_x_XBOX.svg"}, {"y", "button_y_XBOX.svg"},
          {"start", "button_start_XBOX.svg"}, {"back", "button_back_XBOX.svg"},
          {"left/right", "dpad_leftright.svg"}, {"up/down", "dpad_updown.svg"},
@@ -9015,7 +9182,7 @@ index 857edadb1e6..1fc8109f753 100644
          {"up/down/left/right", "dpad_all.svg"}, {"lr", "button_lr.svg"},
          {"ltrt", "button_ltrt.svg"}, {"l", "button_l.svg"}, {"r", "button_r.svg"},
          {"lt", "button_lt.svg"}, {"rt", "button_rt.svg"}, {"thumbstickclick", "thumbstick.svg"},
-@@ -4030,6 +4275,7 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
+@@ -4030,6 +4285,7 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
      // theme's <entries> list then selects which of these actually show (ABN trims the gamelist
      // bar to back,start,a = OPTIONS MENU SELECT); "all"/absent keeps every prompt.
      std::vector<std::pair<std::string, std::string>> prompts;
@@ -9023,7 +9190,7 @@ index 857edadb1e6..1fc8109f753 100644
      // When the ES-DE options menu is open its help bar replaces the view's, exactly as ES-DE's
      // HelpComponent shows the top GUI's prompts. Build the menu prompts (per focused row) and render
      // them through this same glyph + helpsystem-style path so the menu legend matches the control.
-@@ -4054,10 +4300,10 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
+@@ -4054,10 +4310,10 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
          prompts.push_back({"a", "select"});
          prompts.push_back({"b", "back"});
          prompts.push_back({"x", "view media"});
@@ -9036,7 +9203,7 @@ index 857edadb1e6..1fc8109f753 100644
      } else {
          // The "choose" icon tracks the system view's primary: a vertical carousel or a textlist
          // navigates up/down, a horizontal carousel left/right, a grid all four directions.
-@@ -4072,14 +4318,9 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
+@@ -4072,14 +4328,9 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
          }
          prompts.push_back({chooseIcon, "choose"});
          prompts.push_back({"a", "select"});
@@ -9054,7 +9221,7 @@ index 857edadb1e6..1fc8109f753 100644
      }
  
      // Apply the helpsystem's <entries> allow-list (icon ids, whitespace or comma separated). The
-@@ -4134,6 +4375,19 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
+@@ -4134,6 +4385,19 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
          }
          prompts.swap(dd);
      }
@@ -9074,7 +9241,7 @@ index 857edadb1e6..1fc8109f753 100644
      if (prompts.empty()) return;
  
      float fs = e->getF("fontSize", 0.035f);
-@@ -4460,6 +4714,95 @@ bool NanoMenu::esdeBack() {
+@@ -4460,6 +4724,96 @@ bool NanoMenu::esdeBack() {
      return false;   // at system root: let the caller handle (e.g. nothing / exit gesture)
  }
  
@@ -9109,6 +9276,7 @@ index 857edadb1e6..1fc8109f753 100644
 +        if (un != mEsdeUnfavorites.end()) { mEsdeUnfavorites.erase(un); saveFavorites(); }
 +        if (!metaFav) toggleFavorite(rom);
 +    }
++    favoritesResort(rom);
 +    esdeSfx(5);                                // favorite
 +    mDisplayDirty = true;
 +}
