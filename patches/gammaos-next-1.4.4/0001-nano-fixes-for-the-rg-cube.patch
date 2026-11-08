@@ -1,5 +1,5 @@
 diff --git a/frameworks/base/cmds/drastic-nano/InputMap.cpp b/frameworks/base/cmds/drastic-nano/InputMap.cpp
-index 69bda59260d..b979cc6219b 100644
+index 69bda59260d..02bf158f23e 100644
 --- a/frameworks/base/cmds/drastic-nano/InputMap.cpp
 +++ b/frameworks/base/cmds/drastic-nano/InputMap.cpp
 @@ -15,6 +15,7 @@
@@ -63,16 +63,19 @@ index 69bda59260d..b979cc6219b 100644
          ALOGI("DrasticNano::input: /dev/input changed, rescanned (%zu -> %zu nodes)",
                before, st->fds.size() + st->touchFds.size());
      }
-@@ -591,6 +631,28 @@ void pollInputMap(InputState* st, bool overlayOpen, bool captureKey,
+@@ -591,6 +631,31 @@ void pollInputMap(InputState* st, bool overlayOpen, bool captureKey,
                      continue;
                  }
  
 +                // Universal hotkeys: a button pressed while the Anbernic button is held does the
 +                // hotkey bound to it and never reaches the game. The Anbernic button itself keeps
 +                // its own binding.
-+                if (ev.code == KEY_F10 || ev.code == BTN_MODE) st->anbernicHeld = pressed;
-+                else if (pressed && st->anbernicHeld && !overlayOpen && !captureKey && ev.value == 1
++                if (ev.code == KEY_F10 || ev.code == BTN_MODE) {
++                    if (pressed && !st->anbernicHeld) st->anbernicChorded = false;
++                    st->anbernicHeld = pressed;
++                } else if (pressed && st->anbernicHeld && !overlayOpen && !captureKey && ev.value == 1
 +                         && property_get_bool("persist.gammaos.hotkeys.enable", true)) {
++                    st->anbernicChorded = true;
 +                    st->chordKeys.push_back(ev.code);
 +                    st->backPressStartMs = 0;   // a Menu binding on the Anbernic button does not fire
 +                    hotkey(st, ev.code, out);
@@ -92,7 +95,24 @@ index 69bda59260d..b979cc6219b 100644
                  if (ev.code == KEY_BACK) {
                      // Short / long press state tracked via backPressStartMs.
                      if (pressed && !st->backWasDown) {
-@@ -789,6 +851,11 @@ void pollInputMap(InputState* st, bool overlayOpen, bool captureKey,
+@@ -724,6 +789,16 @@ void pollInputMap(InputState* st, bool overlayOpen, bool captureKey,
+                         // backPressStartMs/backWasDown state so the
+                         // shared hold check below fires exitRequested.
+                         case 20:
++                            // The Anbernic button as Menu, with universal hotkeys: the release
++                            // opens the menu unless the press did a hotkey, and holding it does
++                            // not exit (Anbernic + Start does), so a slow chord stays a chord.
++                            if ((ev.code == KEY_F10 || ev.code == BTN_MODE)
++                                && property_get_bool("persist.gammaos.hotkeys.enable", true)) {
++                                if (!pressed && st->backWasDown && !st->anbernicChorded) out->menuToggle = true;
++                                st->backPressStartMs = 0;
++                                st->backWasDown = pressed;
++                                break;
++                            }
+                             if (pressed && !st->backWasDown) {
+                                 st->backPressStartMs =
+                                         android::elapsedRealtime();
+@@ -789,6 +864,11 @@ void pollInputMap(InputState* st, bool overlayOpen, bool captureKey,
          }
      }
  
@@ -104,7 +124,7 @@ index 69bda59260d..b979cc6219b 100644
      // Long-press exit detection. Fires when BACK has been held longer
      // than longBackMs; short-press was already handled on release.
      if (st->backPressStartMs > 0) {
-@@ -810,11 +877,11 @@ void pollInputMap(InputState* st, bool overlayOpen, bool captureKey,
+@@ -810,11 +890,11 @@ void pollInputMap(InputState* st, bool overlayOpen, bool captureKey,
              st->powerHoldFired = true;
          }
      }
@@ -119,16 +139,17 @@ index 69bda59260d..b979cc6219b 100644
          if (held >= powerOffHoldMs) {
              ALOGI("DrasticNano::input: KEY_POWER held %lldms -> power off",
 diff --git a/frameworks/base/cmds/drastic-nano/InputMap.h b/frameworks/base/cmds/drastic-nano/InputMap.h
-index b51c7347a1f..c6a829a2a3f 100644
+index b51c7347a1f..f380a50256a 100644
 --- a/frameworks/base/cmds/drastic-nano/InputMap.h
 +++ b/frameworks/base/cmds/drastic-nano/InputMap.h
-@@ -109,6 +109,11 @@ struct InputState {
+@@ -109,6 +109,12 @@ struct InputState {
      // detects the press so one physical press = one toggle. (btnFastFwd is
      // kept only for any code that still reads the raw held state.)
      bool ffToggled = false;
 +    // Universal hotkeys (HOTKEYS.md): the Anbernic button is held, the chord buttons whose release
 +    // is still to come, and when the quit button went down (0 = not held).
 +    bool anbernicHeld = false;
++    bool anbernicChorded = false;   // this Anbernic press was used for a hotkey
 +    std::vector<int> chordKeys;
 +    int64_t quitHoldStartMs = 0;
      bool ffWasDown = false;
@@ -193,22 +214,27 @@ index 0f747c9a45c..184d00aa5d0 100644
      init_rc: ["gammaos-nano.rc"],
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoHotkeys.cpp b/frameworks/base/cmds/gammaos-nano/NanoHotkeys.cpp
 new file mode 100644
-index 00000000000..097088929c0
+index 00000000000..b4ec50ea625
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/NanoHotkeys.cpp
-@@ -0,0 +1,378 @@
+@@ -0,0 +1,459 @@
 +#include "NanoHotkeys.h"
 +
 +#include <dirent.h>
++#include <fcntl.h>
 +#include <stdlib.h>
++#include <sys/file.h>
 +#include <sys/stat.h>
 +#include <stdio.h>
 +#include <string.h>
 +#include <unistd.h>
 +
 +#include <algorithm>
++#include <cmath>
 +#include <map>
++#include <set>
 +
++#include <cutils/properties.h>
 +#include <utils/Log.h>
 +
 +namespace android {
@@ -216,16 +242,49 @@ index 00000000000..097088929c0
 +namespace {
 +
 +const char* const kDirs[] = {"/system/etc/gammaos/hotkeys", "/data/system/gammaos/hotkeys"};
++const char* const kBom = "\xEF\xBB\xBF";
++
++// The file as read (owner, mode, size and time), to keep its owner and mode and to see whether
++// the emulator wrote it meanwhile.
++thread_local struct stat tReadStat;
++thread_local bool tHaveReadStat = false;
 +
 +bool readFile(const std::string& path, std::string* out) {
 +    FILE* f = fopen(path.c_str(), "re");
 +    if (!f) return false;
++    tHaveReadStat = fstat(fileno(f), &tReadStat) == 0;
 +    out->clear();
 +    char buf[4096];
 +    size_t n;
 +    while ((n = fread(buf, 1, sizeof(buf), f)) > 0) out->append(buf, n);
 +    fclose(f);
 +    return true;
++}
++
++// A profile value as text: a string, or a number or true/false written without quotes.
++std::string valueText(const njson::Value& v) {
++    if (v.isNumber()) {
++        char buf[32];
++        if (v.num == std::floor(v.num) && std::fabs(v.num) < 1e15) snprintf(buf, sizeof(buf), "%lld", (long long)v.num);
++        else snprintf(buf, sizeof(buf), "%.17g", v.num);
++        return buf;
++    }
++    if (v.isBool()) return v.b ? "true" : "false";
++    return v.asString();
++}
++
++std::string xmlEscape(const std::string& s) {
++    std::string out;
++    for (char c : s) {
++        switch (c) {
++            case '&': out += "&amp;"; break;
++            case '<': out += "&lt;"; break;
++            case '>': out += "&gt;"; break;
++            case '"': out += "&quot;"; break;
++            default: out += c;
++        }
++    }
++    return out;
 +}
 +
 +std::string trim(const std::string& s) {
@@ -277,14 +336,56 @@ index 00000000000..097088929c0
 +    return false;
 +}
 +
-+bool writeLines(const std::string& path, const std::vector<std::string>& lines) {
-+    const std::string tmp = path + ".nanotmp";
-+    FILE* o = fopen(tmp.c_str(), "we");
-+    if (!o) return false;
++// Replaces the file through a temporary one, keeping its owner and mode (a new file takes its
++// folder's owner). `fresh`: a new file; otherwise nothing is written if the emulator changed the
++// file since it was read.
++bool writeLines(const std::string& path, const std::vector<std::string>& lines, bool fresh = false) {
++    struct stat before = tReadStat;
++    const bool haveBefore = !fresh && tHaveReadStat;
++    std::string tmp = path + ".nanotmp.XXXXXX";
++    const int fd = mkostemp(&tmp[0], O_CLOEXEC);
++    if (fd < 0) return false;
++    FILE* o = fdopen(fd, "w");
++    if (!o) { close(fd); unlink(tmp.c_str()); return false; }
 +    for (const auto& l : lines) fprintf(o, "%s\n", l.c_str());
-+    if (fclose(o) != 0 || rename(tmp.c_str(), path.c_str()) != 0) { unlink(tmp.c_str()); return false; }
++    bool ok = fflush(o) == 0 && !ferror(o) && fsync(fileno(o)) == 0;
++    struct stat owner, mine;
++    const bool haveOwner = haveBefore ? (owner = before, true)
++                                      : stat(path.substr(0, path.rfind('/')).c_str(), &owner) == 0;
++    if (haveOwner && fstat(fileno(o), &mine) == 0) {
++        if ((mine.st_uid != owner.st_uid || mine.st_gid != owner.st_gid)
++            && fchown(fileno(o), owner.st_uid, owner.st_gid) != 0)
++            ALOGW("hotkeys: chown %s failed", path.c_str());
++        const mode_t mode = haveBefore ? (owner.st_mode & 07777) : 0660;
++        if ((mine.st_mode & 07777) != mode) fchmod(fileno(o), mode);
++    }
++    ok = fclose(o) == 0 && ok;
++    struct stat now;
++    if (ok && haveBefore && (stat(path.c_str(), &now) != 0 || now.st_size != before.st_size
++                             || now.st_mtim.tv_sec != before.st_mtim.tv_sec
++                             || now.st_mtim.tv_nsec != before.st_mtim.tv_nsec)) {
++        ALOGW("hotkeys: %s changed while binding keys; left for next time", path.c_str());
++        ok = false;
++    }
++    if (!ok || rename(tmp.c_str(), path.c_str()) != 0) { unlink(tmp.c_str()); return false; }
 +    ALOGI("hotkeys: bound keys in %s", path.c_str());
 +    return true;
++}
++
++// The packages with a running process (an emulator still open, or still closing).
++std::set<std::string> runningPackages() {
++    std::set<std::string> out;
++    DIR* d = opendir("/proc");
++    if (!d) return out;
++    while (dirent* e = readdir(d)) {
++        if (e->d_name[0] < '0' || e->d_name[0] > '9') continue;
++        std::string cmd;
++        if (!readFile(std::string("/proc/") + e->d_name + "/cmdline", &cmd) || cmd.empty()) continue;
++        cmd = cmd.c_str();                        // the first argument: the process name
++        out.insert(cmd.substr(0, cmd.find(':')));  // "com.app:service" belongs to com.app
++    }
++    closedir(d);
++    return out;
 +}
 +
 +std::vector<std::string> toLines(const std::string& text) {
@@ -315,7 +416,9 @@ index 00000000000..097088929c0
 +    const njson::Value* values = rule.find("values");
 +    if (!values || !values->isObject()) return false;
 +
-+    std::vector<std::string> lines = toLines(text);
++    // A byte order mark (PPSSPP writes one) is kept, but not matched as part of the first line.
++    const bool bom = text.compare(0, 3, kBom) == 0;
++    std::vector<std::string> lines = toLines(bom ? text.substr(3) : text);
 +    // The section's lines: [begin, end). With no section, the lines before the first one.
 +    size_t begin = 0, end = lines.size();
 +    bool found = section.empty();
@@ -331,7 +434,7 @@ index 00000000000..097088929c0
 +    }
 +    bool changed = !found;
 +    for (const auto& kv : values->obj) {
-+        const std::string want = kv.second.asString();
++        const std::string want = valueText(kv.second);
 +        bool present = false;
 +        size_t at = 0;
 +        std::string cur;
@@ -357,7 +460,9 @@ index 00000000000..097088929c0
 +        }
 +        changed = true;
 +    }
-+    return !changed || writeLines(path, lines);
++    if (!changed) return true;
++    if (bom) { if (lines.empty()) lines.push_back(""); lines[0] = kBom + lines[0]; }
++    return writeLines(path, lines);
 +}
 +
 +// Flycast controller mappings: "bindN = <keycode>:<action>" lines under [digital], numbered from 0
@@ -386,7 +491,7 @@ index 00000000000..097088929c0
 +    }
 +    bool changed = false;
 +    for (const auto& b : binds->arr) {
-+        const std::string want = b.asString();
++        const std::string want = valueText(b);
 +        // The keycode is already bound (to this action or to another one the user chose): leave it.
 +        const std::string kc = want.substr(0, want.find(':') + 1);
 +        if (std::any_of(have.begin(), have.end(), [&](const std::string& h) { return h.compare(0, kc.size(), kc) == 0; }))
@@ -402,7 +507,7 @@ index 00000000000..097088929c0
 +}
 +
 +// Android SharedPreferences XML: <int name="k" value="v" /> entries ("type": int, long, boolean)
-+// or <string name="k">v</string>. The file stays the app's own: same owner, mode 0660.
++// or <string name="k">v</string>.
 +bool applyXmlPrefs(const std::string& path, const njson::Value& rule) {
 +    std::string text;
 +    if (!readFile(path, &text)) return false;
@@ -413,8 +518,8 @@ index 00000000000..097088929c0
 +    std::vector<std::string> lines = toLines(text);
 +    bool changed = false;
 +    for (const auto& kv : values->obj) {
-+        const std::string want = kv.second.asString();
-+        const std::string nameAttr = "name=\"" + kv.first + "\"";
++        const std::string want = xmlEscape(valueText(kv.second));
++        const std::string nameAttr = "name=\"" + xmlEscape(kv.first) + "\"";
 +        bool present = false;
 +        size_t at = 0;
 +        std::string cur;
@@ -453,13 +558,7 @@ index 00000000000..097088929c0
 +        }
 +        changed = true;
 +    }
-+    if (!changed) return true;
-+    struct stat st;
-+    const bool owned = stat(path.c_str(), &st) == 0;
-+    if (!writeLines(path, lines)) return false;
-+    if (owned && chown(path.c_str(), st.st_uid, st.st_gid) != 0) ALOGW("hotkeys: chown %s failed", path.c_str());
-+    chmod(path.c_str(), 0660);
-+    return true;
++    return !changed || writeLines(path, lines);
 +}
 +
 +// melonDS for Android (WatermelonDS) controller_config.json: {"inputMapper": [{"input": NAME,
@@ -479,7 +578,7 @@ index 00000000000..097088929c0
 +    };
 +    bool changed = false;
 +    for (const auto& kv : binds->obj) {
-+        const int kc = atoi(kv.second.asString().c_str());
++        const int kc = atoi(valueText(kv.second).c_str());
 +        if (std::any_of(mapper->arr.begin(), mapper->arr.end(), [&](const njson::Value& e) { return keyOf(e) == kc; }))
 +            continue;
 +        njson::Value* entry = nullptr;
@@ -502,13 +601,7 @@ index 00000000000..097088929c0
 +        entry->set("assignment") = a;
 +        changed = true;
 +    }
-+    if (!changed) return true;
-+    struct stat st;
-+    const bool owned = stat(path.c_str(), &st) == 0;
-+    if (!writeLines(path, {njson::serialize(root, false)})) return false;
-+    if (owned && (chown(path.c_str(), st.st_uid, st.st_gid) != 0 || chmod(path.c_str(), st.st_mode & 07777) != 0))
-+        ALOGW("hotkeys: could not keep the owner of %s", path.c_str());
-+    return true;
++    return !changed || writeLines(path, {njson::serialize(root, false)});
 +}
 +
 +}  // namespace
@@ -548,8 +641,16 @@ index 00000000000..097088929c0
 +}
 +
 +void provision(const std::string& skipPkg) {
++    if (!property_get_bool("persist.gammaos.hotkeys.enable", true)) return;
++    // One run at a time, across the home and overlay processes; a run already going covers this one.
++    const int lock = open("/data/system/gammaos-hotkeys.lock", O_RDWR | O_CREAT | O_CLOEXEC, 0600);
++    if (lock < 0 || flock(lock, LOCK_EX | LOCK_NB) != 0) { if (lock >= 0) close(lock); return; }
++    // Not an emulator that is open (or still closing): it writes its settings when it closes.
++    std::set<std::string> skip = runningPackages();
++    if (!skipPkg.empty()) skip.insert(skipPkg);
 +    for (const auto& p : loadProfiles()) {
-+        if (!skipPkg.empty() && std::find(p.packages.begin(), p.packages.end(), skipPkg) != p.packages.end()) continue;
++        if (std::any_of(p.packages.begin(), p.packages.end(), [&](const std::string& pk) { return skip.count(pk) > 0; }))
++            continue;
 +        const njson::Value* rules = p.json.find("provision");
 +        if (!rules || !rules->isArray()) continue;
 +        for (const auto& rule : rules->arr) {
@@ -561,7 +662,7 @@ index 00000000000..097088929c0
 +                const std::string tmpl = rule.getString("template");
 +                const std::string dir = path.substr(0, path.rfind('/'));
 +                if (tmpl.empty() || access(dir.c_str(), F_OK) != 0) continue;
-+                if (!writeLines(path, toLines(tmpl))) continue;
++                if (!writeLines(path, toLines(tmpl), true)) continue;
 +            }
 +            const std::string format = rule.getString("format", "ini");
 +            if (format == "ini" || format == "retroarch_cfg") applyLines(path, rule);
@@ -571,6 +672,7 @@ index 00000000000..097088929c0
 +            else ALOGW("hotkeys: %s: unknown provision format %s", p.id.c_str(), format.c_str());
 +        }
 +    }
++    close(lock);   // releases the lock
 +}
 +
 +}  // namespace nanohotkeys
@@ -2001,7 +2103,7 @@ index f8ae7fb55ee..eb2684e7149 100644
      mPs3DlgTitle = title;
      mPs3DlgBody  = body;
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuInput.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuInput.cpp
-index 4af4ff27eea..f5e171c2d42 100644
+index 4af4ff27eea..00304e96a01 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuInput.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuInput.cpp
 @@ -270,6 +270,7 @@ void NanoMenu::checkInputHotplug() {
@@ -2163,15 +2265,16 @@ index 4af4ff27eea..f5e171c2d42 100644
                  else if (mPvActive)  pvTouchFrame();    // photo viewer (Gallery-style touch)
                  else if (mVidActive) vidTouchFrame();   // video player (YouTube-style touch)
                  else if (mMpActive)  mpTouchFrame();    // music Now Playing touch
-@@ -2559,7 +2588,18 @@ void NanoMenu::pollInput() {
+@@ -2559,7 +2588,19 @@ void NanoMenu::pollInput() {
              // Track SELECT button state; in XMB mode, press refreshes game lists
              if (ev.type == EV_KEY && ev.code == BTN_SELECT) {
                  if (ev.value == 1) {
 -                    if (mOskActive) oskCycleLanguage(1);   // Select cycles language
 +                    // Select again cancels the search it opened: its keyboard, or its results.
 +                    if (mOskActive && mOskPasswordPrompt == "Search") {
++                        const bool popup = mOsk.miniOpen;   // closeOsk closes only the accent popup
 +                        closeOsk();
-+                        if (!mOsk.miniOpen) mOskPasswordCallback = nullptr;
++                        if (!popup) mOskPasswordCallback = nullptr;
 +                        ps3Sfx(PS3_SFX_BACK);
 +                    }
 +                    else if (mOskActive) {}   // the keyboard's language button cycles its language
@@ -2183,7 +2286,7 @@ index 4af4ff27eea..f5e171c2d42 100644
                      // Photo viewer: SELECT toggles the EXIF/Information overlay (the
                      // "Display" control), matching the real PS3 photo viewer - which is
                      // why the viewer panel shows the SELECT pill only on that control.
-@@ -2600,7 +2640,18 @@ void NanoMenu::pollInput() {
+@@ -2600,7 +2641,18 @@ void NanoMenu::pollInput() {
                      if (mSelectSearchArmed && !mSelectVolChord
                          && mPs3Xmb && !mOskActive && !mMpActive && !mPs3OptActive
                          && !mPs3DlgActive && !mPs3WizActive && !mPs3TzActive && !mPs3LangActive) {
@@ -2203,7 +2306,7 @@ index 4af4ff27eea..f5e171c2d42 100644
                      }
                      mSelectSearchArmed = false;
                      mSelectVolChord    = false;
-@@ -2737,6 +2788,19 @@ void NanoMenu::pollInput() {
+@@ -2737,6 +2789,19 @@ void NanoMenu::pollInput() {
                  case KEY_RIGHT: navRelease(NavDir::Right); break;
                  case BTN_SOUTH: if (mOskActive) oskARelease(); break;
                  case KEY_LEFTSHIFT: case KEY_RIGHTSHIFT: mKbdShiftHeld = false; break;
@@ -2223,7 +2326,7 @@ index 4af4ff27eea..f5e171c2d42 100644
                  default: break;
                  }
              }
-@@ -2809,17 +2873,13 @@ void NanoMenu::pollInput() {
+@@ -2809,17 +2874,13 @@ void NanoMenu::pollInput() {
                          }
                          continue;
                      }
@@ -2243,14 +2346,18 @@ index 4af4ff27eea..f5e171c2d42 100644
                      switch (ev.code) {
                      case KEY_UP:
                          navPress(NavDir::Up); break;
-@@ -2840,11 +2900,22 @@ void NanoMenu::pollInput() {
+@@ -2840,11 +2901,26 @@ void NanoMenu::pollInput() {
                          // button to KEY_ENTER.
                          if (mOskActive) oskConfirm();
                          else if (mSetupWizardActive) handleSetupStart();
 -                        // ES-DE home: Start toggles the ES-DE options menu.
 +                        // Kiosk Mode: Start opens and closes the Quick Menu instead of the ES-DE menu.
 +                        else if (kioskMode() && (mEsdeTheme || mEsdeSettingsMinima) && mPs3Xmb
-+                                 && (quickMenuOpen() || (!ndsInModal() && mPs3Stack.empty()))) toggleQuickMenu();
++                                 && (quickMenuOpen() || (!ndsInModal() && mPs3Stack.empty()))) {
++                            if (quickMenuOpen() && mPs3OptActive) closeXmbOpt();
++                            if (quickMenuOpen() && mPs3DlgActive) closePs3Dialog(false);
++                            if (!mPs3DlgActive && !mPs3OptActive) toggleQuickMenu();
++                        }
 +                        // ES-DE home: Start toggles the ES-DE options menu, and leaves a screen opened from it.
 +                        else if (mEsdeMenuReturn && !mPs3Stack.empty()) esdeMenuExitAll();
                          else if (mEsdeTheme && (mEsdeMenuActive || mEsdeMenuClosing)) esdeMenuClose();
@@ -2268,7 +2375,7 @@ index 4af4ff27eea..f5e171c2d42 100644
                          if (mSetupWizardActive) handleSetupBack();
                          else handleBack();
                          break;
-@@ -2859,6 +2930,10 @@ void NanoMenu::pollInput() {
+@@ -2859,6 +2935,10 @@ void NanoMenu::pollInput() {
                              if (!mPvWpMode && !mPvTrimMode && !mPvPlChooserActive) pvShow3D();
                              break;
                          }
@@ -2279,7 +2386,7 @@ index 4af4ff27eea..f5e171c2d42 100644
                          // Photo album grid: Y cycles the Sort By order (+ banner). Group
                          // Content lives in the Triangle option menu (a submenu).
                          if (mPs3Xmb && !mOskActive && !mPs3OptActive && !mPs3DlgActive
-@@ -2894,19 +2969,8 @@ void NanoMenu::pollInput() {
+@@ -2894,19 +2974,8 @@ void NanoMenu::pollInput() {
                              mOskQuery = mIconGridFilter; mOsk.caret = (int)mOskQuery.size();
                              break;
                          }
@@ -2301,7 +2408,7 @@ index 4af4ff27eea..f5e171c2d42 100644
                          // Game Systems list: Y removes a custom system (built-ins only disable).
                          if (mPs3Xmb && ps3TopScreenKind() == GS_LIST) {
                              auto& its = mPs3Stack.back().items; int sel = mPs3Stack.back().sel;
-@@ -3007,6 +3071,10 @@ void NanoMenu::pollInput() {
+@@ -3007,6 +3076,10 @@ void NanoMenu::pollInput() {
                                  itemHideToggle(its[sel].payloadStr);
                              break;
                          }
@@ -2312,7 +2419,7 @@ index 4af4ff27eea..f5e171c2d42 100644
                          // Triangle on the focused Internet Search item picks the engine
                          // (before the generic option menu).
                          if (tryOpenSearchEngineChooser()) break;
-@@ -3025,6 +3093,9 @@ void NanoMenu::pollInput() {
+@@ -3025,6 +3098,9 @@ void NanoMenu::pollInput() {
                          }
                          if (mMpActive) { mpPrev(); break; }   // L1: previous track in Now Playing
                          if (mPvActive) { pvStep(-1); break; }   // L1: previous photo in the viewer
@@ -2322,7 +2429,7 @@ index 4af4ff27eea..f5e171c2d42 100644
                          // Game Systems list: L1 moves the selected system up.
                          if (mPs3Xmb && ps3TopScreenKind() == GS_LIST) {
                              auto& its = mPs3Stack.back().items; int sel = mPs3Stack.back().sel;
-@@ -3070,6 +3141,9 @@ void NanoMenu::pollInput() {
+@@ -3070,6 +3146,9 @@ void NanoMenu::pollInput() {
                          }
                          if (mMpActive) { mpNext(); break; }   // R1: next track in Now Playing
                          if (mPvActive) { pvStep(+1); break; }   // R1: next photo in the viewer
@@ -2332,7 +2439,7 @@ index 4af4ff27eea..f5e171c2d42 100644
                          // Game Systems list: R1 moves the selected system down.
                          if (mPs3Xmb && ps3TopScreenKind() == GS_LIST) {
                              auto& its = mPs3Stack.back().items; int sel = mPs3Stack.back().sel;
-@@ -3099,13 +3173,27 @@ void NanoMenu::pollInput() {
+@@ -3099,13 +3178,27 @@ void NanoMenu::pollInput() {
                          ALOGD("Quick Resume: %s", mQuickResumeEnabled ? "ON" : "OFF");
                          break;
                      case BTN_TL2:
@@ -3990,7 +4097,7 @@ index a778ea7da0d..638c4463dd0 100644
  // aspect bucket so the Test Controller / Calibration buttons get the identical glass
  // relight as the console icons (bevelFromRGBA), refracting the live XMB wave. round =
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
-index c6a8e9c9dc1..2c9ac97dc81 100644
+index c6a8e9c9dc1..add0738f5d1 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 @@ -25,6 +25,7 @@
@@ -5627,7 +5734,7 @@ index c6a8e9c9dc1..2c9ac97dc81 100644
      // Control Registration, and Audio Device Settings.
      WS_BT_MANAGE, WS_BT_REGISTER_INFO, WS_BT_SCANNING, WS_BT_DEVICE_LIST,
 -    WS_BT_PASSKEY, WS_BT_REGISTERING, WS_BT_REGISTER_DONE,
-+    WS_BT_PASSKEY, WS_BT_REGISTERING, WS_BT_REGISTER_DONE, WS_BT_PASSKEY_ENTRY, WS_BT_PAIR_CONFIRM,
++    WS_BT_PASSKEY, WS_BT_REGISTERING, WS_BT_REGISTER_DONE, WS_BT_PAIR_CONFIRM,
      WS_BT_DEVICE_OPTS, WS_BT_CONNECTING, WS_BT_DISCONNECTING,
      WS_BT_DELETE_CONFIRM, WS_BT_DELETING, WS_BT_INFO,
      WS_BT_BD_REMOTE,
@@ -5641,19 +5748,17 @@ index c6a8e9c9dc1..2c9ac97dc81 100644
  // Build the pass-key instruction shown while pairing. gammaos-net publishes the
  // system-generated code in sys.gammaos.bt.passkey and the SSP variant in
  // sys.gammaos.bt.pk_variant (2=numeric compare, 4=display passkey, 5=display PIN).
-@@ -15119,7 +15525,10 @@ static void wizDesc(int id, WizDesc& d) {
+@@ -15119,7 +15525,8 @@ static void wizDesc(int id, WizDesc& d) {
      case WS_BT_DEVICE_LIST: d.kind = WK_SCANLIST; d.title = "Register Bluetooth® Device";
          d.body = "Select the Bluetooth® device to register."; break;
      case WS_BT_PASSKEY: d.kind = WK_TEXT; d.title = "Register Bluetooth® Device";
 -        d.label = "Pass Key (enter the same on the device, default 0000)"; d.field = WF_BT_PIN; break;
 +        d.label = "The device asks for a PIN (see its manual; leave blank for 0000)"; d.field = WF_BT_PIN; break;
-+    case WS_BT_PASSKEY_ENTRY: d.kind = WK_TEXT; d.title = "Register Bluetooth® Device";
-+        d.label = "Enter the pass key the device shows"; d.field = WF_BT_PIN; break;
 +    case WS_BT_PAIR_CONFIRM: d.kind = WK_CONFIRM; d.title = "Register Bluetooth® Device"; break;  // dynamic body in render
      case WS_BT_REGISTERING: d.kind = WK_PROGRESS; d.title = "Register Bluetooth® Device";
          d.body = "Registering...\nPlease wait."; d.autoNext = WS_BT_REGISTER_DONE; break;
      case WS_BT_REGISTER_DONE: d.kind = WK_RESULT; d.title = "Register Bluetooth® Device";
-@@ -15178,6 +15587,89 @@ void NanoMenu::startNetWizard() {
+@@ -15178,6 +15585,89 @@ void NanoMenu::startNetWizard() {
      wizEnter(WS_INTRO, 1);
  }
  
@@ -5743,7 +5848,7 @@ index c6a8e9c9dc1..2c9ac97dc81 100644
  // First-run setup only: bring up the XMB "waiting for services" progress screen (a WK_PROGRESS
  // net-wizard page) while the setup wizard holds before the Wi-Fi step until sys.boot_completed.
  // Lives here because the WizScr enum is file-local to this translation unit; the setup wizard
-@@ -15257,6 +15749,13 @@ void NanoMenu::btWizStopReceive() {
+@@ -15257,6 +15747,13 @@ void NanoMenu::btWizStopReceive() {
  }
  
  void NanoMenu::wizEnter(int id, int dir) {
@@ -5757,7 +5862,7 @@ index c6a8e9c9dc1..2c9ac97dc81 100644
      mPs3WizId = id;
      mPs3WizSel = 0;
      mPs3WizScroll = 0;
-@@ -15280,7 +15779,9 @@ void NanoMenu::wizEnter(int id, int dir) {
+@@ -15280,7 +15777,9 @@ void NanoMenu::wizEnter(int id, int dir) {
          std::lock_guard<std::mutex> lk(mBtWizMutex); mBtWizScan.clear(); mBtWizPin.clear();
      }
      if (id == WS_BT_SCANNING)      btWizScanAsync();                    // real inquiry -> device list (accumulates)
@@ -5768,7 +5873,7 @@ index c6a8e9c9dc1..2c9ac97dc81 100644
      if (id == WS_BT_CONNECTING)    btWizConnectAsync(mBtWizSelAddr);    // real profile connect
      if (id == WS_BT_DISCONNECTING) btWizDisconnectAsync(mBtWizSelAddr); // real profile disconnect
      if (id == WS_BT_DELETING)      btWizUnpairAsync(mBtWizSelAddr);     // real removeBond
-@@ -15305,34 +15806,8 @@ void NanoMenu::wizEnter(int id, int dir) {
+@@ -15305,34 +15804,8 @@ void NanoMenu::wizEnter(int id, int dir) {
      // (NTP) and nudge a refresh on a background thread (the 2.6s dwell is real work).
      if (id == WS_DT_SVI_PROGRESS) {
          std::thread([]{
@@ -5804,7 +5909,7 @@ index c6a8e9c9dc1..2c9ac97dc81 100644
          }).detach();
          // auto_time_zone is now on; the Olson tz captures DST automatically and the
          // "Daylight Saving" row reflects it live (drawPs3Clock -> mPs3DstNow).
-@@ -15411,6 +15886,11 @@ void NanoMenu::wizOpenTextField(int field) {
+@@ -15411,6 +15884,11 @@ void NanoMenu::wizOpenTextField(int field) {
          std::string err = validateWizField(field, val);
          if (!err.empty()) { mPs3WizFieldError = err; mPs3WizPendingTextField = field; return; }
          mPs3WizFieldError.clear();
@@ -5816,7 +5921,7 @@ index c6a8e9c9dc1..2c9ac97dc81 100644
          int nxt = wizNextScreen(mPs3WizId, 0);
          if (nxt == WS_NONE) { mPs3WizExit = 1; mPs3WizActive = false; }
          else { mPs3WizStack.push_back(mPs3WizId); wizEnter(nxt, 1); }
-@@ -15508,6 +15988,11 @@ void NanoMenu::wizConfirm() {
+@@ -15508,6 +15986,11 @@ void NanoMenu::wizConfirm() {
          }
          return;
      }
@@ -5828,7 +5933,7 @@ index c6a8e9c9dc1..2c9ac97dc81 100644
      if (mPs3WizId == WS_BT_INBOUND_CONFIRM) {
          if (mPs3WizSel == 0) {   // Yes -> accept + wait for the bond
              mPs3WizStack.push_back(mPs3WizId); wizEnter(WS_BT_INBOUND_PAIRING, 1);
-@@ -15534,7 +16019,8 @@ void NanoMenu::wizConfirm() {
+@@ -15534,7 +16017,8 @@ void NanoMenu::wizConfirm() {
          // connect it, or delete it and register fresh - matching Android's behaviour
          // when you pick an already-paired device from "pair new device".
          if (scan[mPs3WizSel].bonded) { wizEnter(WS_BT_DEVICE_OPTS, 1); return; }
@@ -5838,33 +5943,25 @@ index c6a8e9c9dc1..2c9ac97dc81 100644
          return;
      }
      if (mPs3WizId == WS_BT_REGISTER_DONE) {   // loop back to the Manage root (BD remote closes)
-@@ -15634,6 +16120,12 @@ void NanoMenu::wizBack() {
+@@ -15634,6 +16118,13 @@ void NanoMenu::wizBack() {
      if (mPs3WizId == WS_DT_SVI_DONE || mPs3WizId == WS_DT_SM_DONE) {
          mPs3WizExit = 1; mPs3WizActive = false; return;
      }
-+    if (mBtWizAskVariant >= 0 && (mPs3WizId == WS_BT_PASSKEY || mPs3WizId == WS_BT_PASSKEY_ENTRY
-+                                  || mPs3WizId == WS_BT_PAIR_CONFIRM)) {   // decline the pairing
++    if (mBtWizAskVariant >= 0 && (mPs3WizId == WS_BT_PASSKEY || mPs3WizId == WS_BT_PAIR_CONFIRM)) {   // decline the pairing
 +        btWizPairReply("cancel");
 +        wizEnter(WS_BT_REGISTERING, -1);
 +        return;
 +    }
++    // Back while registering cancels the pairing; the screen stays until it has stopped.
++    if (mPs3WizId == WS_BT_REGISTERING && mBtWizPairRunning) { btWizPairReply("cancel"); return; }
      if (mPs3WizStack.empty()) { mPs3WizExit = -1; mPs3WizActive = false; return; }
      int prev = mPs3WizStack.back(); mPs3WizStack.pop_back();
      // Don't land back on a transient progress/test screen (mirrors web wizBack). If
-@@ -15788,6 +16280,7 @@ int NanoMenu::wizNextScreen(int id, int sel) {
-     // ---- Accessory: Bluetooth ----
-     case WS_BT_REGISTER_INFO: return WS_BT_SCANNING;
-     case WS_BT_PASSKEY:       return WS_BT_REGISTERING;
-+    case WS_BT_PASSKEY_ENTRY: return WS_BT_REGISTERING;
-     case WS_BT_BD_REMOTE:     return WS_BT_SCANNING;
-     case WS_BT_DEVICE_OPTS:
-         return (sel == 0) ? WS_BT_CONNECTING
-@@ -15844,6 +16337,32 @@ void NanoMenu::renderNetWizard() {
+@@ -15844,6 +16335,34 @@ void NanoMenu::renderNetWizard() {
              wizDesc(mPs3WizId, d);
          }
      }
-+    // Pairing asks the user something (gammaos-net bt pair --ask): a PIN, a pass key the device
-+    // shows, or whether the codes match.
++    // Pairing asks the user something (gammaos-net bt pair --ask): a PIN, or whether the codes match.
 +    if (mPs3WizId == WS_BT_REGISTERING && mBtWizPairRunning) {
 +        char pr[PROPERTY_VALUE_MAX] = {0};
 +        property_get("sys.gammaos.bt.pair_request", pr, "");
@@ -5875,16 +5972,19 @@ index c6a8e9c9dc1..2c9ac97dc81 100644
 +            mBtWizAskVariant = atoi(s.c_str());
 +            mBtWizAskKey = tab == std::string::npos ? "" : s.substr(tab + 1);
 +            mBtWizPin.clear();
-+            wizEnter(mBtWizAskVariant == 2 ? WS_BT_PAIR_CONFIRM
-+                     : mBtWizAskVariant == 1 ? WS_BT_PASSKEY_ENTRY : WS_BT_PASSKEY, 1);
++            wizEnter(mBtWizAskVariant == 2 ? WS_BT_PAIR_CONFIRM : WS_BT_PASSKEY, 1);
 +            wizDesc(mPs3WizId, d);
 +        }
 +    }
 +    // The device gave up while its prompt was up: show the result.
 +    if (mBtWizAskVariant >= 0 && !mBtWizPairRunning) {
 +        mBtWizAskVariant = -1;
-+        if (mPs3WizId == WS_BT_PASSKEY || mPs3WizId == WS_BT_PASSKEY_ENTRY || mPs3WizId == WS_BT_PAIR_CONFIRM) {
-+            if (mOskActive) closeOsk();
++        if (mPs3WizId == WS_BT_PASSKEY || mPs3WizId == WS_BT_PAIR_CONFIRM) {
++            if (mOskActive) {   // closed without closeOsk's step back through the wizard
++                mOskPasswordMode = false; mOskPlaintext = false; mOskPasswordPrompt.clear();
++                mOskPasswordCallback = nullptr; mOskQuery.clear(); mOsk.caret = 0;
++                closeOsk();
++            }
 +            wizEnter(WS_BT_REGISTER_DONE, 1);
 +            wizDesc(mPs3WizId, d);
 +        }
@@ -7091,7 +7191,7 @@ index 6ea6d3295dd..7541fec9e90 100644
          break;
      case SettingNodeType::kInfo:
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuSetupWizard.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuSetupWizard.cpp
-index b44ae98de35..c0888af37a1 100644
+index b44ae98de35..e50ef11faf2 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuSetupWizard.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuSetupWizard.cpp
 @@ -18,6 +18,8 @@
@@ -7111,15 +7211,16 @@ index b44ae98de35..c0888af37a1 100644
  
  namespace android {
  
-@@ -291,6 +294,109 @@ void NanoMenu::buildTimezoneList() {
+@@ -291,6 +294,110 @@ void NanoMenu::buildTimezoneList() {
      }
  }
  
 +// Online at the time zone step: set the clock from the internet and look the zone up from the
 +// connection's IP address (ipapi.co, then ip-api.com), off the render thread.
 +void NanoMenu::tzAutoDetectAsync() {
-+    int idle = 0;
-+    if (!mTzAutoState.compare_exchange_strong(idle, 1)) return;   // once per setup
++    int st = mTzAutoState.load();
++    if (st == 1 || st == 2) return;   // running, or found: once per setup; a failure tries again
++    if (!mTzAutoState.compare_exchange_strong(st, 1)) return;
 +    std::thread([this]() {
 +        mTzAutoClockSet = setClockFromInternet();
 +        auto fetch = [](const char* cmd) {
@@ -7221,7 +7322,7 @@ index b44ae98de35..c0888af37a1 100644
  // ---------------------------------------------------------------------------
  // Setup script
  // ---------------------------------------------------------------------------
-@@ -499,6 +605,9 @@ void NanoMenu::updateSetupTransition() {
+@@ -499,6 +606,9 @@ void NanoMenu::updateSetupTransition() {
              mMenuState = MENU_SETUP_WIZARD;
              buildTimezoneList();
              beginTzGlobeFade();
@@ -7231,7 +7332,7 @@ index b44ae98de35..c0888af37a1 100644
          } else {
              mMenuState = MENU_SETUP_WIZARD;
          }
-@@ -533,11 +642,12 @@ void NanoMenu::handleSetupSelect() {
+@@ -533,11 +643,12 @@ void NanoMenu::handleSetupSelect() {
      case SETUP_TIMEZONE:
          // A selects the highlighted timezone and advances
          if (!mTzEntries.empty()) {
@@ -7247,7 +7348,7 @@ index b44ae98de35..c0888af37a1 100644
          }
          advanceSetupStep();
          break;
-@@ -662,9 +772,10 @@ void NanoMenu::handleSetupStart() {
+@@ -662,9 +773,10 @@ void NanoMenu::handleSetupStart() {
          // Apply selected timezone before advancing
          if (!mTzEntries.empty()) {
              char cmd[256];
@@ -9351,7 +9452,7 @@ index 8e387db4282..1527ffb5bec 100644
  
      // Grab DRM master early on non-Qualcomm SoCs to beat HWC.
 diff --git a/frameworks/base/cmds/gammaos-net/src/com/gammaos/net/BtSubcommand.java b/frameworks/base/cmds/gammaos-net/src/com/gammaos/net/BtSubcommand.java
-index c46516e1ccb..1d2cd3d65c7 100644
+index c46516e1ccb..497a59f664f 100644
 --- a/frameworks/base/cmds/gammaos-net/src/com/gammaos/net/BtSubcommand.java
 +++ b/frameworks/base/cmds/gammaos-net/src/com/gammaos/net/BtSubcommand.java
 @@ -497,7 +497,7 @@ public final class BtSubcommand {
@@ -9368,23 +9469,32 @@ index c46516e1ccb..1d2cd3d65c7 100644
          // null falls back to 0000. Clear any stale passkey we may have published
          // so the UI doesn't show an old one before this bond's request lands.
 -        final String pin = (args.length >= 4 && !args[3].isEmpty()) ? args[3] : null;
-+        // --ask: answer the requests that need the user (a PIN, a pass key typed here, a code
-+        // comparison) through the UI (askUser) instead of automatically.
++        // --ask: the requests that need the user (a PIN, a code comparison, a code to type on the
++        // device) go to the UI (askLoop) instead of being answered automatically.
 +        final boolean ask = args.length >= 4 && "--ask".equals(args[3]);
 +        final String pin = (!ask && args.length >= 4 && !args[3].isEmpty()) ? args[3] : null;
          clearPasskey();
          // The latch holder is shared between the broadcast receiver and
          // the main pair flow so we can re-arm it for a second (LE)
-@@ -551,7 +554,7 @@ public final class BtSubcommand {
-                                        int sendingUser) {
-                 callbackHandler.post(() -> handlePairIntent(
-                         intent, addr, finalBond, doneHolder[0],
--                        callbackHandler, pin));
-+                        callbackHandler, pin, ask));
-             }
-         };
-         IntentFilter f = new IntentFilter();
-@@ -639,6 +642,12 @@ public final class BtSubcommand {
+@@ -580,7 +583,16 @@ public final class BtSubcommand {
+         // it starts BluetoothPairingDialog on display 0, which in the
+         // Nano UI's fullscreen DRM scanout is both visually wrong and
+         // unreachable (no input method, no gamepad focus).
+-        android.os.SystemProperties.set("sys.gammaos.bt_autopair", "1");
++        // --ask: the stack leaves a PIN, a code comparison or a code to type on the device to
++        // the asker thread below instead (sys.gammaos.bt.pair_ask).
++        android.os.SystemProperties.set("sys.gammaos.bt.pair_ask", "");
++        android.os.SystemProperties.set("sys.gammaos.bt_autopair", ask ? "ask" : "1");
++        final boolean[] pairDone = { false };
++        if (ask) {
++            Thread asker = new Thread(() -> askLoop(dev, pairDone), "gammaos-net-bt-ask");
++            asker.setDaemon(true);
++            asker.start();
++        }
+         try {
+             // Pick the transport based on what the stack thinks the device
+             // is. Trust getType(): if the LE scanner saw the peripheral,
+@@ -639,10 +651,16 @@ public final class BtSubcommand {
                  doneHolder[0].await(15, TimeUnit.SECONDS);
                  bondResult = finalBond[0];
              }
@@ -9397,21 +9507,75 @@ index c46516e1ccb..1d2cd3d65c7 100644
              // Only fall back to the other transport when the first attempt genuinely
              // FAILED back to BOND_NONE. Never removeBond() a BONDING/BONDED device.
              if (bondResult == BluetoothDevice.BOND_NONE
-@@ -717,11 +726,54 @@ public final class BtSubcommand {
+-                    && fallbackTransport != 0) {
++                    && fallbackTransport != 0 && !sDeclined) {
+                 System.err.println("gammaos-net bt: transport " + firstTransport
+                         + " bond failed (final=" + bondResult + "), retrying transport "
+                         + fallbackTransport);
+@@ -667,8 +685,10 @@ public final class BtSubcommand {
+                 }
+             }
+         } finally {
++            pairDone[0] = true;
+             try {
+                 android.os.SystemProperties.set("sys.gammaos.bt_autopair", "0");
++                android.os.SystemProperties.set("sys.gammaos.bt.pair_ask", "");
+                 clearPasskey();
+             } catch (Throwable ignored) { }
+             if (receiverRegistered) {
+@@ -717,6 +737,80 @@ public final class BtSubcommand {
          return finalBond[0];
      }
  
 +    // While the user answers a pairing prompt, pair() keeps waiting until this uptime.
 +    private static volatile long sAskUntilMs;
++    // The user declined the pairing (or let its prompt time out): no retry on the other transport.
++    private static volatile boolean sDeclined;
++
++    // pair --ask: take the requests the stack left pending (sys.gammaos.bt.pair_ask) to the UI, and
++    // a Back on the UI's "Registering..." screen (sys.gammaos.bt.pair_reply = cancel) as a cancel.
++    private static void askLoop(BluetoothDevice d, boolean[] done) {
++        while (!done[0]) {
++            try { Thread.sleep(100); } catch (InterruptedException e) { return; }
++            String req = android.os.SystemProperties.get("sys.gammaos.bt.pair_ask", "");
++            if (!req.isEmpty()) {
++                android.os.SystemProperties.set("sys.gammaos.bt.pair_ask", "");
++                int tab = req.indexOf('\t');
++                String key = tab < 0 ? "" : req.substring(tab + 1);
++                int variant;
++                try { variant = Integer.parseInt(tab < 0 ? req : req.substring(0, tab)); }
++                catch (NumberFormatException e) { continue; }
++                if (variant == 4 || variant == 5) {
++                    // A code to type on the device: the UI shows it on "Registering...".
++                    sAskUntilMs = android.os.SystemClock.uptimeMillis() + 65000;
++                    try { publishPasskey(variant, Integer.parseInt(key)); }
++                    catch (NumberFormatException ignored) { }
++                } else {
++                    askUser(d, variant, key);
++                }
++                continue;
++            }
++            if ("cancel".equals(android.os.SystemProperties.get("sys.gammaos.bt.pair_reply", ""))) {
++                android.os.SystemProperties.set("sys.gammaos.bt.pair_reply", "");
++                decline(d);
++            }
++        }
++    }
++
++    private static void decline(BluetoothDevice d) {
++        sDeclined = true;
++        sAskUntilMs = 0;
++        try { d.cancelBondProcess(); }
++        catch (Throwable t) { System.err.println("pair: cancel failed: " + t); }
++    }
 +
 +    // Ask the UI to answer a pairing request: publishes sys.gammaos.bt.pair_request
 +    // ("<variant>\t<pass key>") and waits for sys.gammaos.bt.pair_reply ("pin <digits>",
-+    // "confirm" or "cancel"). Runs on its own thread so the bond broadcasts keep flowing.
-+    private static void askUser(BluetoothDevice d, int variant, int key) {
++    // "confirm" or "cancel"). No answer within a minute declines it.
++    private static void askUser(BluetoothDevice d, int variant, String key) {
 +        sAskUntilMs = android.os.SystemClock.uptimeMillis() + 65000;
 +        android.os.SystemProperties.set("sys.gammaos.bt.pair_reply", "");
-+        android.os.SystemProperties.set("sys.gammaos.bt.pair_request", variant + "\t"
-+                + (variant == 2 && key >= 0 ? String.format("%06d", key) : ""));
++        android.os.SystemProperties.set("sys.gammaos.bt.pair_request", variant + "\t" + key);
 +        String reply = "";
 +        try {
 +            for (int i = 0; i < 600 && reply.isEmpty(); i++) {
@@ -9423,21 +9587,14 @@ index c46516e1ccb..1d2cd3d65c7 100644
 +        android.os.SystemProperties.set("sys.gammaos.bt.pair_request", "");
 +        android.os.SystemProperties.set("sys.gammaos.bt.pair_reply", "");
 +        sAskUntilMs = android.os.SystemClock.uptimeMillis() + 30000;   // time for the bond to land
++        if (d.getBondState() != BluetoothDevice.BOND_BONDING) return;   // the device gave up
 +        try {
 +            if (reply.startsWith("pin ")) {
-+                String p = reply.substring(4).trim();
-+                if (variant == 1) {
-+                    BluetoothDevice.class.getMethod("setPasskey", int.class)
-+                            .invoke(d, Integer.parseInt(p));
-+                } else {
-+                    d.setPin(p.getBytes(StandardCharsets.UTF_8));
-+                }
++                d.setPin(reply.substring(4).trim().getBytes(StandardCharsets.UTF_8));
 +            } else if (reply.equals("confirm")) {
 +                d.setPairingConfirmation(true);
 +            } else {
-+                sAskUntilMs = 0;
-+                try { BluetoothDevice.class.getMethod("cancelPairing").invoke(d); }
-+                catch (Throwable t) { d.setPairingConfirmation(false); }
++                decline(d);
 +            }
 +        } catch (Throwable t) {
 +            System.err.println("pair: answer variant=" + variant + " failed: " + t);
@@ -9447,23 +9604,18 @@ index c46516e1ccb..1d2cd3d65c7 100644
      private static void handlePairIntent(Intent intent, String addr,
                                           int[] finalBond,
                                           CountDownLatch done,
-                                          Handler callbackHandler,
--                                         String pin) {
-+                                         String pin, boolean ask) {
-         BluetoothDevice d = intent.getParcelableExtra(
-                 BluetoothDevice.EXTRA_DEVICE);
-         if (d == null || !addr.equals(d.getAddress())) return;
-@@ -734,6 +786,10 @@ public final class BtSubcommand {
-             // Surface the system-generated passkey to the UI so the user can
-             // verify it (confirmation) or type it on the remote (display).
-             publishPasskey(variant, key);
-+            if (ask && (variant == 0 || variant == 1 || variant == 2)) {
-+                new Thread(() -> askUser(d, variant, key), "gammaos-net-bt-ask").start();
-+                return;
-+            }
-             // Auto-accept the kinds of pairing that Settings'
-             // BluetoothPairingController handles without user input, and use
-             // the user-supplied PIN (falling back to 0000) for classic PIN
+@@ -993,10 +1087,7 @@ public final class BtSubcommand {
+                     dev.setPairingConfirmation(true);
+                 }
+             } else {
+-                try { BluetoothDevice.class.getMethod("cancelPairing").invoke(dev); }
+-                catch (Throwable t) {
+-                    try { dev.setPairingConfirmation(false); } catch (Throwable ignored) { }
+-                }
++                dev.cancelBondProcess();
+             }
+             System.out.println("OK");
+             return 0;
 diff --git a/frameworks/base/services/core/java/com/android/server/policy/GammaHotkeyController.java b/frameworks/base/services/core/java/com/android/server/policy/GammaHotkeyController.java
 new file mode 100644
 index 00000000000..c88863fc79b
@@ -9789,16 +9941,17 @@ index 00000000000..c88863fc79b
 +    }
 +}
 diff --git a/frameworks/base/services/core/java/com/android/server/policy/PhoneWindowManager.java b/frameworks/base/services/core/java/com/android/server/policy/PhoneWindowManager.java
-index 0d7e69d0a6b..10109db7da6 100644
+index 0d7e69d0a6b..3461d56c380 100644
 --- a/frameworks/base/services/core/java/com/android/server/policy/PhoneWindowManager.java
 +++ b/frameworks/base/services/core/java/com/android/server/policy/PhoneWindowManager.java
-@@ -1888,6 +1888,74 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -1888,6 +1888,75 @@ public class PhoneWindowManager implements WindowManagerPolicy {
          }
      }
  
 +    // GammaOS Nano: closes a standalone app (unless it is kept running in the background) and
 +    // returns to the nano menu.
 +    private void nanoStopAppToHome(String fgApp) {
++        nanoChordReset();
 +        // Per-app "Keep Running in Background" allowlist (persist.gammaos.nano.background_pkgs,
 +        // set from nano's per-app option menu): leave the app alive on exit so re-launching it
 +        // resumes warm. We still raise the nano menu and clear the launch state below; we only
@@ -9867,7 +10020,7 @@ index 0d7e69d0a6b..10109db7da6 100644
      private void backLongPress() {
          // GammaOS Nano: in nano mode, long-press back handles app exit.
          // RetroArch / DraStic: send ESC (save state, close gracefully).
-@@ -1942,69 +2010,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -1942,69 +2011,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
              // For standalone emulators (PPSSPP, Flycast, Mupen64Plus, etc.):
              // force-stop the app and signal nano menu restart
              if (fgApp != null) {
@@ -9938,7 +10091,15 @@ index 0d7e69d0a6b..10109db7da6 100644
                  return;
              }
          }
-@@ -2608,6 +2614,119 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -2553,6 +2560,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+     }
+ 
+     private void nanoKillAppAndRestart(boolean hardKill) {
++        nanoChordReset();
+         // Cancel any pending emergency exit timer
+         mHandler.removeCallbacks(mNanoBackEmergencyRunnable);
+         mNanoBackEmergencyPending = false;
+@@ -2608,6 +2616,130 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                          "init.svc.gammaos-nano-overlay", ""));
      }
  
@@ -10022,11 +10183,22 @@ index 0d7e69d0a6b..10109db7da6 100644
 +                || keyCode == KeyEvent.KEYCODE_DPAD_CENTER;
 +    }
 +
-+    // The button for a hotkey: persist.gammaos.hotkeys.<action> holds a keycode name (BUTTON_R1).
++    // The button for a hotkey: persist.gammaos.hotkeys.<action> holds a keycode name (BUTTON_R1),
++    // or NONE for off; unset is the default button.
 +    private static int nanoHotkeyButton(String action, int def) {
 +        final String name = SystemProperties.get("persist.gammaos.hotkeys." + action, "");
-+        final int code = name.isEmpty() ? KeyEvent.KEYCODE_UNKNOWN : KeyEvent.keyCodeFromString(name);
-+        return code == KeyEvent.KEYCODE_UNKNOWN ? def : code;
++        if (name.isEmpty()) return def;
++        final int code = KeyEvent.keyCodeFromString(name);
++        return code == KeyEvent.KEYCODE_UNKNOWN ? -1 : code;
++    }
++
++    // Forgets the Anbernic chord: an app that stops while its buttons are held never sends the
++    // key-ups to here (drop_input holds them back while the overlay is up).
++    private void nanoChordReset() {
++        mNanoChordArmed = false;
++        mNanoChordUsed = false;
++        mNanoChordKeys.clear();
++        mHandler.removeCallbacks(mNanoQuitHold);
 +    }
 +
 +    // Anbernic + a button over a running app: the hotkey bound to the button, if any.
@@ -10058,7 +10230,15 @@ index 0d7e69d0a6b..10109db7da6 100644
      // GammaOS Nano: schedule (on key-down) or cancel (on key-up) the 10s emergency-recovery
      // hold. Shared by BACK and BTN_MODE so either can trigger it - the retro gamepad emits
      // BTN_MODE (Generic.kl -> BUTTON_MODE), not a BACK keycode, so MODE is the reachable key
-@@ -6872,6 +6991,57 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -6825,6 +6957,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+                         "sys.gammaos.nano.app_launched", "0"))
+                 && !"1".equals(android.os.SystemProperties.get(
+                         "sys.gammaos.nano.show_overlay", "0"))) {
++            nanoPowerOffHold(down, event);   // the 7 s shutdown holds here too (a drastic-nano game)
+             return 0; // consume: don't queue, don't wake, don't sleep
+         }
+         // Keep an accurate "physical BACK" signal for combo logic
+@@ -6872,6 +7005,74 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                  || keyCode == KeyEvent.KEYCODE_BUTTON_MODE) {
              nanoEmergencyHoldKey(down);
          }
@@ -10072,10 +10252,23 @@ index 0d7e69d0a6b..10109db7da6 100644
 +        }
 +        // GammaOS Nano: the rest of a button used in an Anbernic chord (its repeats and key-up),
 +        // even once the Anbernic button is up, so the app never sees half a press.
++        // A fresh press of one (not a repeat: same down and event time) whose key-up went missing
++        // is a new press.
++        if (mNanoChordKeys.get(keyCode) && down && !mNanoChordArmed
++                && event.getEventTime() == event.getDownTime()) {
++            mNanoChordKeys.delete(keyCode);
++        }
 +        if (mNanoChordKeys.get(keyCode)) {
 +            if (!down) {
 +                mNanoChordKeys.delete(keyCode);
-+                mHandler.removeCallbacks(mNanoQuitHold);
++                // The quit button let go before its hold: cancel the quit, queued behind the
++                // nanoHotkey call that starts it.
++                final int released = keyCode;
++                mHandler.post(() -> {
++                    if (released == nanoHotkeyButton("quit", KeyEvent.KEYCODE_BUTTON_START)) {
++                        mHandler.removeCallbacks(mNanoQuitHold);
++                    }
++                });
 +            }
 +            return 0;
 +        }
@@ -10084,7 +10277,9 @@ index 0d7e69d0a6b..10109db7da6 100644
 +        // hotkey instead. Once the overlay is up, nano reads the button itself.
 +        if (mNanoChordArmed) {
 +            if (anbernicKey) {
-+                if (!down) {
++                if (down && event.getEventTime() == event.getDownTime()) {
++                    mNanoChordUsed = false;   // a new press: the last one's key-up went missing
++                } else if (!down) {
 +                    mNanoChordArmed = false;
 +                    // Past 10 s the hold was the emergency recovery, not a Quick Menu press.
 +                    if (!mNanoChordUsed && event.getEventTime() - event.getDownTime() < 10000
@@ -10097,7 +10292,9 @@ index 0d7e69d0a6b..10109db7da6 100644
 +                }
 +                return 0;
 +            }
-+            if (down && (KeyEvent.isGamepadButton(keyCode) || nanoIsDpadKey(keyCode))) {
++            if (down && (KeyEvent.isGamepadButton(keyCode) || nanoIsDpadKey(keyCode))
++                    && (policyFlags & WindowManagerPolicy.FLAG_INJECTED) == 0   // a hotkey's own key
++                    && SystemProperties.getBoolean("persist.gammaos.hotkeys.enable", true)) {
 +                if (nanoAnbernicPhysicallyHeld()) {
 +                    mNanoChordUsed = true;
 +                    mNanoChordKeys.put(keyCode, true);
@@ -10116,7 +10313,7 @@ index 0d7e69d0a6b..10109db7da6 100644
          boolean isWakeKey = (policyFlags & WindowManagerPolicy.FLAG_WAKE) != 0
                  || event.isWakeKey();
  
-@@ -7301,6 +7471,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -7301,6 +7502,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
              }
  
              case KeyEvent.KEYCODE_POWER: {
@@ -10148,3 +10345,43 @@ index 2d1141f2ad2..15fc4cbbe5f 100644
                      // Check if nano menu requested a specific game launch
                      String launchRom = getNanoLaunchRom();
                      String launchCore = android.os.SystemProperties.get(
+diff --git a/packages/modules/Bluetooth/android/app/src/com/android/bluetooth/btservice/BondStateMachine.java b/packages/modules/Bluetooth/android/app/src/com/android/bluetooth/btservice/BondStateMachine.java
+index bd714284560..7e395cc0705 100644
+--- a/packages/modules/Bluetooth/android/app/src/com/android/bluetooth/btservice/BondStateMachine.java
++++ b/packages/modules/Bluetooth/android/app/src/com/android/bluetooth/btservice/BondStateMachine.java
+@@ -485,6 +485,35 @@ final class BondStateMachine extends StateMachine {
+             device.setPairingConfirmation(true);
+             return;
+         }
++        // GammaOS Nano, `gammaos-net bt pair --ask` (sys.gammaos.bt_autopair=ask): just-works
++        // and consent pairings go ahead, while a PIN, a code comparison or a code to type on the
++        // device is handed to the Nano UI through sys.gammaos.bt.pair_ask ("<variant>\t<key>")
++        // and the request is left pending for it to answer, with Settings' dialog suppressed.
++        if (device != null && device.isBondingInitiatedLocally()
++                && "ask".equals(android.os.SystemProperties.get(
++                        "sys.gammaos.bt_autopair", "0"))) {
++            if (variant == 3 || variant == 6) {   // CONSENT, OOB_CONSENT
++                try {
++                    device.setPairingConfirmation(true);
++                } catch (Throwable t) {
++                    Log.w(TAG, "gammaos ask: confirm variant=" + variant + " failed: " + t);
++                }
++                return;
++            }
++            if (variant == 0 || variant == 2 || variant == 4 || variant == 5 || variant == 7) {
++                String key = (maybePin.isPresent()
++                        && (variant == 2 || variant == 4 || variant == 5))
++                        ? String.format("%06d", maybePin.get()) : "";
++                try {
++                    Class.forName("android.os.SystemProperties")
++                            .getMethod("set", String.class, String.class)
++                            .invoke(null, "sys.gammaos.bt.pair_ask", variant + "\t" + key);
++                } catch (Throwable t) {
++                    Log.w(TAG, "gammaos ask: publish failed: " + t);
++                }
++                return;
++            }
++        }
+         // GammaOS Nano: when a pair is driven by the gammaos-net helper
+         // (which sets sys.gammaos.bt_autopair=1 for the duration of a
+         // createBond call), auto-confirm the common just-works/consent

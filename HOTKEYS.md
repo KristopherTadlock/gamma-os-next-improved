@@ -133,11 +133,12 @@ Profiles are JSON files, one per emulator:
 
 ### Provisioning
 
-Nano applies every profile's `provision` rules on a background thread when it starts and each time it comes back to the front. It skips the app that is running then, which may write its settings back when it exits. Every launch starts from Nano, so the bindings are in place before the emulator reads them, and they come back if an emulator rewrites its file.
+Nano applies every profile's `provision` rules on a background thread when it starts and each time it comes back to the front, one run at a time. It skips emulators with a running process, which may write their settings back when they exit, and leaves a file the emulator changed while Nano was editing it for the next run. Every launch starts from Nano, so the bindings are in place before the emulator reads them, and they come back if an emulator rewrites its file. With Universal Hotkeys off, nothing is provisioned.
 
 **Rules:**
 - Only files that already exist are edited (the emulator has run once). A rule with `"template"` creates the file from it when the emulator's folder exists.
-- `${sdcard}` is `/storage/emulated/0`, which keeps file ownership right on shared storage. Files in `/data/data/<pkg>` keep their owner and mode.
+- `${sdcard}` is `/storage/emulated/0`, which keeps file ownership right on shared storage. An edited file keeps its owner and mode; a file made from a template takes its folder's owner, mode 0660.
+- A value can be a string or a number. Files are replaced through a temporary file that is synced first.
 
 **Modes, for each value:**
 
