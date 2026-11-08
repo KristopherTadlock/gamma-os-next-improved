@@ -189,6 +189,12 @@ It also changes Nano:
   `ro.gammaos.nano.no_slide`).
 - **Android Games:** Nano starts an entry as the game's own app rather than
   through the helper app, so it follows the game like any other.
+- **Boxart Scraper** is faster. Covers and fan art for every game come first
+  and show as each one lands; screenshots, manuals and videos follow, lighter
+  media first. Requests reuse their connections. A ScreenScraper account that
+  allows several requests at once (its `maxthreads`) gets that many, up to 4;
+  without a user account, or when the limit cannot be read, and for
+  TheGamesDB, the scraper makes one request at a time.
 - **4:3 Cropped** is a new global shader (Nano's Global Shaders, the video
   player's shader choice and the ShaderControl app). It works on the picture a
   standalone emulator draws, not on the whole screen: the game is stretched to
