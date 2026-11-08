@@ -927,7 +927,7 @@ index 00000000000..69a466875bb
 +}  // namespace nanohotkeys
 +}  // namespace android
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenu.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenu.cpp
-index dcd7bbaf475..1567922b201 100644
+index dcd7bbaf475..5465bddc381 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenu.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenu.cpp
 @@ -75,6 +75,7 @@ extern "C" uint32_t __system_property_serial(const prop_info* __pi);
@@ -947,7 +947,21 @@ index dcd7bbaf475..1567922b201 100644
      }
      openInputDevices();
      if (!sDrasticQrFastPath) {
-@@ -4058,6 +4059,7 @@ if (sRingPrimedCount >= 2) {
+@@ -1464,8 +1465,11 @@ bool NanoMenu::threadLoop() {
+ 
+     // readyToRun() sets service.bootanim.exit=1 to kill the vendor bootanim.
+     // Reset it here so our own exit check (further below) doesn't immediately
+-    // terminate the menu on restarts.
+-    property_set("service.bootanim.exit", "0");
++    // terminate the menu on restarts. Home only, as in readyToRun: the overlay
++    // starts at the first app launch, after init has set it for the hand-off, and
++    // PhoneWindowManager reads it as "the app has taken over" (the Anbernic button,
++    // the long-press-Back exit).
++    if (!mOverlayMode) property_set("service.bootanim.exit", "0");
+ 
+     // Wait for persistent properties to load before reading any persist.*
+     // values. readyToRun() used to wait for ro.persistent_properties.ready
+@@ -4058,6 +4062,7 @@ if (sRingPrimedCount >= 2) {
          // the screen-off park at ~3455 used to skip render() and freeze the heartbeat.)
          mRenderHeartbeat.fetch_add(1, std::memory_order_relaxed);
          if (!mWatchdogStarted) { mWatchdogStarted = true; startRenderWatchdog(); }
@@ -955,7 +969,7 @@ index dcd7bbaf475..1567922b201 100644
  
          // GammaOS hardware-rotate (force-SF): SurfaceFlinger is pinned at ROTATION_0 for nano's
          // layer (DisplayRotation forces the angle from sys.gammaos.rotate.state whenever nano is
-@@ -4624,6 +4626,7 @@ if (sRingPrimedCount >= 2) {
+@@ -4624,6 +4629,7 @@ if (sRingPrimedCount >= 2) {
              // to the launched card (pollInput does this for every other launch; this path
              // exits below without ever reaching it).
              if (mNdsTheme && mPs3Xmb) ndsSaveReturnPath();
@@ -963,7 +977,7 @@ index dcd7bbaf475..1567922b201 100644
              // Clear the stale stock-DraStic launch state the standalone XMB launch
              // path set (launch_app=com.dsemu.drastic + launch_intent=file). This
              // DRM-direct path runs the drastic-nano BINARY via start=1 and never uses
-@@ -5095,6 +5098,7 @@ if (sRingPrimedCount >= 2) {
+@@ -5095,6 +5101,7 @@ if (sRingPrimedCount >= 2) {
                  sOvlAudioWake = false;
              }
              if (screenOff) {
@@ -971,7 +985,7 @@ index dcd7bbaf475..1567922b201 100644
                  usleep(250000);   // 4Hz idle poll while the panel is off (no audio)
                  continue;
              }
-@@ -5162,6 +5166,7 @@ if (sRingPrimedCount >= 2) {
+@@ -5162,6 +5169,7 @@ if (sRingPrimedCount >= 2) {
              if (screenOff) {
                  // The screen stays on during a system update: wake it again (see otaScreenOffTick).
                  if (mOtaFlowActive) otaScreenOffTick();
@@ -979,7 +993,7 @@ index dcd7bbaf475..1567922b201 100644
                  usleep(250000);   // 4Hz idle while the framework holds the panel off
                  continue;
              }
-@@ -5239,7 +5244,6 @@ if (sRingPrimedCount >= 2) {
+@@ -5239,7 +5247,6 @@ if (sRingPrimedCount >= 2) {
              }
          }
  
@@ -987,7 +1001,7 @@ index dcd7bbaf475..1567922b201 100644
          if (!ndsIdleSkip) {
          mMinimaWantsFrame = false;   // the Minima renderer re-arms it while anything animates
          render();
-@@ -5830,6 +5834,13 @@ if (sRingPrimedCount >= 2) {
+@@ -5830,6 +5837,13 @@ if (sRingPrimedCount >= 2) {
                  // the media drains below) because a scrape runs while the user is
                  // deep in the Settings submenu with the progress modal up.
                  scraperDrainResults();
@@ -1001,7 +1015,7 @@ index dcd7bbaf475..1567922b201 100644
  
                  // IPTV: rebuild the open channel-groups screen when the background fetch/
                  // parse finishes. Must run every frame (not only at the settled XMB root)
-@@ -5996,6 +6007,7 @@ if (sRingPrimedCount >= 2) {
+@@ -5996,6 +6010,7 @@ if (sRingPrimedCount >= 2) {
          // wallpaper so the app (or a later video clip) can use it, and stop burning power decoding a
          // background the user cannot see.
          if (mWpVideoTop) wpVideoStop();

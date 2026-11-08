@@ -232,9 +232,11 @@ It also changes Nano:
 - **ES-DE menu → Applications** no longer locks the console up when it starts
   an app from the boot home: it hands off like every other launch instead of
   starting the app behind the home, which kept the screen and the controls.
-- **Back to the right game list after the first game:** the overlay home,
-  which starts at the first launch, returns to the system and game the
-  launch came from, as it already did for later launches.
+- **The first game after boot:** the Anbernic button opens the Quick Menu and
+  holding Back returns to the game list it was launched from. The overlay home,
+  which starts at that first launch, reset the hand-off signal
+  (`service.bootanim.exit`) the framework reads as "the app has taken over", and
+  it now restores the system and game the launch came from.
 - **ES-DE menu:** B at the top of the menu closes it.
 
 1.4.4 adds GammaOS Nano, a console-style home. The build makes the device
