@@ -174,6 +174,9 @@ It also changes Nano:
     emulator for that game), Rename / Edit Title, Set Boxart, Scrape This Game,
     Favorites, Collections, Information and Search Games. The XMB's game option
     menu gets Emulator for This Game too.
+- **Game lists** put favourites first, each part in name order.
+- **Game information** pages turn a full page at a time with the shoulder
+  buttons, the last line of a page repeated at the top of the next.
 - **Background Colour** (Theme Settings) gets a Custom option with a colour
   picker.
 - **Slide Behaviour** is hidden on devices that cannot slide (the build sets
