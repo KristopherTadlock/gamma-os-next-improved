@@ -56,9 +56,9 @@ It runs while a game is in front (`app_launched`, overlay down, not in a drastic
 3. **Anbernic up:**
    - after a chord: nothing more;
    - alone, within 3 s: the overlay rises on the Quick Menu.
-4. **Hold to quit:** the Anbernic button held on its own for 3 s runs quit, and its release opens nothing. Any other key pressed during the hold cancels it. A hold of 10 s is still the emergency recovery (now also from the RG Cube's `F10` Anbernic button), for an app that does not close.
-5. **Start + Select:** the second of the two pressed while the other is held, with no other pad button down, arms the chord. Both keys still reach the app.
-   - A hotkey button pressed while it is armed runs its hotkey and is swallowed like an Anbernic chord. Any other key reaches the app.
+4. **Hold to quit:** the Anbernic button held on its own for 3 s runs quit, and its release opens nothing. Any other key pressed during the hold cancels it. With Universal Hotkeys off there is no hold to quit, and a release within 10 s opens the Quick Menu as before. The 10 s emergency recovery hold (BACK, or a pad's mode button) is unchanged, and checks the key is still down when it fires. The D-pad reaches Android as a hat axis, so over an Android app it doesn't cancel a hold.
+5. **Start + Select:** the second of the two pressed while the other is held, with no other pad button down, arms the chord. Both keys still reach the app. Their down state is tracked from the key events, and a chord whose key-ups went missing (the overlay holds them back) is dropped at the next key.
+   - A hotkey button pressed while both are held runs its hotkey and is swallowed like an Anbernic chord. Any other key reaches the app. A game's own combination that starts with Start + Select and then adds a hotkey button (L + R + Start + Select resets DS games) runs the hotkeys instead; *Start + Select Hotkeys* off avoids that.
    - Held for 3 s with nothing else pressed, it runs quit. Any other key, or Start or Select pressed again, cancels the hold until both are let go.
    - It never opens the Quick Menu over a game.
    - *Start + Select Hotkeys* (`persist.gammaos.hotkeys.startselect`) turns it off.

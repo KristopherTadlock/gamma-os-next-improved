@@ -215,8 +215,13 @@ It also changes Nano:
 - **Hold to quit:** holding the Anbernic button, or Start + Select, on its own
   for 3 seconds closes the game; any other button pressed during the hold
   cancels it. This replaces Anbernic + Start (the Quit Game Button is now off
-  by default). The 10-second emergency recovery hold now also works from the
-  RG Cube's Anbernic button.
+  by default).
+- **Setup:** Wi-Fi comes before the time zone. With an internet connection,
+  setup sets the clock from the internet, finds the time zone from the
+  connection and picks the date and time formats that go with it, then shows
+  them on a **Date and Time** screen to confirm; the zone can be changed on the
+  globe (returning to that screen) and either format changed there. Offline,
+  setup goes to the globe as before.
 - **Quick Menu Bluetooth:** choosing On keeps the chooser open on Pair Device,
   and the connected devices appear as the radio comes up; Off closes it.
 - **Kiosk Mode:** Start opens and closes Applications instead of the ES-DE
