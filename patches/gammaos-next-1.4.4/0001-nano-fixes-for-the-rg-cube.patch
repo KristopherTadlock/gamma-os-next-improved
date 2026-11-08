@@ -2396,7 +2396,7 @@ index 38089f122b6..f2491964cb0 100644
      }
      mTextOutlineMode = minPrevOutline;
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuMtp.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuMtp.cpp
-index 8c9eff8851b..51ef082f573 100644
+index 8c9eff8851b..8cc02e6e293 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuMtp.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuMtp.cpp
 @@ -1,21 +1,28 @@
@@ -2440,7 +2440,23 @@ index 8c9eff8851b..51ef082f573 100644
  #include <dirent.h>
  #include <fcntl.h>
  #include <unistd.h>
-@@ -108,183 +115,129 @@ void mtpSetMediaModuleAdj(int pid, int adj) {
+@@ -69,12 +76,13 @@ bool mtpUsbOnline() {
+     return on;
+ }
+ 
+-// The ffs.mtp function is linked into the active gadget configuration.
++// The ffs.mtp function is linked into the active gadget configuration. The link's name depends on the
++// device's USB init script (AOSP "function0", Unisoc "f1"), so any link pointing at ffs.mtp counts.
+ bool mtpFunctionLinked() {
+     DIR* d = opendir("/config/usb_gadget/g1/configs/b.1"); if (!d) return false;
+     bool linked = false;
+     while (dirent* e = readdir(d)) {
+-        if (strncmp(e->d_name, "function", 8) != 0) continue;
++        if (e->d_name[0] == '.') continue;
+         std::string p = std::string("/config/usb_gadget/g1/configs/b.1/") + e->d_name;
+         char tgt[256]; ssize_t n = readlink(p.c_str(), tgt, sizeof(tgt) - 1);
+         if (n > 0) { tgt[n] = 0; if (strstr(tgt, "ffs.mtp")) { linked = true; break; } }
+@@ -108,183 +116,132 @@ void mtpSetMediaModuleAdj(int pid, int adj) {
      writeSmallFile(p, v);
  }
  
@@ -2606,6 +2622,9 @@ index 8c9eff8851b..51ef082f573 100644
 -        mDisplayDirty = true;
 -        if (on) mtpRejigAsync("cable connected");
 -        else { std::lock_guard<std::mutex> lk(mMtpMutex); mMtpStatus.clear(); }
++    // Applying a mode switches the gadget off and on, which can briefly read as an unplug: cable
++    // edges wait until it is done (a real unplug is still there to see then).
++    if (mUsbApplying && mUsbSeen) return;
 +    if (!mUsbSeen) {
 +        mUsbSeen = true;   // this process's first look: the cable was already there, or not
 +        mUsbOnline = on;
