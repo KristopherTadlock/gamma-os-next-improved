@@ -1,0 +1,28 @@
+{
+  "id": "ppsspp",
+  "name": "PPSSPP",
+  "packages": ["org.ppsspp.ppsspp", "org.ppsspp.ppssppgold"],
+  "note": "Rewind steps back one snapshot per press, once Rewind is turned on in PPSSPP's settings.",
+  "actions": {
+    "save_state": {"driver": "key", "key": "F2"},
+    "load_state": {"driver": "key", "key": "F4"},
+    "fast_forward": {"driver": "key_hold", "key": "F6"},
+    "rewind": {"driver": "key", "key": "F7"},
+    "quit": {"driver": "exit"}
+  },
+  "provision": [
+    {
+      "file": "${sdcard}/PSP/SYSTEM/controls.ini",
+      "format": "ini",
+      "section": "ControlMapping",
+      "mode": "append",
+      "separator": ",",
+      "values": {
+        "Save State": "1-132,0-132",
+        "Load State": "1-134,0-134",
+        "Fast-forward": "1-136,0-136",
+        "Rewind": "1-137,0-137"
+      }
+    }
+  ]
+}

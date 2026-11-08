@@ -1,0 +1,13 @@
+{
+  "id": "dolphin",
+  "name": "Dolphin",
+  "packages": ["org.dolphinemu.dolphinemu", "org.dolphinemu.mmjr"],
+  "note": "This Dolphin build has no hotkeys, so only quit is universal.",
+  "actions": {
+    "save_state": {"driver": "none"},
+    "load_state": {"driver": "none"},
+    "fast_forward": {"driver": "none"},
+    "rewind": {"driver": "none"},
+    "quit": {"driver": "exit"}
+  }
+}

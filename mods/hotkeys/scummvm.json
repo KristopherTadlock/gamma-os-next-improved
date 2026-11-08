@@ -1,0 +1,13 @@
+{
+  "id": "scummvm",
+  "name": "ScummVM",
+  "packages": ["org.scummvm.scummvm"],
+  "note": "Fast forward works in LucasArts (SCUMM) games. Games save and load from their own menus.",
+  "actions": {
+    "save_state": {"driver": "none"},
+    "load_state": {"driver": "none"},
+    "fast_forward": {"driver": "key_toggle", "key": "F", "mods": ["CTRL"]},
+    "rewind": {"driver": "none"},
+    "quit": {"driver": "key", "key": "Q", "mods": ["CTRL"], "then": "exit", "timeout_ms": 3000}
+  }
+}

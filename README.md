@@ -144,10 +144,16 @@ It also changes Nano:
   External Display submenu, the same as in Display Settings. System Settings is
   renamed Android Settings and sits at the bottom. Close Current App and Screen
   Orientation only show over a running app.
-- **Anbernic button:** opens the Quick Menu, on the home screen and over a
-  running game (pressing it again goes back to the game). The RG Cube reports it
-  as F10. **Toolbox → Anbernic Button Opens Quick Menu** gives the button back
-  to games.
+- **Anbernic button:** opens the Quick Menu when it is released, on the home
+  screen and over a running game (pressing it again, or B, goes back to the
+  game). The RG Cube reports it as F10. **Toolbox → Anbernic Button Opens Quick
+  Menu** gives the button back to games.
+- **Universal hotkeys:** in a game, hold the Anbernic button and press R1 to
+  save, L1 to load, R2 for fast forward, L2 for rewind, or hold Start to quit,
+  in every emulator that can (**Gamepad Settings → Hotkeys** changes the buttons
+  and lists what each emulator supports). [HOTKEYS.md](HOTKEYS.md) describes
+  it; `mods/55-hotkeys.sh` installs the emulator profiles from `mods/hotkeys`.
+- **Power button:** held for 7 seconds, it shuts the console down.
 - **USB Settings:** the mode you choose (Charging Only, File Transfer (MTP),
   Photo Transfer (PTP) or USB Ethernet (RNDIS)) stays on and is applied each
   time a computer is connected, from boot onwards. File Transfer is the default.

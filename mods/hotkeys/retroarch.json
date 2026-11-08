@@ -1,0 +1,26 @@
+{
+  "id": "retroarch",
+  "name": "RetroArch",
+  "packages": ["com.retroarch.aarch64", "com.retroarch", "com.retroarch.ra32"],
+  "note": "Rewind works where the core supports it and Rewind is turned on in RetroArch's settings.",
+  "actions": {
+    "save_state": {"driver": "key", "key": "F2"},
+    "load_state": {"driver": "key", "key": "F4"},
+    "fast_forward": {"driver": "key_toggle", "key": "SPACE"},
+    "rewind": {"driver": "key_hold", "key": "R"},
+    "quit": {"driver": "exit"}
+  },
+  "provision": [
+    {
+      "file": "${sdcard}/Android/data/com.retroarch.aarch64/files/retroarch.cfg",
+      "format": "retroarch_cfg",
+      "mode": "add",
+      "values": {
+        "input_save_state": "f2",
+        "input_load_state": "f4",
+        "input_toggle_fast_forward": "space",
+        "input_rewind": "r"
+      }
+    }
+  ]
+}

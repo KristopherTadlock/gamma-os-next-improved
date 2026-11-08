@@ -1,0 +1,20 @@
+{
+  "id": "flycast",
+  "name": "Flycast",
+  "packages": ["com.flycast.emulator"],
+  "actions": {
+    "save_state": {"driver": "key", "key": "F2"},
+    "load_state": {"driver": "key", "key": "F4"},
+    "fast_forward": {"driver": "key_toggle", "key": "F6"},
+    "rewind": {"driver": "none"},
+    "quit": {"driver": "exit"}
+  },
+  "provision": [
+    {
+      "file": "${sdcard}/Android/data/com.flycast.emulator/files/mappings/Android_Virtual.cfg",
+      "format": "flycast_mapping",
+      "template": "[emulator]\nmapping_name = Default\ndead_zone = 10\nsaturation = 100\nrumble_power = 100\nversion = 4\n\n[digital]\n",
+      "binds": ["132:btn_quick_save", "134:btn_jump_state", "136:btn_fforward"]
+    }
+  ]
+}

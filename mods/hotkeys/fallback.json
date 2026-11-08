@@ -1,0 +1,13 @@
+{
+  "id": "fallback",
+  "name": "Other apps",
+  "packages": ["*"],
+  "note": "Any app without its own profile.",
+  "actions": {
+    "save_state": {"driver": "none"},
+    "load_state": {"driver": "none"},
+    "fast_forward": {"driver": "none"},
+    "rewind": {"driver": "none"},
+    "quit": {"driver": "exit"}
+  }
+}

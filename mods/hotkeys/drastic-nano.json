@@ -1,0 +1,13 @@
+{
+  "id": "drastic-nano",
+  "name": "DraStic (Nano's DS player)",
+  "packages": [],
+  "note": "Built into drastic-nano, which reads the buttons itself. Save and load use quick save slot 0.",
+  "actions": {
+    "save_state": {"driver": "native"},
+    "load_state": {"driver": "native"},
+    "fast_forward": {"driver": "native"},
+    "rewind": {"driver": "none"},
+    "quit": {"driver": "native"}
+  }
+}

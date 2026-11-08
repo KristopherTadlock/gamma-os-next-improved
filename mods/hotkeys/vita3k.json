@@ -1,0 +1,13 @@
+{
+  "id": "vita3k",
+  "name": "Vita3K",
+  "packages": ["org.vita3k.emulator"],
+  "note": "Vita3K has no save states or fast forward.",
+  "actions": {
+    "save_state": {"driver": "none"},
+    "load_state": {"driver": "none"},
+    "fast_forward": {"driver": "none"},
+    "rewind": {"driver": "none"},
+    "quit": {"driver": "exit"}
+  }
+}

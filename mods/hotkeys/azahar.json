@@ -1,0 +1,26 @@
+{
+  "id": "azahar",
+  "name": "Azahar",
+  "packages": ["org.azahar_emu.azahar"],
+  "note": "Save and load use the quick save slot. Fast forward runs at Azahar's turbo speed. Hotkeys need Azahar's own hotkey Enable button to be left unset.",
+  "actions": {
+    "save_state": {"driver": "key", "key": "F2"},
+    "load_state": {"driver": "key", "key": "F4"},
+    "fast_forward": {"driver": "key_toggle", "key": "F6"},
+    "rewind": {"driver": "none"},
+    "quit": {"driver": "key", "key": "F8", "then": "exit", "timeout_ms": 3000}
+  },
+  "provision": [
+    {
+      "file": "/data/data/org.azahar_emu.azahar/shared_prefs/org.azahar_emu.azahar_preferences.xml",
+      "format": "xml_prefs",
+      "type": "set",
+      "values": {
+        "InputMapping_HostAxis_132": "10005",
+        "InputMapping_HostAxis_134": "10006",
+        "InputMapping_HostAxis_136": "10007",
+        "InputMapping_HostAxis_138": "10003"
+      }
+    }
+  ]
+}

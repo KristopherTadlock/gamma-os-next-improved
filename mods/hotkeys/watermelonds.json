@@ -1,0 +1,26 @@
+{
+  "id": "watermelonds",
+  "name": "WatermelonDS",
+  "packages": ["me.magnum.melondualds"],
+  "note": "Rewind opens WatermelonDS's rewind screen, once Rewind is turned on in its settings.",
+  "actions": {
+    "save_state": {"driver": "key", "key": "F2"},
+    "load_state": {"driver": "key", "key": "F4"},
+    "fast_forward": {"driver": "key_toggle", "key": "F6"},
+    "rewind": {"driver": "key", "key": "F7"},
+    "quit": {"driver": "key", "key": "F8", "then": "exit", "timeout_ms": 3000}
+  },
+  "provision": [
+    {
+      "file": "/data/data/me.magnum.melondualds/files/controller_config.json",
+      "format": "melonds_mapper",
+      "binds": {
+        "QUICK_SAVE": "132",
+        "QUICK_LOAD": "134",
+        "FAST_FORWARD": "136",
+        "REWIND": "137",
+        "EXIT_GAME": "138"
+      }
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "id": "armsx2",
+  "name": "ARMSX2",
+  "packages": ["com.armsx2"],
+  "note": "Quit saves the game's state, then closes ARMSX2.",
+  "actions": {
+    "save_state": {"driver": "key", "key": "F2"},
+    "load_state": {"driver": "key", "key": "F4"},
+    "fast_forward": {"driver": "key_toggle", "key": "F6"},
+    "rewind": {"driver": "none"},
+    "quit": {"driver": "key", "key": "F8", "then": "exit", "timeout_ms": 5000}
+  },
+  "provision": [
+    {
+      "file": "/data/data/com.armsx2/shared_prefs/ARMSX2.xml",
+      "format": "xml_prefs",
+      "type": "int",
+      "mode": "add",
+      "values": {
+        "pad.savestate.keycode": "132",
+        "pad.loadstate.keycode": "134",
+        "pad.fastforwardtoggle.keycode": "136",
+        "pad.saveandexit.keycode": "138"
+      }
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "id": "mupen64plus-fz",
+  "name": "M64Plus FZ",
+  "packages": ["org.mupen64plusae.v3.fzurita"],
+  "note": "Its hotkeys live in its private controller profiles, so only quit is universal.",
+  "actions": {
+    "save_state": {"driver": "none"},
+    "load_state": {"driver": "none"},
+    "fast_forward": {"driver": "none"},
+    "rewind": {"driver": "none"},
+    "quit": {"driver": "exit"}
+  }
+}
