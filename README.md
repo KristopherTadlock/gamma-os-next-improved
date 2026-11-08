@@ -201,7 +201,8 @@ It also changes Nano:
   800 × 600, 40 pixels are cut from each side, and the remaining 720 × 600 is
   shown with 60 pixels of black above and below, scaled with sharp bilinear
   filtering. Only the game is filtered, with no extra frame copy; menus,
-  overlays and touch controls drawn as their own layers stay as they are.
+  overlays and touch controls drawn as their own layers, and the emulator's
+  own settings and pause screens, stay as they are.
   **Game Area** chooses which part of the emulator's picture is the game:
   Auto (the centred 4:3 area, for emulators that letterbox) or Full Picture
   (for emulators set to stretch). RetroArch is left alone, as it has its own
