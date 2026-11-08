@@ -6235,7 +6235,7 @@ index b0e278f3bc0..b8e9ba9412c 100644
          // panel via the secondary pass (oskOnSecondary hoisted above the setup-wizard branch); a
          // single-panel device draws it here on the only panel.
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp
-index bc837715d76..b338b77647a 100644
+index bc837715d76..648446d20ff 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp
 @@ -26,6 +26,7 @@
@@ -6750,32 +6750,32 @@ index bc837715d76..b338b77647a 100644
          centered(line, py + ph * 0.42f, 1.3f * sf, t1R, t1G, t1B, 1.0f);
          // progress bar (accent fill on a dim track), in the theme accent
          const float barW = pw * 0.72f, barH = 6.0f * sf;
-@@ -1450,12 +1663,22 @@ void NanoMenu::renderScrapeProgress() {
+@@ -1450,14 +1663,22 @@ void NanoMenu::renderScrapeProgress() {
          drawRoundedRect(barX, barY, barW, barH, barH * 0.5f, t2R, t2G, t2B, 0.28f);
          float frac = (total > 0) ? (float)done / (float)total : 0.0f;
          if (frac > 0.0f) drawRoundedRect(barX, barY, barW * frac, barH, barH * 0.5f, accR, accG, accB, 1.0f);
 -        // current game (clipped)
-+        // current game (clipped), then the art downloading and its speed
-+        std::string tail;
++        // current game (clipped), and under it the art downloading and its speed
+         std::string s = status;
+         if (measureText(s.c_str(), 0.95f * sf) > pw * 0.9f) {
+             while (s.size() > 4 && measureText((s + "...").c_str(), 0.95f * sf) > pw * 0.9f) s.pop_back();
+             s += "...";
+         }
+-        centered(s.c_str(), py + ph * 0.72f, 0.95f * sf, t2R, t2G, t2B, 1.0f);
+-        centered(themeButtonText(trDyn("Press Circle to cancel")).c_str(), py + ph * 0.88f, 0.9f * sf, t2R, t2G, t2B, 0.9f);
++        centered(s.c_str(), py + ph * 0.68f, 0.95f * sf, t2R, t2G, t2B, 1.0f);
 +        if (!what.empty() && !moving && !copying) {
-+            tail = "  ·  " + std::string(trDyn(what.c_str()));
++            std::string dl = trDyn(what.c_str());
 +            char sp[32] = "";
 +            if (bps >= 1024.0 * 1024.0) snprintf(sp, sizeof(sp), "%.1f MB/s", bps / (1024.0 * 1024.0));
 +            else if (bps >= 1024.0) snprintf(sp, sizeof(sp), "%.0f KB/s", bps / 1024.0);
-+            if (sp[0]) tail += std::string("  ·  ") + sp;
++            if (sp[0]) dl += std::string("  ·  ") + sp;
++            centered(dl.c_str(), py + ph * 0.79f, 0.85f * sf, t2R, t2G, t2B, 0.85f);
 +        }
-         std::string s = status;
--        if (measureText(s.c_str(), 0.95f * sf) > pw * 0.9f) {
--            while (s.size() > 4 && measureText((s + "...").c_str(), 0.95f * sf) > pw * 0.9f) s.pop_back();
-+        const float roomW = pw * 0.9f - measureText(tail.c_str(), 0.95f * sf);
-+        if (measureText(s.c_str(), 0.95f * sf) > roomW) {
-+            while (s.size() > 4 && measureText((s + "...").c_str(), 0.95f * sf) > roomW) s.pop_back();
-             s += "...";
-         }
-+        s += tail;
-         centered(s.c_str(), py + ph * 0.72f, 0.95f * sf, t2R, t2G, t2B, 1.0f);
-         centered(themeButtonText(trDyn("Press Circle to cancel")).c_str(), py + ph * 0.88f, 0.9f * sf, t2R, t2G, t2B, 0.9f);
++        centered(themeButtonText(trDyn("Press Circle to cancel")).c_str(), py + ph * 0.91f, 0.9f * sf, t2R, t2G, t2B, 0.9f);
      }
+ }
+ 
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuSettings.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuSettings.cpp
 index f9a33380b54..d936efe1103 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuSettings.cpp
