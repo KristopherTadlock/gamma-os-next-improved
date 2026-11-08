@@ -11,9 +11,11 @@
 # Set ESDE_APK=/path/to/ES-DE.apk to replace Daijisho with ES-DE
 # (mods/37-esde.sh, 1.2 base only); that also needs aapt.
 #
-# The vendor_boot's DisplayPort driver is patched (scripts/patch_vendor_boot.py),
-# which needs unpack_bootimg, lz4 and avbtool on PATH, MKBOOTIMG naming
-# mkbootimg (or mkbootimg.py) and AVB_KEY naming AOSP's testkey_rsa4096.pem.
+# The vendor kernel's DisplayPort driver is patched (scripts/sprd_drm.py) in
+# vendor_dlkm (scripts/patch_vendor_dlkm.py) and vendor_boot
+# (scripts/patch_vendor_boot.py). That needs fsck.erofs, mkfs.erofs,
+# unpack_bootimg, lz4 and avbtool on PATH, MKBOOTIMG naming mkbootimg (or
+# mkbootimg.py) and AVB_KEY naming AOSP's testkey_rsa4096.pem.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -43,11 +45,11 @@ if [[ -n "${ESDE_APK:-}" ]]; then
   export ESDE_APK
 fi
 
-for tool in unpack_bootimg lz4 avbtool; do
-  command -v "$tool" >/dev/null || { echo "$tool is required (vendor_boot patch)" >&2; exit 1; }
+for tool in fsck.erofs mkfs.erofs unpack_bootimg lz4 avbtool; do
+  command -v "$tool" >/dev/null || { echo "$tool is required (DisplayPort driver patch)" >&2; exit 1; }
 done
 [[ -n "${MKBOOTIMG:-}" && -f "${AVB_KEY:-}" ]] || {
-  echo "MKBOOTIMG and AVB_KEY are required (vendor_boot patch)" >&2; exit 1; }
+  echo "MKBOOTIMG and AVB_KEY are required (DisplayPort driver patch)" >&2; exit 1; }
 
 mkdir -p "$WORK/bin" "$WORK/images" "$WORK/mnt" "$OUT"
 export CRC16ARC="$WORK/bin/crc16arc"
@@ -100,6 +102,11 @@ e2fsck -fn "$system"
 pac="$OUT/RG_Cube_GammaOS_Next_Improved_v$VERSION$VARIANT.pac"
 echo "writing $pac"
 python3 -I "$ROOT/scripts/lptool.py" replace "$super" system_a "$system"
+dlkm="$WORK/images/vendor_dlkm_a.img"
+python3 -I "$ROOT/scripts/lptool.py" extract "$super" vendor_dlkm_a "$dlkm"
+python3 -I "$ROOT/scripts/patch_vendor_dlkm.py" "$dlkm" "$dlkm.patched"
+python3 -I "$ROOT/scripts/lptool.py" replace "$super" vendor_dlkm_a "$dlkm.patched"
+rm -f "$dlkm" "$dlkm.patched"
 cp "$WORK/pac/$NAME.pac" "$pac.partial"
 python3 -I "$ROOT/scripts/pactool.py" replace "$pac.partial" super_full.img "$super"
 vendor_boot="$WORK/images/vendor_boot.img"

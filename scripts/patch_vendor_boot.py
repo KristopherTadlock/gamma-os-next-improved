@@ -3,18 +3,7 @@
 
   patch_vendor_boot.py IN OUT
 
-Plugging in a monitor made the vendor composer set the largest mode the monitor
-lists. For any 3840x2160 mode the driver goes into bypass and reads the plane's
-framebuffer format, but the composer's hotplug commit has no framebuffer, so
-the kernel panicked; and 4K at 60 Hz needs more than the Cube's two DP lanes.
-
-sprd_dp_connector_mode_valid:
-  - rejects modes with a pixel clock above 4K at 30 Hz (about 297 MHz);
-  - keeps the monitor's preferred mode preferred, instead of clearing it and
-    preferring CEA 1080p60 only, so the composer picks the monitor's own mode
-    when it fits.
-sprd_dp_encoder_mode_set:
-  - treats a missing framebuffer in bypass as RGB instead of reading through it.
+Applies sprd_drm.py's patch to the copy recovery loads from the vendor ramdisk.
 
 The ramdisk is otherwise byte-identical. The image is repacked and re-signed
 with the AOSP test key it was signed with, keeping its salt and properties.
@@ -22,39 +11,17 @@ with the AOSP test key it was signed with, keeping its salt and properties.
 Needs on PATH: unpack_bootimg, lz4, avbtool. MKBOOTIMG names mkbootimg (or
 mkbootimg.py) and AVB_KEY the key (external/avb/test/data/testkey_rsa4096.pem).
 """
-import hashlib
 import os
 import shlex
-import struct
 import subprocess
 import sys
 import tempfile
 
-MODULE = "lib/modules/sprd-drm.ko"
-MODULE_SHA256 = "4d60c3c021bdd779cd55502b73fbe849eb2e773f7b9671dbd843444d8ce5f932"
-TEXT_OFFSET = 0x30000   # .text in the module file
-PARTITION_SIZE = 104857600
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from sprd_drm import patch_module  # noqa: E402
 
-# (address in .text, original words, patched words)
-PATCHES = [
-    # mode_valid: clock > 0x49000 kHz -> MODE_CLOCK_HIGH; keep the type's preferred bit.
-    (0x8cdc, [0xb9403668, 0x36180068, 0x121c7908, 0xb9003668],
-             [0xb9403a6a, 0x7141255f, 0x540007a8, 0xb9403668]),
-    # mode_valid: CEA 1080p60 no longer made preferred.
-    (0x8d74, [0x321d0108], [0xd503201f]),
-    # mode_valid: the CEA 4K60 branch (now unreachable) becomes the MODE_CLOCK_HIGH return.
-    (0x8dd8, [0xb9403a69, 0x52820a0a, 0x72a0012a, 0x6b0a013f, 0x54000361, 0x39431289],
-             [0xa9447bfd, 0xa9454ff4, 0xf85f8e5e, 0x528001e0, 0x910183ff, 0xd65f03c0]),
-    # encoder_mode_set: NULL framebuffer in bypass -> RGB, 8 bpc.
-    (0x90f4, [0xf94042c8, 0x528ac9c9, 0x72a64629, 0xf9426d08, 0xf9400908, 0xf9402508,
-              0xb9400108, 0x6b09011f, 0x54000100, 0x52860a09, 0x72a60629, 0x6b09011f,
-              0x540000c1, 0x52800028, 0x52800149, 0x14000005, 0x52800028, 0x14000002,
-              0x2a1f03e8, 0x52800109],
-             [0xf94042c8, 0xf9426d08, 0xf9400908, 0xb40001e8, 0xf9402508, 0xb940010a,
-              0x52800028, 0x528ac9c9, 0x72a64629, 0x6b09015f, 0x54000120, 0x52860a09,
-              0x72a60629, 0x6b09015f, 0x54000081, 0x52800149, 0x14000004, 0xd503201f,
-              0x2a1f03e8, 0x52800109]),
-]
+MODULE = "lib/modules/sprd-drm.ko"
+PARTITION_SIZE = 104857600
 
 
 def run(*cmd, **kw):
@@ -78,19 +45,6 @@ def find_cpio_entry(cpio, name):
             break
         pos = (data + size + 3) & ~3
     sys.exit("vendor ramdisk: no %s" % name)
-
-
-def patch_module(ko):
-    if hashlib.sha256(ko).hexdigest() != MODULE_SHA256:
-        sys.exit("%s is not the 1.2 module this patch is for" % MODULE)
-    ko = bytearray(ko)
-    for addr, old, new in PATCHES:
-        off = TEXT_OFFSET + addr
-        n = len(old)
-        if list(struct.unpack_from("<%dI" % n, ko, off)) != old:
-            sys.exit("unexpected code at 0x%x" % addr)
-        struct.pack_into("<%dI" % n, ko, off, *new)
-    return bytes(ko)
 
 
 def footer_info(image):

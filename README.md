@@ -326,7 +326,8 @@ screenshots are captured from the games; `tools/pack-in-art` has the scripts.
 
 On Linux with `curl`, 7-Zip (`7zz` or `7z`), `xz`, `zstd`, `unzip`, `e2fsck` and
 `resize2fs`, `setfattr`, `cc`, `python3`, `sudo` (to loop-mount the system
-image), AOSP's `unpack_bootimg`, `lz4` and `avbtool` on `PATH`, `MKBOOTIMG`
+image), erofs-utils' `fsck.erofs` and `mkfs.erofs` (1.7 or later), AOSP's
+`unpack_bootimg`, `lz4` and `avbtool` on `PATH`, `MKBOOTIMG`
 naming AOSP's `mkbootimg` (or `mkbootimg.py`), `AVB_KEY` naming AOSP's
 `external/avb/test/data/testkey_rsa4096.pem`, and about 40 GB free:
 
@@ -346,9 +347,14 @@ The tools it uses:
 - `scripts/lptool.py` lists, extracts, and replaces logical partitions
   (`system_a`, `vendor_a`, ...) in the raw `super_full.img`.
 - `tools/crc16arc.c` is the CRC-16/ARC helper `pactool.py fixcrc` uses.
-- `scripts/patch_vendor_boot.py` patches the vendor kernel's DisplayPort
-  driver (`sprd-drm.ko` in `vendor_boot`), then repacks the image and signs it
-  again with the AOSP test key it was signed with.
+- `scripts/sprd_drm.py` is the patch to the vendor kernel's DisplayPort driver
+  (`sprd-drm.ko`). `scripts/patch_vendor_dlkm.py` applies it to the copy the
+  kernel loads at boot, in the compressed EROFS `vendor_dlkm` partition, which
+  it rebuilds with every file's owner, mode and SELinux label, the original
+  UUID and build time, and no filesystem feature the original lacks.
+  `scripts/patch_vendor_boot.py` applies it to the copy recovery loads, in
+  `vendor_boot`, then repacks that image and signs it again with the AOSP test
+  key it was signed with.
 
 ### External monitors
 
