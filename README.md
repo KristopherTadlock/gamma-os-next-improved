@@ -226,6 +226,12 @@ It also changes Nano:
   and the connected devices appear as the radio comes up; Off closes it.
 - **Kiosk Mode:** Start opens and closes Applications instead of the ES-DE
   menu.
+- **ES-DE boot:** the cold-boot intro ends in black after the warning instead
+  of revealing the XMB menu, the ES-DE theme loads while the warning is up,
+  and the ES-DE home fades in.
+- **Back to the right game list after the first game:** the overlay home,
+  which starts at the first launch, returns to the system and game the
+  launch came from, as it already did for later launches.
 - **ES-DE menu:** B at the top of the menu closes it.
 
 1.4.4 adds GammaOS Nano, a console-style home. The build makes the device
