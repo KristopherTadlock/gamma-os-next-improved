@@ -132,7 +132,10 @@ fixes GammaOS Nano bugs:
   help bar shows did nothing, or acted on the hidden XMB menu, and Y could not
   take away a favourite imported from ES-DE's game lists;
 - Nano's File Transfer (MTP) only worked while a full-screen "MTP Active"
-  screen stayed open.
+  screen stayed open;
+- the Wi-Fi and Bluetooth wizards' result screens (Save completed, the
+  connection test result, Register completed), in setup and in Settings,
+  showed B for OK, but B went back a screen; they now show A, which continues.
 
 It also changes Nano:
 

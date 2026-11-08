@@ -4293,7 +4293,7 @@ index a778ea7da0d..638c4463dd0 100644
  // aspect bucket so the Test Controller / Calibration buttons get the identical glass
  // relight as the console icons (bevelFromRGBA), refracting the live XMB wave. round =
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
-index c6a8e9c9dc1..abb70e1c78c 100644
+index c6a8e9c9dc1..69f4d15d452 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 @@ -25,6 +25,7 @@
@@ -6349,7 +6349,17 @@ index c6a8e9c9dc1..abb70e1c78c 100644
          std::vector<std::string> bl = wrap(cbody, fs);
          float ty = Y((innerTop + innerBot) * 0.5f) - (float)((int)bl.size() - 1) * lh * 0.5f - DS(50.0f);
          for (auto& ln : bl) { if (!ln.empty()) ps3DlgText(ln.c_str(), bodyCx, ty, fs, 0.95f, 0.95f, 0.95f, ap, 1); ty += lh; }
-@@ -16555,6 +17149,9 @@ void NanoMenu::renderNdsNetWizardBody(float rx, float ry, float rw, float rh) {
+@@ -16292,7 +16886,8 @@ void NanoMenu::renderNetWizard() {
+     } else if (d.kind == WK_PROGRESS) {
+         // no input
+     } else if (d.kind == WK_RESULT || mPs3WizId == WS_BT_INFO || (d.kind == WK_TEST && !mPs3NetTestActive)) {
+-        ps3DlgHint(cancelCX, false, "OK", hintY, S, ap);   // info/result screens dismiss with OK
++        // OK is Confirm (wizConfirm moves on); Cancel would go back a screen.
++        ps3DlgHint(enterCX, true, "OK", hintY, S, ap);
+     } else if (d.kind == WK_TEST) {
+         // running: no hints
+     } else if (mPs3WizId == WS_APLIST || mPs3WizId == WS_BT_DEVICE_LIST) {
+@@ -16555,6 +17150,9 @@ void NanoMenu::renderNdsNetWizardBody(float rx, float ry, float rw, float rh) {
              if (!mBtWizInPasskey.empty()) cbody += "\n\nPass Key:  " + mBtWizInPasskey;
              cbody += "\n\nAccept this device?";
          }
@@ -6359,7 +6369,7 @@ index c6a8e9c9dc1..abb70e1c78c 100644
          auto lines = wrapDs(trDyn(cbody.c_str()), 12.0f, 224.0f);
          centeredBlock(lines, 80.0f, 15.0f, 12.0f, 0.93f, 0.93f, 0.93f);
          // Yes / No glossy buttons (dialog capsule geometry: h32 r4).
-@@ -16978,6 +17575,9 @@ void NanoMenu::renderMinimaNetWizardBody(float rx, float ry, float rw, float rh)
+@@ -16978,6 +17576,9 @@ void NanoMenu::renderMinimaNetWizardBody(float rx, float ry, float rw, float rh)
              if (!mBtWizInPasskey.empty()) cbody += "\n\nPass Key:  " + mBtWizInPasskey;
              cbody += "\n\nAccept this device?";
          }
@@ -6369,7 +6379,7 @@ index c6a8e9c9dc1..abb70e1c78c 100644
          auto lines = wrap(trDyn(cbody.c_str()), fsRow, rw - pad * 3.0f);
          centeredBlock(lines, g.bodyTop + (g.bodyBot - g.bodyTop) * 0.32f, rowH * 0.9f, fsRow, 0.90f, 0.90f, 0.92f);
          float pillH = rowH, by = g.footerTop - rowH - g.btnMg;
-@@ -17178,6 +17778,30 @@ float NanoMenu::ps3TzFadeAlpha() {
+@@ -17178,6 +17779,30 @@ float NanoMenu::ps3TzFadeAlpha() {
  // it opens already showing that location (web initGlobe sets tzGlobe lon/lat =
  // target = the selected zone, then renderGlobe; the fade only cross-fades the
  // composite, not the rotation).
@@ -6400,7 +6410,7 @@ index c6a8e9c9dc1..abb70e1c78c 100644
  void NanoMenu::beginTzGlobeFade() {
      // Warm up first: the globe textures load on the render thread on the first
      // render (GL has no context here on the input thread), which spikes one frame.
-@@ -17201,6 +17825,13 @@ void NanoMenu::openTimezoneGlobe() {
+@@ -17201,6 +17826,13 @@ void NanoMenu::openTimezoneGlobe() {
  }
  
  void NanoMenu::closeTimezoneGlobe(bool apply) {
@@ -6414,7 +6424,7 @@ index c6a8e9c9dc1..abb70e1c78c 100644
      if (apply && mTzSelected >= 0 && mTzSelected < (int)mTzEntries.size()) {
          char cmd[256];
          snprintf(cmd, sizeof(cmd), "setprop persist.sys.timezone %s",
-@@ -17237,6 +17868,7 @@ void NanoMenu::tzGlobeNav(int dir) {
+@@ -17237,6 +17869,7 @@ void NanoMenu::tzGlobeNav(int dir) {
      int n = (int)mTzEntries.size();
      if (n <= 0) return;
      mTzSelected = (mTzSelected + dir + n) % n;
@@ -6422,7 +6432,7 @@ index c6a8e9c9dc1..abb70e1c78c 100644
      const TimezoneEntry& z = mTzEntries[mTzSelected];
      ps3globe::setTarget(z.lon * (float)M_PI / 180.0f, z.lat * (float)M_PI / 180.0f);
  }
-@@ -17453,6 +18085,26 @@ void NanoMenu::renderTimezoneGlobe() {
+@@ -17453,6 +18086,26 @@ void NanoMenu::renderTimezoneGlobe() {
      // Caption "Select a time zone." (web XCF(V.W*0.04), yT+56, 24px, left).
      ps3DlgText("Select a time zone.", XC(VW * 0.04f), Y(innerTop + 56.0f), FS(24.0f),
                 1, 1, 1, 0.95f * ap, 0);
