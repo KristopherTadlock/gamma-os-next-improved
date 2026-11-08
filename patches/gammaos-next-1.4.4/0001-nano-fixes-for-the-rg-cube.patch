@@ -4293,7 +4293,7 @@ index a778ea7da0d..638c4463dd0 100644
  // aspect bucket so the Test Controller / Calibration buttons get the identical glass
  // relight as the console icons (bevelFromRGBA), refracting the live XMB wave. round =
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
-index c6a8e9c9dc1..0172b017839 100644
+index c6a8e9c9dc1..abb70e1c78c 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 @@ -25,6 +25,7 @@
@@ -5550,7 +5550,15 @@ index c6a8e9c9dc1..0172b017839 100644
      static const char* kPerfOpts[] = {"Normal", "Max Performance", "Power Saver"};
      for (const char* s : kPerfOpts) { mPs3DlgOptions.push_back(s); mPs3DlgSwatch.push_back(-1); }
      char cur[PROPERTY_VALUE_MAX]; property_get("persist.gammaos.performance_mode", cur, "stock");
-@@ -10876,8 +11212,18 @@ void NanoMenu::buildShaderSubmenu(Ps3Level& out) {
+@@ -10658,6 +10994,7 @@ const GsType kShaderTypes[] = {
+     {"LCD3x",           "lcd3x"},
+     {"LCD",             "lcd-shader"},
+     {"Blur Fill",       "blur-fill"},
++    {"4:3 Cropped",     "4x3-cropped"},
+     {"Custom (Vulkan)", "custom-vk"},
+     {"Custom (GLSL)",   "custom-gl"},
+ };
+@@ -10876,9 +11213,26 @@ void NanoMenu::buildShaderSubmenu(Ps3Level& out) {
          it.iconTex = iconTexForIcon(icon); it.nmapTex = nmapForIcon(icon); it.iconR = it.iconG = it.iconB = 1.0f;
          out.items.push_back(it);
      };
@@ -5569,9 +5577,17 @@ index c6a8e9c9dc1..0172b017839 100644
 +        if (on) out.sel = i;
 +    }
      if (type.empty()) return;   // Off: nothing else to configure
++    if (type == "4x3-cropped") {
++        // Where the game sits in the emulator's picture. Auto takes the centred 4:3 area, which
++        // suits emulators that letterbox; Full suits emulators set to stretch.
++        act("Game Area", QA_SHADER_OPT_MENU,
++            std::string("persist.gammaos.shader.4x3.content|auto:Auto (4:3),full:Full Picture|Game Area"), 22);
++        return;
++    }
      if (custom) {
          // Empty payload -> the browser opens at the RetroArch subfolder for this type;
-@@ -10960,29 +11306,17 @@ void NanoMenu::openShaderDisclaimer() {
+         // the row's inline value (the current preset name) comes from resolvePs3ItemValue.
+@@ -10960,29 +11314,17 @@ void NanoMenu::openShaderDisclaimer() {
      mPs3DlgActive = true; mPs3DlgAnim = 0.0f; mPs3DlgClosing = false; mPs3DlgBlurValid = false;
  }
  
@@ -5611,7 +5627,7 @@ index c6a8e9c9dc1..0172b017839 100644
  }
  
  // Given a shader-opt spec "key|v1:l1,v2:l2,...|title", return the display label of the
-@@ -11283,6 +11617,8 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
+@@ -11283,6 +11625,8 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
                  // For a half-hour zone with no clean Etc/GMT, Off falls back to the
                  // Olson zone (those few zones keep automatic DST).
                  std::string target = on ? olson : (etc.empty() ? olson : etc);
@@ -5620,7 +5636,7 @@ index c6a8e9c9dc1..0172b017839 100644
                  std::thread([target]{
                      system("settings put global auto_time_zone 0 2>/dev/null");
                      std::string c = "cmd alarm set-timezone " + target + " 2>/dev/null";
-@@ -11346,6 +11682,22 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
+@@ -11346,6 +11690,22 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
              if (sel == 1 && mGsEditIdx >= 0) gsRemoveSystem(mGsEditIdx);
              break;
          }
@@ -5643,7 +5659,7 @@ index c6a8e9c9dc1..0172b017839 100644
          case 49: {  // Game Systems editor: clear the system's scraped boxart (sel 1 = clear)
              if (sel == 1 && mGsEditIdx >= 0) gsClearSystemArt(mGsEditIdx);
              break;
-@@ -11387,7 +11739,7 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
+@@ -11387,7 +11747,7 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
                      // Progress modal: stays up until the list refresh shows the app gone
                      // (closed from the apps_generation handler), or a ~10s timeout.
                      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5652,7 +5668,7 @@ index c6a8e9c9dc1..0172b017839 100644
                      mPs3DlgIllust = 0; mPs3DlgNotice.clear();
                      mPs3DlgRomInfo = false; mPs3DlgAppInfo = false;
                      mPs3DlgTitle = "Uninstalling";
-@@ -11442,20 +11794,6 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
+@@ -11442,20 +11802,6 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
              stDialogResult(themeKey, sel);   // Syncthing choosers and confirms
              break;
          }
@@ -5673,7 +5689,7 @@ index c6a8e9c9dc1..0172b017839 100644
          case 42:    // GammaShader: custom-shader disclaimer answered (Apply = option 1)
              if (sel == 1 && mShaderPendingTypeSel >= 0) shaderApplyType(mShaderPendingTypeSel);
              mShaderPendingTypeSel = -1;
-@@ -11627,10 +11965,16 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11627,10 +11973,16 @@ void NanoMenu::closePs3Dialog(bool apply) {
          // so the row value updates immediately.
          const Ps3SettingBinding* b = mPs3DlgBinding;
          mPs3DlgBinding = nullptr;
@@ -5690,7 +5706,7 @@ index c6a8e9c9dc1..0172b017839 100644
              if (!strcmp(b->options, "@rgbeffect")) {
                  // Off -> gammargb.control=off; any effect -> control=on + rgb.effect.
                  auto list = ps3RgbEffectList();
-@@ -11675,6 +12019,23 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11675,6 +12027,23 @@ void NanoMenu::closePs3Dialog(bool apply) {
                      applyRgbSolidColor(ps3SwatchHex(sw), b);
                  }
                  mDisplayDirty = true;
@@ -5714,7 +5730,7 @@ index c6a8e9c9dc1..0172b017839 100644
              } else if (mPs3DlgSlider) {
                  std::string v = ps3FormatNum(mPs3DlgSldVal, mPs3DlgSldScale);
                  writeSettingValue(b->source, b->key, v);
-@@ -11685,6 +12046,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11685,6 +12054,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
                  std::vector<SettingListOption> opts = parseListOptions(b->options);
                  if (mPs3DlgSel >= 0 && mPs3DlgSel < (int)opts.size()) {
                      const std::string& v = opts[mPs3DlgSel].value;
@@ -5722,7 +5738,7 @@ index c6a8e9c9dc1..0172b017839 100644
                      writeSettingValue(b->source, b->key, v);
                      mPs3BindCache[b->label] = v;
                      refreshBoundValuesInStack();   // update the DSi/Minima frozen row-value snapshot live
-@@ -11695,6 +12057,8 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11695,6 +12065,8 @@ void NanoMenu::closePs3Dialog(bool apply) {
                      // overlay process (restarting gammaos-nano would not touch it). The persist
                      // prop was already written above, so the choice survives a reboot.
                      if (!strcmp(b->label, "Home Theme")) {
@@ -5731,7 +5747,7 @@ index c6a8e9c9dc1..0172b017839 100644
                          int  tv       = atoi(v.c_str());   // 0 XMB, 1 DSi, 2 Minima, 3 ES-DE
                          bool wantDsi  = (tv == 1);
                          bool wantMin  = (tv == 2);
-@@ -11703,6 +12067,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11703,6 +12075,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
                              mNdsTheme = wantDsi;
                              mMinimaTheme = wantMin;
                              mEsdeTheme = wantEsde;
@@ -5739,7 +5755,7 @@ index c6a8e9c9dc1..0172b017839 100644
                              if (wantDsi) ensureNdsAssets();
                              if (wantEsde) {   // force a (re)load of the ES-DE theme set, reset its view
                                  mEsdeLoaded = false; mEsdeInGamelist = false;
-@@ -11723,7 +12088,9 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11723,7 +12096,9 @@ void NanoMenu::closePs3Dialog(bool apply) {
                              mMinimaScroll = 0.0f; mMinimaSelAnim = 0.0f; mMinimaPrevDepth = -1;
                              mMinimaSfxDepth = -1; mMinimaSfxSel = -1; mMinimaTransStart = 0;
                          }
@@ -5749,7 +5765,7 @@ index c6a8e9c9dc1..0172b017839 100644
                      // DSi Dark Theme on/off: apply LIVE. mNdsDark is read every frame by ndsPal()
                      // in each DSi renderer, so flipping the member repaints the DSi home dark/light
                      // with no restart (the persist prop was already written above for reboot).
-@@ -11828,6 +12195,10 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11828,6 +12203,10 @@ void NanoMenu::closePs3Dialog(bool apply) {
                      // Screen Map: mirror the volatile active flag and show/hide the
                      // cosmetic button-hint overlay service (functional effect is the
                      // two props, consumed by the gammapad daemon).
@@ -5760,7 +5776,7 @@ index c6a8e9c9dc1..0172b017839 100644
                      if (!strcmp(b->label, "Screen Map")) {
                          bool on = (v == "1" || v == "true");
                          writeSettingValue(SettingSource::kProp, "sys.gammaos.screenmap.active", on ? "1" : "0");
-@@ -11847,9 +12218,17 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11847,9 +12226,17 @@ void NanoMenu::closePs3Dialog(bool apply) {
                          else if (!strcmp(b->label, "Wi-Fi"))
                              cmd = on ? "cmd wifi set-wifi-enabled enabled 2>/dev/null"
                                       : "cmd wifi set-wifi-enabled disabled 2>/dev/null";
@@ -5779,7 +5795,7 @@ index c6a8e9c9dc1..0172b017839 100644
                          else if (!strcmp(b->label, "Do Not Disturb"))
                              cmd = on ? "cmd notification set_dnd on 2>/dev/null"
                                       : "cmd notification set_dnd off 2>/dev/null";
-@@ -11867,7 +12246,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11867,7 +12254,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
              // Confirmation toast: one brief self-fading pill on a successful settings-bound
              // commit. Inside `if (apply)`, so never on cancel; a slider commits only here on
              // close, so never per-frame/per-drag.
@@ -5788,7 +5804,7 @@ index c6a8e9c9dc1..0172b017839 100644
          }
      } else if (mPs3DlgThemeKey == 21 && !apply) {
          // Icon-tint cancel: restore the exact original tint (not the nearest
-@@ -11896,7 +12275,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11896,7 +12283,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
              // wifi-radio, delete-playlist).
              switch (committedKey) {
                  case 6: case 22: case 23: case 30: case 31: case 32:
@@ -5797,7 +5813,7 @@ index c6a8e9c9dc1..0172b017839 100644
                      break;                                   // confirm/action, not a setting
                  default:
                      photoShowBanner(trDyn("Setting changed"));
-@@ -12295,6 +12674,7 @@ void NanoMenu::openXmbOpt() {
+@@ -12295,6 +12682,7 @@ void NanoMenu::openXmbOpt() {
              // (columns / recents / search / Info) and the scraper search query; Scrape
              // This Game re-fetches just this ROM (forcing overwrite) using that query.
              add("Rename / Edit Title", "romrename", false);
@@ -5805,7 +5821,7 @@ index c6a8e9c9dc1..0172b017839 100644
              add("Scrape This Game", "romscrape", false);
              // One-off scrape with a typed-in search name (does NOT rename the game): useful when the
              // filename does not match the database (a region tag, a fan-translation title, etc.).
-@@ -13260,7 +13640,7 @@ void NanoMenu::xmbOptApplySub(const Ps3OptSub& sr) {
+@@ -13260,7 +13648,7 @@ void NanoMenu::xmbOptApplySub(const Ps3OptSub& sr) {
  // been closed by the caller, so the dialog draws over the home column.
  void NanoMenu::mediaDeleteConfirm(const std::string& title, const std::string& body) {
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5814,7 +5830,7 @@ index c6a8e9c9dc1..0172b017839 100644
      mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false;
      mPs3DlgTitle = title; mPs3DlgBody = body;
      mPs3DlgOptions.push_back("Cancel"); mPs3DlgSwatch.push_back(-1);
-@@ -13277,7 +13657,7 @@ void NanoMenu::mediaDeleteConfirm(const std::string& title, const std::string& b
+@@ -13277,7 +13665,7 @@ void NanoMenu::mediaDeleteConfirm(const std::string& title, const std::string& b
  void NanoMenu::mediaCopyToClipboard(const std::string& name) {
      feOpen();   // enter the File Explorer at the storage roots (mFeClipPath already set by the caller)
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5823,7 +5839,7 @@ index c6a8e9c9dc1..0172b017839 100644
      mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false;
      mPs3DlgTitle = "Copy";
      mPs3DlgBody = std::string("Copied \"") + name +
-@@ -13333,11 +13713,18 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13333,11 +13721,18 @@ void NanoMenu::xmbOptAction(const std::string& act) {
          if (mPs3OptCtxKind == PS3_ROM && mPs3OptCtxA >= 0 && mPs3OptCtxA < (int)mXmbSystems.size()
              && mPs3OptCtxB >= 0 && mPs3OptCtxB < (int)mXmbSystems[mPs3OptCtxA].roms.size())
              romPath = mXmbSystems[mPs3OptCtxA].roms[mPs3OptCtxB];
@@ -5843,7 +5859,7 @@ index c6a8e9c9dc1..0172b017839 100644
          // If we just un-starred a game while viewing the Favorites list itself, rebuild it in place
          // so the row disappears immediately (title is set only by buildFavoritesSubmenu).
          if (wasFav && !mPs3Stack.empty() && mPs3Stack.back().title == "Favorites") {
-@@ -13357,8 +13744,11 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13357,8 +13752,11 @@ void NanoMenu::xmbOptAction(const std::string& act) {
          if (mPs3OptCtxKind == PS3_ROM && mPs3OptCtxA >= 0 && mPs3OptCtxA < (int)mXmbSystems.size()
              && mPs3OptCtxB >= 0 && mPs3OptCtxB < (int)mXmbSystems[mPs3OptCtxA].roms.size())
              romPath = mXmbSystems[mPs3OptCtxA].roms[mPs3OptCtxB];
@@ -5856,7 +5872,7 @@ index c6a8e9c9dc1..0172b017839 100644
          if (romPath.empty()) return;
          if (act == "addcol") { openAddToCollectionDialog(romPath); return; }
          // rmcol: remove from the collection whose game list we are viewing, then rebuild it in place.
-@@ -13511,7 +13901,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13511,7 +13909,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              body = mPs3OptCtxDesc.empty() ? std::string("No information is available.") : mPs3OptCtxDesc;
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5865,7 +5881,7 @@ index c6a8e9c9dc1..0172b017839 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false; mPs3DlgAppInfo = false;
          mPs3DlgTitle = title;
          mPs3DlgBody  = body;
-@@ -13584,6 +13974,21 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13584,6 +13982,21 @@ void NanoMenu::xmbOptAction(const std::string& act) {
          }
          return;
      }
@@ -5887,7 +5903,7 @@ index c6a8e9c9dc1..0172b017839 100644
      if (act == "romrename") {
          // Per-game title override. Resolve the focused ROM path + current display name
          // exactly the way "rominfo" does, then open the OSK prefilled with the current
-@@ -13640,6 +14045,16 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13640,6 +14053,16 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              // tops, not open stack levels), with the highlight kept on the renamed game:
              // the new title re-sorts the list, so its old index points at another game.
              if (owner >= 0) rebuildOpenRomLevels(owner, romPath);
@@ -5904,7 +5920,7 @@ index c6a8e9c9dc1..0172b017839 100644
              // Also rebuild an open Recently Played list in place (it is not sysIdx-tagged;
              // identify it by its first item being a PS3_RECENT row).
              for (auto& lvl : mPs3Stack) {
-@@ -13765,7 +14180,10 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13765,7 +14188,10 @@ void NanoMenu::xmbOptAction(const std::string& act) {
          if (mPs3DlgBoxTex) { glDeleteTextures(1, &mPs3DlgBoxTex); mPs3DlgBoxTex = 0; }
          mPs3DlgFanW = mPs3DlgFanH = 0; mPs3DlgBoxW = mPs3DlgBoxH = 0;
  
@@ -5916,7 +5932,7 @@ index c6a8e9c9dc1..0172b017839 100644
          bool rich = se && (!se->box.empty() || !se->fan.empty() ||
                             !se->synopsis.empty() || !se->genre.empty() ||
                             !se->developer.empty() || !se->publisher.empty() ||
-@@ -13773,7 +14191,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13773,7 +14199,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
                             !se->releaseDate.empty());
  
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5925,7 +5941,7 @@ index c6a8e9c9dc1..0172b017839 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear();
          mPs3DlgTitle = name.empty() ? std::string("Information") : name;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14042,7 +14460,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -14042,7 +14468,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              row("Path", dir);
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5934,7 +5950,7 @@ index c6a8e9c9dc1..0172b017839 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false;
          mPs3DlgTitle = title; mPs3DlgBody = body;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14117,7 +14535,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -14117,7 +14543,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              body = b;
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5943,7 +5959,7 @@ index c6a8e9c9dc1..0172b017839 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear();
          mPs3DlgTitle = title; mPs3DlgBody = body;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14138,7 +14556,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -14138,7 +14564,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              body = b;
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -5952,7 +5968,7 @@ index c6a8e9c9dc1..0172b017839 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear();
          mPs3DlgTitle = title; mPs3DlgBody = body;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14530,9 +14948,15 @@ void NanoMenu::renderPs3Dialog() {
+@@ -14530,9 +14956,15 @@ void NanoMenu::renderPs3Dialog() {
              float fs = ps3::fontScale((sel ? 26.0f : 22.0f) * fb);
              float ty = cyDev - 0.45f * ps3::emPx(fs);   // web textBaseline='middle'
              const char* optTxt = trDyn(mPs3DlgOptions[i].c_str());
@@ -5970,7 +5986,7 @@ index c6a8e9c9dc1..0172b017839 100644
          }
  
          // (4) Up/down scroll arrows at the text x when items scroll off-window.
-@@ -14894,7 +15318,7 @@ enum WizScr {
+@@ -14894,7 +15326,7 @@ enum WizScr {
      // the real gammaos-net bt scan/pair/connect/disconnect/unpair), BD Remote
      // Control Registration, and Audio Device Settings.
      WS_BT_MANAGE, WS_BT_REGISTER_INFO, WS_BT_SCANNING, WS_BT_DEVICE_LIST,
@@ -5979,7 +5995,7 @@ index c6a8e9c9dc1..0172b017839 100644
      WS_BT_DEVICE_OPTS, WS_BT_CONNECTING, WS_BT_DISCONNECTING,
      WS_BT_DELETE_CONFIRM, WS_BT_DELETING, WS_BT_INFO,
      WS_BT_BD_REMOTE,
-@@ -14939,9 +15363,6 @@ static const char* btTypeLabel(int cod) {
+@@ -14939,9 +15371,6 @@ static const char* btTypeLabel(int cod) {
          default:     return "Bluetooth Device";
      }
  }
@@ -5989,7 +6005,7 @@ index c6a8e9c9dc1..0172b017839 100644
  // Build the pass-key instruction shown while pairing. gammaos-net publishes the
  // system-generated code in sys.gammaos.bt.passkey and the SSP variant in
  // sys.gammaos.bt.pk_variant (2=numeric compare, 4=display passkey, 5=display PIN).
-@@ -14972,7 +15393,7 @@ enum WizField { WF_SSID = 0, WF_WEP_KEY, WF_WPA_KEY, WF_IP_ADDR, WF_IP_SUBNET,
+@@ -14972,7 +15401,7 @@ enum WizField { WF_SSID = 0, WF_WEP_KEY, WF_WPA_KEY, WF_IP_ADDR, WF_IP_SUBNET,
                  WF_IP_ROUTER, WF_IP_PDNS, WF_IP_SDNS, WF_DNS_PDNS, WF_DNS_SDNS,
                  WF_MTU, WF_PROXY_ADDR, WF_PROXY_PORT, WF_PPPOE_USER, WF_PPPOE_PASS,
                  WF_DHCP_HOST, WF_EAP_USER, WF_EAP_PASS,
@@ -5998,7 +6014,7 @@ index c6a8e9c9dc1..0172b017839 100644
  struct WizDesc {
      int kind = WK_INFO;
      const char* title = "Internet Connection Settings";
-@@ -15119,7 +15540,12 @@ static void wizDesc(int id, WizDesc& d) {
+@@ -15119,7 +15548,12 @@ static void wizDesc(int id, WizDesc& d) {
      case WS_BT_DEVICE_LIST: d.kind = WK_SCANLIST; d.title = "Register Bluetooth® Device";
          d.body = "Select the Bluetooth® device to register."; break;
      case WS_BT_PASSKEY: d.kind = WK_TEXT; d.title = "Register Bluetooth® Device";
@@ -6012,7 +6028,7 @@ index c6a8e9c9dc1..0172b017839 100644
      case WS_BT_REGISTERING: d.kind = WK_PROGRESS; d.title = "Register Bluetooth® Device";
          d.body = "Registering...\nPlease wait."; d.autoNext = WS_BT_REGISTER_DONE; break;
      case WS_BT_REGISTER_DONE: d.kind = WK_RESULT; d.title = "Register Bluetooth® Device";
-@@ -15178,6 +15604,89 @@ void NanoMenu::startNetWizard() {
+@@ -15178,6 +15612,89 @@ void NanoMenu::startNetWizard() {
      wizEnter(WS_INTRO, 1);
  }
  
@@ -6102,7 +6118,7 @@ index c6a8e9c9dc1..0172b017839 100644
  // First-run setup only: bring up the XMB "waiting for services" progress screen (a WK_PROGRESS
  // net-wizard page) while the setup wizard holds before the Wi-Fi step until sys.boot_completed.
  // Lives here because the WizScr enum is file-local to this translation unit; the setup wizard
-@@ -15257,6 +15766,13 @@ void NanoMenu::btWizStopReceive() {
+@@ -15257,6 +15774,13 @@ void NanoMenu::btWizStopReceive() {
  }
  
  void NanoMenu::wizEnter(int id, int dir) {
@@ -6116,7 +6132,7 @@ index c6a8e9c9dc1..0172b017839 100644
      mPs3WizId = id;
      mPs3WizSel = 0;
      mPs3WizScroll = 0;
-@@ -15280,7 +15796,10 @@ void NanoMenu::wizEnter(int id, int dir) {
+@@ -15280,7 +15804,10 @@ void NanoMenu::wizEnter(int id, int dir) {
          std::lock_guard<std::mutex> lk(mBtWizMutex); mBtWizScan.clear(); mBtWizPin.clear();
      }
      if (id == WS_BT_SCANNING)      btWizScanAsync();                    // real inquiry -> device list (accumulates)
@@ -6128,7 +6144,7 @@ index c6a8e9c9dc1..0172b017839 100644
      if (id == WS_BT_CONNECTING)    btWizConnectAsync(mBtWizSelAddr);    // real profile connect
      if (id == WS_BT_DISCONNECTING) btWizDisconnectAsync(mBtWizSelAddr); // real profile disconnect
      if (id == WS_BT_DELETING)      btWizUnpairAsync(mBtWizSelAddr);     // real removeBond
-@@ -15304,35 +15823,17 @@ void NanoMenu::wizEnter(int id, int dir) {
+@@ -15304,35 +15831,17 @@ void NanoMenu::wizEnter(int id, int dir) {
      // Date and Time: Set via Internet -> enable Android automatic time + time zone
      // (NTP) and nudge a refresh on a background thread (the 2.6s dwell is real work).
      if (id == WS_DT_SVI_PROGRESS) {
@@ -6174,7 +6190,7 @@ index c6a8e9c9dc1..0172b017839 100644
          }).detach();
          // auto_time_zone is now on; the Olson tz captures DST automatically and the
          // "Daylight Saving" row reflects it live (drawPs3Clock -> mPs3DstNow).
-@@ -15384,7 +15885,7 @@ void NanoMenu::wizOpenTextField(int field) {
+@@ -15384,7 +15893,7 @@ void NanoMenu::wizOpenTextField(int field) {
      case WF_DHCP_HOST: cur = &mPs3WizDhcpHost; break;
      case WF_EAP_USER: cur = &mPs3WizEapUser; break;   case WF_EAP_PASS: cur = &mPs3WizEapPass; break;
      case WF_DT_DATE: cur = &mPs3DtDate; break;        case WF_DT_TIME: cur = &mPs3DtTime; break;
@@ -6183,7 +6199,7 @@ index c6a8e9c9dc1..0172b017839 100644
      }
      mOskQuery = cur ? *cur : "";
      openOskForPassword(prompt, [this, field](const std::string& val) {
-@@ -15402,6 +15903,14 @@ void NanoMenu::wizOpenTextField(int field) {
+@@ -15402,6 +15911,14 @@ void NanoMenu::wizOpenTextField(int field) {
          case WF_EAP_USER: mPs3WizEapUser = val; break;   case WF_EAP_PASS: mPs3WizEapPass = val; break;
          case WF_DT_DATE: mPs3DtDate = val; break;        case WF_DT_TIME: mPs3DtTime = val; break;
          case WF_BT_PIN: mBtWizPin = val.empty() ? "0000" : val; break;   // default PIN 0000
@@ -6198,7 +6214,7 @@ index c6a8e9c9dc1..0172b017839 100644
          }
          // Optional fields (secondary DNS, the BT PIN which defaults to 0000) may be
          // left blank; everything else treats an empty submit as a cancel.
-@@ -15411,6 +15920,13 @@ void NanoMenu::wizOpenTextField(int field) {
+@@ -15411,6 +15928,13 @@ void NanoMenu::wizOpenTextField(int field) {
          std::string err = validateWizField(field, val);
          if (!err.empty()) { mPs3WizFieldError = err; mPs3WizPendingTextField = field; return; }
          mPs3WizFieldError.clear();
@@ -6212,7 +6228,7 @@ index c6a8e9c9dc1..0172b017839 100644
          int nxt = wizNextScreen(mPs3WizId, 0);
          if (nxt == WS_NONE) { mPs3WizExit = 1; mPs3WizActive = false; }
          else { mPs3WizStack.push_back(mPs3WizId); wizEnter(nxt, 1); }
-@@ -15476,6 +15992,16 @@ std::string NanoMenu::validateWizField(int field, const std::string& val) {
+@@ -15476,6 +16000,16 @@ std::string NanoMenu::validateWizField(int field, const std::string& val) {
              return "MTU must be 576-9000";
          return "";
      }
@@ -6229,7 +6245,7 @@ index c6a8e9c9dc1..0172b017839 100644
      case WF_BT_PIN: {   // empty -> 0000; otherwise 1-16 numeric digits (BT PIN spec)
          if (val.size() > 16) return "PIN must be 1-16 digits";
          for (char c : val) if (c < '0' || c > '9') return "PIN must be digits only";
-@@ -15508,6 +16034,12 @@ void NanoMenu::wizConfirm() {
+@@ -15508,6 +16042,12 @@ void NanoMenu::wizConfirm() {
          }
          return;
      }
@@ -6242,7 +6258,7 @@ index c6a8e9c9dc1..0172b017839 100644
      if (mPs3WizId == WS_BT_INBOUND_CONFIRM) {
          if (mPs3WizSel == 0) {   // Yes -> accept + wait for the bond
              mPs3WizStack.push_back(mPs3WizId); wizEnter(WS_BT_INBOUND_PAIRING, 1);
-@@ -15534,7 +16066,8 @@ void NanoMenu::wizConfirm() {
+@@ -15534,7 +16074,8 @@ void NanoMenu::wizConfirm() {
          // connect it, or delete it and register fresh - matching Android's behaviour
          // when you pick an already-paired device from "pair new device".
          if (scan[mPs3WizSel].bonded) { wizEnter(WS_BT_DEVICE_OPTS, 1); return; }
@@ -6252,7 +6268,7 @@ index c6a8e9c9dc1..0172b017839 100644
          return;
      }
      if (mPs3WizId == WS_BT_REGISTER_DONE) {   // loop back to the Manage root (BD remote closes)
-@@ -15634,6 +16167,15 @@ void NanoMenu::wizBack() {
+@@ -15634,6 +16175,15 @@ void NanoMenu::wizBack() {
      if (mPs3WizId == WS_DT_SVI_DONE || mPs3WizId == WS_DT_SM_DONE) {
          mPs3WizExit = 1; mPs3WizActive = false; return;
      }
@@ -6268,7 +6284,7 @@ index c6a8e9c9dc1..0172b017839 100644
      if (mPs3WizStack.empty()) { mPs3WizExit = -1; mPs3WizActive = false; return; }
      int prev = mPs3WizStack.back(); mPs3WizStack.pop_back();
      // Don't land back on a transient progress/test screen (mirrors web wizBack). If
-@@ -15788,6 +16330,8 @@ int NanoMenu::wizNextScreen(int id, int sel) {
+@@ -15788,6 +16338,8 @@ int NanoMenu::wizNextScreen(int id, int sel) {
      // ---- Accessory: Bluetooth ----
      case WS_BT_REGISTER_INFO: return WS_BT_SCANNING;
      case WS_BT_PASSKEY:       return WS_BT_REGISTERING;
@@ -6277,7 +6293,7 @@ index c6a8e9c9dc1..0172b017839 100644
      case WS_BT_BD_REMOTE:     return WS_BT_SCANNING;
      case WS_BT_DEVICE_OPTS:
          return (sel == 0) ? WS_BT_CONNECTING
-@@ -15844,6 +16388,45 @@ void NanoMenu::renderNetWizard() {
+@@ -15844,6 +16396,45 @@ void NanoMenu::renderNetWizard() {
              wizDesc(mPs3WizId, d);
          }
      }
@@ -6323,7 +6339,7 @@ index c6a8e9c9dc1..0172b017839 100644
      // The receive screen advances when the BondStateMachine patch publishes a
      // remote-initiated pairing request to sys.gammaos.bt.inbound.
      if (mPs3WizId == WS_BT_INBOUND_WAIT) {
-@@ -16111,6 +16694,9 @@ void NanoMenu::renderNetWizard() {
+@@ -16111,6 +16702,9 @@ void NanoMenu::renderNetWizard() {
              if (!mBtWizInPasskey.empty()) cbody += "\n\nPass Key:  " + mBtWizInPasskey;
              cbody += "\n\nAccept this device?";
          }
@@ -6333,7 +6349,7 @@ index c6a8e9c9dc1..0172b017839 100644
          std::vector<std::string> bl = wrap(cbody, fs);
          float ty = Y((innerTop + innerBot) * 0.5f) - (float)((int)bl.size() - 1) * lh * 0.5f - DS(50.0f);
          for (auto& ln : bl) { if (!ln.empty()) ps3DlgText(ln.c_str(), bodyCx, ty, fs, 0.95f, 0.95f, 0.95f, ap, 1); ty += lh; }
-@@ -16555,6 +17141,9 @@ void NanoMenu::renderNdsNetWizardBody(float rx, float ry, float rw, float rh) {
+@@ -16555,6 +17149,9 @@ void NanoMenu::renderNdsNetWizardBody(float rx, float ry, float rw, float rh) {
              if (!mBtWizInPasskey.empty()) cbody += "\n\nPass Key:  " + mBtWizInPasskey;
              cbody += "\n\nAccept this device?";
          }
@@ -6343,7 +6359,7 @@ index c6a8e9c9dc1..0172b017839 100644
          auto lines = wrapDs(trDyn(cbody.c_str()), 12.0f, 224.0f);
          centeredBlock(lines, 80.0f, 15.0f, 12.0f, 0.93f, 0.93f, 0.93f);
          // Yes / No glossy buttons (dialog capsule geometry: h32 r4).
-@@ -16978,6 +17567,9 @@ void NanoMenu::renderMinimaNetWizardBody(float rx, float ry, float rw, float rh)
+@@ -16978,6 +17575,9 @@ void NanoMenu::renderMinimaNetWizardBody(float rx, float ry, float rw, float rh)
              if (!mBtWizInPasskey.empty()) cbody += "\n\nPass Key:  " + mBtWizInPasskey;
              cbody += "\n\nAccept this device?";
          }
@@ -6353,7 +6369,7 @@ index c6a8e9c9dc1..0172b017839 100644
          auto lines = wrap(trDyn(cbody.c_str()), fsRow, rw - pad * 3.0f);
          centeredBlock(lines, g.bodyTop + (g.bodyBot - g.bodyTop) * 0.32f, rowH * 0.9f, fsRow, 0.90f, 0.90f, 0.92f);
          float pillH = rowH, by = g.footerTop - rowH - g.btnMg;
-@@ -17178,6 +17770,30 @@ float NanoMenu::ps3TzFadeAlpha() {
+@@ -17178,6 +17778,30 @@ float NanoMenu::ps3TzFadeAlpha() {
  // it opens already showing that location (web initGlobe sets tzGlobe lon/lat =
  // target = the selected zone, then renderGlobe; the fade only cross-fades the
  // composite, not the rotation).
@@ -6384,7 +6400,7 @@ index c6a8e9c9dc1..0172b017839 100644
  void NanoMenu::beginTzGlobeFade() {
      // Warm up first: the globe textures load on the render thread on the first
      // render (GL has no context here on the input thread), which spikes one frame.
-@@ -17201,6 +17817,13 @@ void NanoMenu::openTimezoneGlobe() {
+@@ -17201,6 +17825,13 @@ void NanoMenu::openTimezoneGlobe() {
  }
  
  void NanoMenu::closeTimezoneGlobe(bool apply) {
@@ -6398,7 +6414,7 @@ index c6a8e9c9dc1..0172b017839 100644
      if (apply && mTzSelected >= 0 && mTzSelected < (int)mTzEntries.size()) {
          char cmd[256];
          snprintf(cmd, sizeof(cmd), "setprop persist.sys.timezone %s",
-@@ -17237,6 +17860,7 @@ void NanoMenu::tzGlobeNav(int dir) {
+@@ -17237,6 +17868,7 @@ void NanoMenu::tzGlobeNav(int dir) {
      int n = (int)mTzEntries.size();
      if (n <= 0) return;
      mTzSelected = (mTzSelected + dir + n) % n;
@@ -6406,7 +6422,7 @@ index c6a8e9c9dc1..0172b017839 100644
      const TimezoneEntry& z = mTzEntries[mTzSelected];
      ps3globe::setTarget(z.lon * (float)M_PI / 180.0f, z.lat * (float)M_PI / 180.0f);
  }
-@@ -17453,6 +18077,26 @@ void NanoMenu::renderTimezoneGlobe() {
+@@ -17453,6 +18085,26 @@ void NanoMenu::renderTimezoneGlobe() {
      // Caption "Select a time zone." (web XCF(V.W*0.04), yT+56, 24px, left).
      ps3DlgText("Select a time zone.", XC(VW * 0.04f), Y(innerTop + 56.0f), FS(24.0f),
                 1, 1, 1, 0.95f * ap, 0);
@@ -7865,7 +7881,7 @@ index c35725069eb..7af0f0e0524 100644
      mPs3DlgOptions.push_back(trDyn("Cancel")); mPs3DlgSwatch.push_back(-1);
      mPs3DlgOptions.push_back(trDyn(action)); mPs3DlgSwatch.push_back(-1);
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuVideo.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuVideo.cpp
-index 0fa4e98c671..e862ce44b27 100644
+index 0fa4e98c671..23650d68d86 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuVideo.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuVideo.cpp
 @@ -2652,6 +2652,7 @@ void NanoMenu::vidBeginOpen(const VidPending& p) {
@@ -8097,6 +8113,17 @@ index 0fa4e98c671..e862ce44b27 100644
          }
          if (!mVidPlaying) title += trDyn("   (Paused)");
          float tfs = ps3::fontScale(26.0f);
+@@ -4055,8 +4174,8 @@ static const int kVidCpCount = (int)(sizeof(kVidCp) / sizeof(kVidCp[0]));
+ // Global Shaders chooser (video panel "shader" action): the system-wide display shader, mirrors the XMB
+ // Global Shaders list (kShaderTypes). Off clears persist.gammaos.shader.enable; any other sets the type +
+ // enables it. Kept local to the video player so it needs no cross-file coupling.
+-static const char* kVidShaderLabels[] = { "Off", "CRT", "LCD3x", "LCD", "Blur Fill", "Custom (Vulkan)", "Custom (GLSL)" };
+-static const char* kVidShaderTypes[]  = { "",    "crt-simple", "lcd3x", "lcd-shader", "blur-fill", "custom-vk", "custom-gl" };
++static const char* kVidShaderLabels[] = { "Off", "CRT", "LCD3x", "LCD", "Blur Fill", "4:3 Cropped", "Custom (Vulkan)", "Custom (GLSL)" };
++static const char* kVidShaderTypes[]  = { "",    "crt-simple", "lcd3x", "lcd-shader", "blur-fill", "4x3-cropped", "custom-vk", "custom-gl" };
+ static const int   kVidShaderCount = (int)(sizeof(kVidShaderLabels) / sizeof(kVidShaderLabels[0]));
+ static int vidCpDefault() {
+     for (int i = 0; i < kVidCpCount; i++) if (!strcmp(kVidCp[i].act, "play")) return i;
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp
 index a0824b29e6e..d5e83fcaf21 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp
@@ -11112,6 +11139,861 @@ index 2d1141f2ad2..15fc4cbbe5f 100644
                      // Check if nano menu requested a specific game launch
                      String launchRom = getNanoLaunchRom();
                      String launchCore = android.os.SystemProperties.get(
+diff --git a/frameworks/native/libs/renderengine/Android.bp b/frameworks/native/libs/renderengine/Android.bp
+index d8cac0c21e4..6307bfe7f06 100644
+--- a/frameworks/native/libs/renderengine/Android.bp
++++ b/frameworks/native/libs/renderengine/Android.bp
+@@ -105,6 +105,7 @@ filegroup {
+         "skia/filters/GammaCustomShader.cpp",
+         "skia/filters/GammaVulkanShaderChain.cpp",
+         "skia/filters/GammaGLSLShaderChain.cpp",
++        "skia/filters/GammaSurfaceScaler.cpp",
+     ],
+ }
+ 
+diff --git a/frameworks/native/libs/renderengine/include/renderengine/GammaSurfaceFilter.h b/frameworks/native/libs/renderengine/include/renderengine/GammaSurfaceFilter.h
+new file mode 100644
+index 00000000000..93ea9797a3a
+--- /dev/null
++++ b/frameworks/native/libs/renderengine/include/renderengine/GammaSurfaceFilter.h
+@@ -0,0 +1,87 @@
++/*
++ * Copyright 2026 The GammaOS Next Improved Project
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#pragma once
++
++#include <android-base/properties.h>
++
++#include <iosfwd>
++#include <optional>
++#include <ostream>
++#include <string>
++
++namespace android::renderengine {
++
++// GammaOS global shaders come in two kinds. Composition shaders post-process the whole
++// composed frame. Surface shaders filter only the launched emulator's game layer while it
++// is drawn, so they need neither the offscreen frame nor full client composition.
++enum class GammaShaderMode { Off, Composition, Surface };
++
++inline constexpr const char* kGammaShader4x3Cropped = "4x3-cropped";
++
++inline GammaShaderMode gammaShaderMode() {
++    if (!base::GetBoolProperty("persist.gammaos.shader.enable", false)) {
++        return GammaShaderMode::Off;
++    }
++    return base::GetProperty("persist.gammaos.shader.type", "crt-simple") == kGammaShader4x3Cropped
++            ? GammaShaderMode::Surface
++            : GammaShaderMode::Composition;
++}
++
++inline bool gammaCompositionShaderOn() {
++    return gammaShaderMode() == GammaShaderMode::Composition;
++}
++
++// 4:3 Cropped: the game content is stretched to a logical projection, which is scaled to fit
++// the display with cropX projected pixels cut from each side, centred, with black around it.
++struct GammaSurfaceFilter {
++    // Game content within the layer's buffer crop, normalized (0..1) in display orientation.
++    // autoContent picks the largest centred 4:3 rectangle instead.
++    bool autoContent = true;
++    float contentLeft = 0.f;
++    float contentTop = 0.f;
++    float contentRight = 1.f;
++    float contentBottom = 1.f;
++
++    float projectionWidth = 800.f;
++    float projectionHeight = 600.f;
++    float cropX = 40.f;
++};
++
++static inline bool operator==(const GammaSurfaceFilter& lhs, const GammaSurfaceFilter& rhs) {
++    return lhs.autoContent == rhs.autoContent && lhs.contentLeft == rhs.contentLeft &&
++            lhs.contentTop == rhs.contentTop && lhs.contentRight == rhs.contentRight &&
++            lhs.contentBottom == rhs.contentBottom && lhs.projectionWidth == rhs.projectionWidth &&
++            lhs.projectionHeight == rhs.projectionHeight && lhs.cropX == rhs.cropX;
++}
++
++static inline bool operator!=(const GammaSurfaceFilter& lhs, const GammaSurfaceFilter& rhs) {
++    return !(lhs == rhs);
++}
++
++static inline void PrintTo(const GammaSurfaceFilter& f, ::std::ostream* os) {
++    *os << "GammaSurfaceFilter {";
++    if (f.autoContent) {
++        *os << " .content = auto";
++    } else {
++        *os << " .content = (" << f.contentLeft << ", " << f.contentTop << ", " << f.contentRight
++            << ", " << f.contentBottom << ")";
++    }
++    *os << " .projection = " << f.projectionWidth << "x" << f.projectionHeight
++        << " .cropX = " << f.cropX << " }";
++}
++
++} // namespace android::renderengine
+diff --git a/frameworks/native/libs/renderengine/include/renderengine/LayerSettings.h b/frameworks/native/libs/renderengine/include/renderengine/LayerSettings.h
+index 8ac0af47c64..93a3f832ece 100644
+--- a/frameworks/native/libs/renderengine/include/renderengine/LayerSettings.h
++++ b/frameworks/native/libs/renderengine/include/renderengine/LayerSettings.h
+@@ -19,6 +19,7 @@
+ #include <math/mat4.h>
+ #include <math/vec3.h>
+ #include <renderengine/ExternalTexture.h>
++#include <renderengine/GammaSurfaceFilter.h>
+ #include <renderengine/PrintMatrix.h>
+ #include <ui/BlurRegion.h>
+ #include <ui/DebugUtils.h>
+@@ -135,6 +136,9 @@ struct LayerSettings {
+ 
+     StretchEffect stretchEffect;
+ 
++    // GammaOS: draw the buffer through the 4:3 Cropped surface filter.
++    std::optional<GammaSurfaceFilter> gammaSurfaceFilter;
++
+     // Name associated with the layer for debugging purposes.
+     std::string name;
+ 
+@@ -183,7 +187,8 @@ static inline bool operator==(const LayerSettings& lhs, const LayerSettings& rhs
+             lhs.skipContentDraw == rhs.skipContentDraw && lhs.shadow == rhs.shadow &&
+             lhs.backgroundBlurRadius == rhs.backgroundBlurRadius &&
+             lhs.blurRegionTransform == rhs.blurRegionTransform &&
+-            lhs.stretchEffect == rhs.stretchEffect && lhs.whitePointNits == rhs.whitePointNits;
++            lhs.stretchEffect == rhs.stretchEffect && lhs.whitePointNits == rhs.whitePointNits &&
++            lhs.gammaSurfaceFilter == rhs.gammaSurfaceFilter;
+ }
+ 
+ static inline void PrintTo(const Buffer& settings, ::std::ostream* os) {
+@@ -285,6 +290,10 @@ static inline void PrintTo(const LayerSettings& settings, ::std::ostream* os) {
+         *os << "\n    .stretchEffect = ";
+         PrintTo(settings.stretchEffect, os);
+     }
++    if (settings.gammaSurfaceFilter) {
++        *os << "\n    .gammaSurfaceFilter = ";
++        PrintTo(*settings.gammaSurfaceFilter, os);
++    }
+     *os << "\n    .whitePointNits = " << settings.whitePointNits;
+     *os << "\n}";
+ }
+diff --git a/frameworks/native/libs/renderengine/skia/SkiaRenderEngine.cpp b/frameworks/native/libs/renderengine/skia/SkiaRenderEngine.cpp
+index 389e4d91820..05ca1865535 100644
+--- a/frameworks/native/libs/renderengine/skia/SkiaRenderEngine.cpp
++++ b/frameworks/native/libs/renderengine/skia/SkiaRenderEngine.cpp
+@@ -86,6 +86,7 @@
+ #include "filters/GammaCustomShader.h"
+ #include "filters/GammaVulkanShaderChain.h"
+ #include "filters/GammaGLSLShaderChain.h"
++#include "filters/GammaSurfaceScaler.h"
+ #include "log/log_main.h"
+ #include "skia/debug/SkiaCapture.h"
+ #include "skia/debug/SkiaMemoryReporter.h"
+@@ -702,10 +703,10 @@ void SkiaRenderEngine::drawLayersInternal(
+     LOG_ALWAYS_FATAL_IF(grContext->abandoned(), "GrContext is abandoned/device lost at start of %s",
+                         __func__);
+  
+-    // GammaOS: if the shader toggle changed since last frame, drain GPU once.
++    // GammaOS: if the post-process shader toggled since last frame, drain GPU once.
++    const GammaShaderMode gammaMode = gammaShaderMode();
+     static bool sPrevShaderOn = false;
+-    const bool shaderPropNow =
+-            android::base::GetBoolProperty("persist.gammaos.shader.enable", false);
++    const bool shaderPropNow = gammaMode == GammaShaderMode::Composition;
+     if (CC_UNLIKELY(shaderPropNow != sPrevShaderOn)) {
+         grContext->flushAndSubmit(GrSyncCpu::kYes);
+         sPrevShaderOn = shaderPropNow;
+@@ -759,7 +760,7 @@ void SkiaRenderEngine::drawLayersInternal(
+     // GammaOS: if post-process shader is enabled, render into an offscreen surface
+     // to avoid src==dst hazards in the post-pass.
+     sk_sp<SkSurface> gammaPostSurface;
+-    const bool kGammaShaderOn = android::base::GetBoolProperty("persist.gammaos.shader.enable", false);
++    const bool kGammaShaderOn = shaderPropNow;
+     if (kGammaShaderOn && activeSurface == dstSurface) {
+         gammaPostSurface = getOrMakeGammaScratch(dstSurface);
+         // (gammaPostSurface != nullptr) expected; RE will still render if allocation fails.
+@@ -859,6 +860,7 @@ void SkiaRenderEngine::drawLayersInternal(
+             canvas->drawAnnotation(SkRect::MakeEmpty(), layer.name.c_str(),
+                                    SkData::MakeWithCString(layerSettings.str().c_str()));
+         }
++        const SkMatrix displayMatrix = canvas->getTotalMatrix();
+         // Layers have a local transform that should be applied to them
+         canvas->concat(getSkM44(layer.geometry.positionTransform).asM33());
+ 
+@@ -992,6 +994,7 @@ void SkiaRenderEngine::drawLayersInternal(
+ 
+         const ui::Dataspace layerDataspace = layer.sourceDataspace;
+ 
++        std::optional<GammaSurfaceScaler::Result> gammaScaled;
+         SkPaint paint;
+         if (layer.source.buffer.buffer) {
+             ATRACE_NAME("DrawImage");
+@@ -1046,7 +1049,15 @@ void SkiaRenderEngine::drawLayersInternal(
+ 
+             sk_sp<SkShader> shader;
+ 
+-            if (layer.source.buffer.useTextureFiltering) {
++            if (layer.gammaSurfaceFilter) {
++                gammaScaled = GammaSurfaceScaler::make(image, texMatrix,
++                                                       {bounds.width(), bounds.height()},
++                                                       getSkRect(display.clip),
++                                                       *layer.gammaSurfaceFilter);
++            }
++            if (gammaScaled) {
++                shader = gammaScaled->shader;
++            } else if (layer.source.buffer.useTextureFiltering) {
+                 shader = image->makeShader(SkTileMode::kClamp, SkTileMode::kClamp,
+                                            SkSamplingOptions(
+                                                    {SkFilterMode::kLinear, SkMipmapMode::kNone}),
+@@ -1170,15 +1181,25 @@ void SkiaRenderEngine::drawLayersInternal(
+             }
+         }
+ 
+-        if (!roundRectClip.isEmpty()) {
+-            canvas->clipRRect(roundRectClip, true);
+-        }
+-
+-        if (!bounds.isRect()) {
+-            paint.setAntiAlias(true);
+-            canvas->drawRRect(bounds, paint);
++        if (gammaScaled) {
++            // The picture is placed on the display, not on the layer, with black around it.
++            canvas->setMatrix(displayMatrix);
++            SkPaint black;
++            black.setColor(SK_ColorBLACK);
++            black.setAlphaf(layer.alpha);
++            canvas->drawRect(getSkRect(display.clip), black);
++            canvas->drawRect(gammaScaled->dstRect, paint);
+         } else {
+-            canvas->drawRect(bounds.rect(), paint);
++            if (!roundRectClip.isEmpty()) {
++                canvas->clipRRect(roundRectClip, true);
++            }
++
++            if (!bounds.isRect()) {
++                paint.setAntiAlias(true);
++                canvas->drawRRect(bounds, paint);
++            } else {
++                canvas->drawRect(bounds.rect(), paint);
++            }
+         }
+         if (kFlushAfterEveryLayer) {
+             ATRACE_NAME("flush surface");
+@@ -1208,26 +1229,26 @@ void SkiaRenderEngine::drawLayersInternal(
+     surfaceAutoSaveRestore.restore();
+     mCapture->endCapture();
+     // ---------------- GammaOS: global CRT/scanline post-process ------------------------------
+-    const bool kRunUnifiedFx = kGammaShaderOn;
+-    if (kRunUnifiedFx) {
+-        // GammaOS: keep sys.gammaos.renderengine.active in step with the backend that
+-        // is really compositing. bootFinished() publishes it once, but a SurfaceFlinger
+-        // restart can re-pick the backend (custom-vk forces Vulkan) without re-running
+-        // bootFinished, so refresh it here whenever it changes. Cheap: only written on a
+-        // change, and only while a shader is enabled (the only time the value matters).
+-        {
+-            static std::string sPublishedBackend;
+-            // backend() is public on the base context, so read it directly - no downcast
+-            // to GrDirectContext (that would be UB for a non-direct recording context).
+-            GrRecordingContext* grCtx = dstSurface ? dstSurface->recordingContext() : nullptr;
+-            if (grCtx) {
+-                const char* be = (grCtx->backend() == GrBackendApi::kVulkan) ? "vk" : "gl";
+-                if (sPublishedBackend != be) {
+-                    sPublishedBackend = be;
+-                    android::base::SetProperty("sys.gammaos.renderengine.active", be);
+-                }
++    // GammaOS: keep sys.gammaos.renderengine.active in step with the backend that
++    // is really compositing. bootFinished() publishes it once, but a SurfaceFlinger
++    // restart can re-pick the backend (custom-vk forces Vulkan) without re-running
++    // bootFinished, so refresh it here whenever it changes. Cheap: only written on a
++    // change, and only while a shader is enabled (the only time the value matters).
++    if (gammaMode != GammaShaderMode::Off) {
++        static std::string sPublishedBackend;
++        // backend() is public on the base context, so read it directly - no downcast
++        // to GrDirectContext (that would be UB for a non-direct recording context).
++        GrRecordingContext* grCtx = dstSurface ? dstSurface->recordingContext() : nullptr;
++        if (grCtx) {
++            const char* be = (grCtx->backend() == GrBackendApi::kVulkan) ? "vk" : "gl";
++            if (sPublishedBackend != be) {
++                sPublishedBackend = be;
++                android::base::SetProperty("sys.gammaos.renderengine.active", be);
+             }
+         }
++    }
++    const bool kRunUnifiedFx = kGammaShaderOn;
++    if (kRunUnifiedFx) {
+         const bool debugLog = android::base::GetBoolProperty("persist.gammaos.shader.debug", false);
+         const bool isProtected = (buffer->getBuffer()->getUsage() & GRALLOC_USAGE_PROTECTED) != 0;
+ 
+diff --git a/frameworks/native/libs/renderengine/skia/filters/GammaSurfaceScaler.cpp b/frameworks/native/libs/renderengine/skia/filters/GammaSurfaceScaler.cpp
+new file mode 100644
+index 00000000000..ad9b2b06f4c
+--- /dev/null
++++ b/frameworks/native/libs/renderengine/skia/filters/GammaSurfaceScaler.cpp
+@@ -0,0 +1,121 @@
++#include "GammaSurfaceScaler.h"
++
++#include <SkM44.h>
++#include <SkRuntimeEffect.h>
++#include <SkSamplingOptions.h>
++#include <SkTileMode.h>
++#include <log/log.h>
++
++#include <algorithm>
++#include <cmath>
++#include <mutex>
++
++namespace android {
++namespace renderengine {
++namespace skia {
++
++namespace {
++
++// Sharp bilinear: texel centres sit on integers in c. Each texel is held flat and neighbours
++// are blended only across the one display pixel that straddles their shared edge, so scale is
++// display pixels per texel (>= 1). At scale 1 this is plain bilinear, which is also the
++// minification policy: one hardware bilinear sample, no extra antialiasing.
++static const char* kSkSL = R"(
++    uniform shader image;
++    uniform float3x3 displayToTexel;
++    uniform float2 scale;
++    uniform float4 texClamp;
++
++    half4 main(float2 p) {
++        float2 c = (displayToTexel * float3(p, 1)).xy - 0.5;
++        float2 i = floor(c);
++        float2 f = clamp((c - i - 0.5) * scale + 0.5, 0.0, 1.0);
++        return image.eval(clamp(i + f + 0.5, texClamp.xy, texClamp.zw));
++    }
++)";
++
++sk_sp<SkRuntimeEffect> effect() {
++    static std::once_flag once;
++    static sk_sp<SkRuntimeEffect> sEffect;
++    std::call_once(once, [] {
++        auto [fx, error] = SkRuntimeEffect::MakeForShader(SkString(kSkSL));
++        ALOGE_IF(!fx, "GammaSurfaceScaler: SkSL compile failed: %s", error.c_str());
++        sEffect = std::move(fx);
++    });
++    return sEffect;
++}
++
++} // namespace
++
++std::optional<GammaSurfaceScaler::Result> GammaSurfaceScaler::make(
++        const sk_sp<SkImage>& image, const SkMatrix& layerToTexel, SkSize layerSize,
++        const SkRect& displayClip, const GammaSurfaceFilter& filter) {
++    const float bw = layerSize.width();
++    const float bh = layerSize.height();
++    const float visibleW = filter.projectionWidth - 2.f * filter.cropX;
++    const float projH = filter.projectionHeight;
++    const sk_sp<SkRuntimeEffect> fx = effect();
++    if (!fx || !image || bw <= 0.f || bh <= 0.f || visibleW <= 0.f || projH <= 0.f ||
++        displayClip.isEmpty()) {
++        return std::nullopt;
++    }
++
++    float cl = filter.contentLeft, ct = filter.contentTop;
++    float cr = filter.contentRight, cb = filter.contentBottom;
++    if (filter.autoContent) {
++        constexpr float kAspect = 4.f / 3.f;
++        cl = ct = 0.f;
++        cr = cb = 1.f;
++        if (bw > bh * kAspect) {
++            const float w = bh * kAspect / bw;
++            cl = (1.f - w) / 2.f;
++            cr = cl + w;
++        } else {
++            const float h = bw / kAspect / bh;
++            ct = (1.f - h) / 2.f;
++            cb = ct + h;
++        }
++    }
++
++    // Fit the visible part of the projection to the display, centred.
++    const float clipW = displayClip.width();
++    const float clipH = displayClip.height();
++    const float k = std::min(clipW / visibleW, clipH / projH);
++    const float projX = displayClip.fLeft + (clipW - filter.projectionWidth * k) / 2.f;
++    const float projY = displayClip.fTop + (clipH - projH * k) / 2.f;
++    SkRect dst = SkRect::MakeXYWH(displayClip.fLeft + (clipW - visibleW * k) / 2.f, projY,
++                                  visibleW * k, projH * k);
++    if (!dst.intersect(displayClip)) {
++        return std::nullopt;
++    }
++
++    // display -> projection -> content rectangle -> layer-relative -> texels
++    const float sx = (cr - cl) * bw / (filter.projectionWidth * k);
++    const float sy = (cb - ct) * bh / (projH * k);
++    const SkMatrix displayToLayer =
++            SkMatrix::MakeAll(sx, 0.f, cl * bw - projX * sx, 0.f, sy, ct * bh - projY * sy, 0.f,
++                              0.f, 1.f);
++    const SkMatrix displayToTexel = SkMatrix::Concat(layerToTexel, displayToLayer);
++
++    SkRect texClamp = layerToTexel.mapRect(SkRect::MakeLTRB(cl * bw, ct * bh, cr * bw, cb * bh));
++    texClamp.inset(std::min(0.5f, texClamp.width() / 2.f),
++                   std::min(0.5f, texClamp.height() / 2.f));
++
++    const float texelsPerPxX = std::hypot(displayToTexel.getScaleX(), displayToTexel.getSkewX());
++    const float texelsPerPxY = std::hypot(displayToTexel.getSkewY(), displayToTexel.getScaleY());
++    const SkV2 scale{texelsPerPxX > 0.f ? std::max(1.f, 1.f / texelsPerPxX) : 1.f,
++                     texelsPerPxY > 0.f ? std::max(1.f, 1.f / texelsPerPxY) : 1.f};
++
++    SkRuntimeShaderBuilder builder(fx);
++    builder.child("image") = image->makeShader(SkTileMode::kClamp, SkTileMode::kClamp,
++                                               SkSamplingOptions(SkFilterMode::kLinear));
++    builder.uniform("displayToTexel") = displayToTexel;
++    builder.uniform("scale") = scale;
++    builder.uniform("texClamp") =
++            SkV4{texClamp.fLeft, texClamp.fTop, texClamp.fRight, texClamp.fBottom};
++    return Result{builder.makeShader(), dst};
++}
++
++} // namespace skia
++} // namespace renderengine
++} // namespace android
+diff --git a/frameworks/native/libs/renderengine/skia/filters/GammaSurfaceScaler.h b/frameworks/native/libs/renderengine/skia/filters/GammaSurfaceScaler.h
+new file mode 100644
+index 00000000000..efb77e4f195
+--- /dev/null
++++ b/frameworks/native/libs/renderengine/skia/filters/GammaSurfaceScaler.h
+@@ -0,0 +1,34 @@
++#pragma once
++
++#include <SkImage.h>
++#include <SkMatrix.h>
++#include <SkRect.h>
++#include <SkShader.h>
++#include <renderengine/GammaSurfaceFilter.h>
++
++#include <optional>
++
++namespace android {
++namespace renderengine {
++namespace skia {
++
++// GammaOS 4:3 Cropped: samples a layer's buffer through the GammaSurfaceFilter projection with
++// a sharp bilinear kernel, directly while the layer is drawn.
++struct GammaSurfaceScaler {
++    struct Result {
++        // Expects logical display coordinates as its local coordinates.
++        sk_sp<SkShader> shader;
++        // The visible picture in logical display coordinates.
++        SkRect dstRect;
++    };
++
++    // layerToTexel maps coordinates relative to the layer bounds' top-left corner to image
++    // texels, as the regular layer draw does.
++    static std::optional<Result> make(const sk_sp<SkImage>& image, const SkMatrix& layerToTexel,
++                                      SkSize layerSize, const SkRect& displayClip,
++                                      const GammaSurfaceFilter& filter);
++};
++
++} // namespace skia
++} // namespace renderengine
++} // namespace android
+diff --git a/frameworks/native/libs/renderengine/skia/filters/README.md b/frameworks/native/libs/renderengine/skia/filters/README.md
+index 6707406864c..d7deb6b3512 100644
+--- a/frameworks/native/libs/renderengine/skia/filters/README.md
++++ b/frameworks/native/libs/renderengine/skia/filters/README.md
+@@ -128,7 +128,7 @@ build dynamic UI sliders.
+ | Property | Type | Description |
+ |----------|------|-------------|
+ | `persist.gammaos.shader.enable` | bool | Master on/off |
+-| `persist.gammaos.shader.type` | string | `crt-simple`, `lcd3x`, `lcd-shader`, `blur-fill`, `custom` |
++| `persist.gammaos.shader.type` | string | `crt-simple`, `lcd3x`, `lcd-shader`, `blur-fill`, `4x3-cropped`, `custom` |
+ | `persist.gammaos.shader.custom.preset` | string | Path to .slangp file |
+ | `persist.gammaos.shader.custom.res_scale` | string | Downscale factor: `1/2`, `1/3`, `1/4`, or decimal |
+ | `persist.gammaos.shader.debug` | bool | Dump SkSL to `.shader_debug_sksl` |
+@@ -136,6 +136,23 @@ build dynamic UI sliders.
+ | `persist.gammaos.shader.lcd3x.*` | float | LCD3x parameters |
+ | `persist.gammaos.shader.lcd-shader.*` | float | LCD-shader parameters |
+ | `persist.gammaos.shader.blur-fill.*` | float | Blur-fill parameters |
++| `persist.gammaos.shader.4x3.content` | string | 4:3 Cropped game area: `auto` (centred 4:3), `full`, or normalized `l,t,r,b` |
++| `persist.gammaos.shader.4x3.content.<package>` | string | Per-emulator override of the game area |
++| `persist.gammaos.shader.4x3.exclude` | string | Comma-separated packages 4:3 Cropped skips (RetroArch is always skipped) |
++
++## 4:3 Cropped (`4x3-cropped`)
++
++Unlike the other types, this is not a post-process. SurfaceFlinger marks the game layer of the
++emulator Nano launched (`sys.gammaos.nano.launch_app`), and only that layer is client composited.
++RenderEngine draws it through `GammaSurfaceScaler`: the game area is stretched to an 800 × 600
++projection, 40 projected pixels are cut from each side, and the remaining 720 × 600 is centred on
++the display (at 0,60 on the 720 × 720 panel) with black around it. Sampling is sharp bilinear:
++each texel is held flat and blended with its neighbour only across the display pixel on their
++shared edge. When the picture is shrunk the kernel is plain bilinear.
++
++The game layer is the launched package's opaque buffer layer with the largest area, so a
++SurfaceView wins over the translucent window above it. A window that is opaque outside its
++SurfaceView still covers the extended picture there.
+ 
+ ## SELinux Policy
+ 
+diff --git a/frameworks/native/services/surfaceflinger/CompositionEngine/include/compositionengine/LayerFECompositionState.h b/frameworks/native/services/surfaceflinger/CompositionEngine/include/compositionengine/LayerFECompositionState.h
+index 11759b855f2..c48dd9c23f6 100644
+--- a/frameworks/native/services/surfaceflinger/CompositionEngine/include/compositionengine/LayerFECompositionState.h
++++ b/frameworks/native/services/surfaceflinger/CompositionEngine/include/compositionengine/LayerFECompositionState.h
+@@ -21,6 +21,7 @@
+ #include <android/gui/CachingHint.h>
+ #include <gui/HdrMetadata.h>
+ #include <math/mat4.h>
++#include <renderengine/GammaSurfaceFilter.h>
+ #include <ui/BlurRegion.h>
+ #include <ui/FloatRect.h>
+ #include <ui/LayerStack.h>
+@@ -214,6 +215,11 @@ struct LayerFECompositionState {
+     float desiredHdrSdrRatio = 1.f;
+ 
+     gui::CachingHint cachingHint = gui::CachingHint::Enabled;
++
++    // GammaOS: set on the launched emulator's game layer while the 4:3 Cropped surface
++    // shader is active. Forces client composition for this layer every frame.
++    std::optional<renderengine::GammaSurfaceFilter> gammaSurfaceFilter;
++
+     virtual ~LayerFECompositionState();
+ 
+     // Debugging
+diff --git a/frameworks/native/services/surfaceflinger/CompositionEngine/src/ClientCompositionRequestCache.cpp b/frameworks/native/services/surfaceflinger/CompositionEngine/src/ClientCompositionRequestCache.cpp
+index bdaa1d0ae10..278c41b9b0b 100644
+--- a/frameworks/native/services/surfaceflinger/CompositionEngine/src/ClientCompositionRequestCache.cpp
++++ b/frameworks/native/services/surfaceflinger/CompositionEngine/src/ClientCompositionRequestCache.cpp
+@@ -37,7 +37,8 @@ inline bool equalIgnoringSource(const renderengine::LayerSettings& lhs,
+             lhs.colorTransform == rhs.colorTransform &&
+             lhs.disableBlending == rhs.disableBlending && lhs.shadow == rhs.shadow &&
+             lhs.backgroundBlurRadius == rhs.backgroundBlurRadius &&
+-            lhs.stretchEffect == rhs.stretchEffect;
++            lhs.stretchEffect == rhs.stretchEffect &&
++            lhs.gammaSurfaceFilter == rhs.gammaSurfaceFilter;
+ }
+ 
+ inline bool equalIgnoringBuffer(const renderengine::Buffer& lhs, const renderengine::Buffer& rhs) {
+diff --git a/frameworks/native/services/surfaceflinger/CompositionEngine/src/LayerFECompositionState.cpp b/frameworks/native/services/surfaceflinger/CompositionEngine/src/LayerFECompositionState.cpp
+index 2d10866db37..b32065d007f 100644
+--- a/frameworks/native/services/surfaceflinger/CompositionEngine/src/LayerFECompositionState.cpp
++++ b/frameworks/native/services/surfaceflinger/CompositionEngine/src/LayerFECompositionState.cpp
+@@ -127,6 +127,9 @@ void LayerFECompositionState::dump(std::string& out) const {
+     }
+     dumpVal(out, "colorTransform", colorTransform);
+     dumpVal(out, "caching hint", toString(cachingHint));
++    if (gammaSurfaceFilter) {
++        out.append("gammaSurfaceFilter ");
++    }
+ 
+     out.append("\n");
+ }
+diff --git a/frameworks/native/services/surfaceflinger/CompositionEngine/src/OutputLayer.cpp b/frameworks/native/services/surfaceflinger/CompositionEngine/src/OutputLayer.cpp
+index 60e095c49b6..e5a32c1a413 100644
+--- a/frameworks/native/services/surfaceflinger/CompositionEngine/src/OutputLayer.cpp
++++ b/frameworks/native/services/surfaceflinger/CompositionEngine/src/OutputLayer.cpp
+@@ -370,7 +370,7 @@ void OutputLayer::updateCompositionState(
+     // These are evaluated every frame as they can potentially change at any
+     // time.
+     if (layerFEState->forceClientComposition || !profile.isDataspaceSupported(state.dataspace) ||
+-        forceClientComposition) {
++        forceClientComposition || layerFEState->gammaSurfaceFilter) {
+         state.forceClientComposition = true;
+     }
+ }
+diff --git a/frameworks/native/services/surfaceflinger/Layer.cpp b/frameworks/native/services/surfaceflinger/Layer.cpp
+index 59a45806b45..6c9c0c6ec57 100644
+--- a/frameworks/native/services/surfaceflinger/Layer.cpp
++++ b/frameworks/native/services/surfaceflinger/Layer.cpp
+@@ -44,6 +44,7 @@
+ #include <gui/TraceUtils.h>
+ #include <math.h>
+ #include <private/android_filesystem_config.h>
++#include <renderengine/GammaSurfaceFilter.h>
+ #include <renderengine/RenderEngine.h>
+ #include <stdint.h>
+ #include <stdlib.h>
+@@ -659,7 +660,7 @@ void Layer::preparePerFrameCompositionState() {
+     }
+     // Force GPU composition when GammaOS shader post-processing is enabled,
+     // so that drawLayers() is called and the shader can be applied.
+-    if (android::base::GetBoolProperty("persist.gammaos.shader.enable", false)) {
++    if (renderengine::gammaCompositionShaderOn()) {
+         snapshot->forceClientComposition = true;
+     }
+     // If there are no visible region changes, we still need to update blur parameters.
+diff --git a/frameworks/native/services/surfaceflinger/LayerFE.cpp b/frameworks/native/services/surfaceflinger/LayerFE.cpp
+index cdc7ffd34cd..7fc47c550ce 100644
+--- a/frameworks/native/services/surfaceflinger/LayerFE.cpp
++++ b/frameworks/native/services/surfaceflinger/LayerFE.cpp
+@@ -265,6 +265,7 @@ void LayerFE::prepareBufferStateClientComposition(
+     layerSettings.source.buffer.maxLuminanceNits = maxLuminance;
+     layerSettings.frameNumber = mSnapshot->frameNumber;
+     layerSettings.bufferId = mSnapshot->externalTexture->getId();
++    layerSettings.gammaSurfaceFilter = mSnapshot->gammaSurfaceFilter;
+ 
+     bool useFiltering = targetSettings.needsFiltering ||
+                         mSnapshot->geomLayerTransform.needsBilinearFiltering();
+diff --git a/frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp b/frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp
+index ec930abfc68..1c4f4f43a7c 100644
+--- a/frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp
++++ b/frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp
+@@ -76,6 +76,7 @@
+ #include <private/android_filesystem_config.h>
+ #include <private/gui/SyncFeatures.h>
+ #include <processgroup/processgroup.h>
++#include <renderengine/GammaSurfaceFilter.h>
+ #include <renderengine/RenderEngine.h>
+ #include <renderengine/impl/ExternalTexture.h>
+ #include <scheduler/FrameTargeter.h>
+@@ -3052,8 +3053,7 @@ CompositeResultsPerDisplay SurfaceFlinger::composite(
+     // Guarded by: persist.gammaos.rgb.sample.pre_fx (default: true)
+     // --------------------------------------------------------------------
+     {
+-        const bool shaderEnabled =
+-                android::base::GetBoolProperty("persist.gammaos.shader.enable", false);
++        const bool shaderEnabled = renderengine::gammaCompositionShaderOn();
+         const bool bfiEnabled =
+                 android::base::GetBoolProperty("persist.gammaos.bfi.enable", false);
+         const bool preFxOK =
+@@ -3500,7 +3500,7 @@ CompositeResultsPerDisplay SurfaceFlinger::composite(
+     }
+ 
+     // GammaOS: if post-processing shader is enabled, force GPU composition
+-    if (android::base::GetBoolProperty("persist.gammaos.shader.enable", false)) {
++    if (renderengine::gammaCompositionShaderOn()) {
+         refreshArgs.devOptForceClientComposition = true;
+     }
+     
+@@ -3835,7 +3835,7 @@ CompositeResultsPerDisplay SurfaceFlinger::composite(
+     sPrevCtmActive = ctmActiveNow;
+ 
+     // GammaOS: if post-processing shader is enabled, force GPU composition
+-    if (android::base::GetBoolProperty("persist.gammaos.shader.enable", false)) {
++    if (renderengine::gammaCompositionShaderOn()) {
+         refreshArgs.devOptForceClientComposition = true;
+     }
+ 
+@@ -10728,10 +10728,125 @@ void SurfaceFlinger::moveSnapshotsFromCompositionArgs(
+     }
+ }
+ 
++namespace {
++
++struct GammaSurfaceFilterTarget {
++    renderengine::GammaSurfaceFilter filter;
++    gui::Uid appUid = gui::Uid::INVALID;
++};
++
++// GammaOS: RetroArch has its own shader pipeline, so 4:3 Cropped never applies to it.
++bool gammaSurfaceFilterExcluded(const std::string& pkg) {
++    static constexpr const char* kRetroArch[] = {"com.retroarch", "com.retroarch.aarch64",
++                                                 "com.retroarch.ra32"};
++    for (const char* excluded : kRetroArch) {
++        if (pkg == excluded) return true;
++    }
++    for (const auto& excluded :
++         base::Split(base::GetProperty("persist.gammaos.shader.4x3.exclude"s, ""), ",")) {
++        if (base::Trim(excluded) == pkg) return true;
++    }
++    return false;
++}
++
++// The game content inside the emulator's buffer: "auto" (centred 4:3), "full", or normalized
++// "left,top,right,bottom". A per-package property overrides the global one.
++renderengine::GammaSurfaceFilter gammaSurfaceFilterProfile(const std::string& pkg) {
++    renderengine::GammaSurfaceFilter filter;
++    std::string content = base::GetProperty("persist.gammaos.shader.4x3.content." + pkg, "");
++    if (content.empty()) {
++        content = base::GetProperty("persist.gammaos.shader.4x3.content"s, "auto");
++    }
++    float l, t, r, b;
++    char extra;
++    if (content == "full") {
++        filter.autoContent = false;
++    } else if (sscanf(content.c_str(), "%f,%f,%f,%f%c", &l, &t, &r, &b, &extra) == 4 &&
++               l >= 0.f && t >= 0.f && r <= 1.f && b <= 1.f && l < r && t < b) {
++        filter.autoContent = false;
++        filter.contentLeft = l;
++        filter.contentTop = t;
++        filter.contentRight = r;
++        filter.contentBottom = b;
++    }
++    return filter;
++}
++
++// The launched emulator, if 4:3 Cropped should filter it. Its uid comes from its input window;
++// those container layers draw nothing, so this runs before the drawable snapshots are moved.
++std::optional<GammaSurfaceFilterTarget> gammaSurfaceFilterTarget(
++        const frontend::LayerSnapshotBuilder& builder) {
++    if (renderengine::gammaShaderMode() != renderengine::GammaShaderMode::Surface ||
++        !base::GetBoolProperty("sys.gammaos.nano.app_launched"s, false)) {
++        return std::nullopt;
++    }
++    const std::string pkg = base::GetProperty("sys.gammaos.nano.launch_app"s, "");
++    if (pkg.empty() || gammaSurfaceFilterExcluded(pkg)) return std::nullopt;
++
++    GammaSurfaceFilterTarget target;
++    builder.forEachInputSnapshot([&](const frontend::LayerSnapshot& snapshot) {
++        if (target.appUid == gui::Uid::INVALID && snapshot.inputInfo.token &&
++            snapshot.inputInfo.packageName == pkg) {
++            target.appUid = snapshot.inputInfo.ownerUid;
++        }
++    });
++    if (target.appUid == gui::Uid::INVALID) return std::nullopt;
++    target.filter = gammaSurfaceFilterProfile(pkg);
++    return target;
++}
++
++// Marks the emulator's game layer for the filter and clears every other layer. A window drawn
++// over a SurfaceView has to be translucent, so an opaque layer wins, then the largest.
++void gammaSelectSurfaceFilterLayer(compositionengine::CompositionRefreshArgs& refreshArgs,
++                                   const std::vector<std::pair<Layer*, LayerFE*>>& layers,
++                                   const std::optional<GammaSurfaceFilterTarget>& target) {
++    static int32_t sSelectedSequence = -1;
++    static std::optional<renderengine::GammaSurfaceFilter> sSelectedFilter;
++
++    LayerFE* selected = nullptr;
++    if (target) {
++        bool selectedOpaque = false;
++        float selectedArea = 0.f;
++        for (const auto& [_, layerFE] : layers) {
++            const auto& snapshot = *layerFE->mSnapshot;
++            if (snapshot.uid != target->appUid || !snapshot.externalTexture ||
++                snapshot.isSecure || snapshot.hasProtectedContent) {
++                continue;
++            }
++            const float area =
++                    snapshot.transformedBounds.getWidth() * snapshot.transformedBounds.getHeight();
++            if (area <= 0.f) continue;
++            if (!selected || (snapshot.contentOpaque && !selectedOpaque) ||
++                (snapshot.contentOpaque == selectedOpaque && area > selectedArea)) {
++                selected = layerFE;
++                selectedOpaque = snapshot.contentOpaque;
++                selectedArea = area;
++            }
++        }
++    }
++
++    std::optional<renderengine::GammaSurfaceFilter> filter;
++    if (selected) filter = target->filter;
++    const int32_t sequence = selected ? selected->mSnapshot->sequence : -1;
++    // Output layers only drop forced client composition on a geometry update.
++    if (sequence != sSelectedSequence || filter != sSelectedFilter) {
++        sSelectedSequence = sequence;
++        sSelectedFilter = filter;
++        refreshArgs.updatingGeometryThisFrame = true;
++    }
++    for (const auto& [_, layerFE] : layers) {
++        layerFE->mSnapshot->gammaSurfaceFilter = layerFE == selected ? filter : std::nullopt;
++    }
++}
++
++} // namespace
++
+ std::vector<std::pair<Layer*, LayerFE*>> SurfaceFlinger::moveSnapshotsToCompositionArgs(
+         compositionengine::CompositionRefreshArgs& refreshArgs, bool cursorOnly) {
+     std::vector<std::pair<Layer*, LayerFE*>> layers;
+     if (mLayerLifecycleManagerEnabled) {
++        const auto gammaTarget = cursorOnly ? std::nullopt
++                                            : gammaSurfaceFilterTarget(mLayerSnapshotBuilder);
+         nsecs_t currentTime = systemTime();
+         mLayerSnapshotBuilder.forEachVisibleSnapshot(
+                 [&](std::unique_ptr<frontend::LayerSnapshot>& snapshot) {
+@@ -10756,6 +10871,9 @@ std::vector<std::pair<Layer*, LayerFE*>> SurfaceFlinger::moveSnapshotsToComposit
+                     refreshArgs.layers.push_back(layerFE);
+                     layers.emplace_back(legacyLayer.get(), layerFE.get());
+                 });
++        if (!cursorOnly) {
++            gammaSelectSurfaceFilterLayer(refreshArgs, layers, gammaTarget);
++        }
+     }
+     if (mLegacyFrontEndEnabled && !mLayerLifecycleManagerEnabled) {
+         auto moveSnapshots = [&layers, &refreshArgs, cursorOnly](Layer* layer) {
+diff --git a/packages/apps/ShaderControl/java/com/gammaos/shadercontrol/MainActivity.java b/packages/apps/ShaderControl/java/com/gammaos/shadercontrol/MainActivity.java
+index 02751bf7950..8e3a941554c 100755
+--- a/packages/apps/ShaderControl/java/com/gammaos/shadercontrol/MainActivity.java
++++ b/packages/apps/ShaderControl/java/com/gammaos/shadercontrol/MainActivity.java
+@@ -53,6 +53,7 @@ public class MainActivity extends AppCompatActivity {
+     private RadioButton radioLcd3x;
+     private RadioButton radioLcdShader;
+     private RadioButton radioBlurFill;
++    private RadioButton radio4x3Cropped;
+     private RadioButton radioCustomSksl;
+     private RadioButton radioCustomVk;
+     private RadioButton radioCustomGl;
+@@ -244,6 +245,7 @@ public class MainActivity extends AppCompatActivity {
+         radioLcd3x = findViewById(R.id.radioLcd3x);
+         radioLcdShader = findViewById(R.id.radioLcdShader);
+         radioBlurFill = findViewById(R.id.radioBlurFill);
++        radio4x3Cropped = findViewById(R.id.radio4x3Cropped);
+         radioCustomSksl = findViewById(R.id.radioCustomSksl);
+         radioCustomVk = findViewById(R.id.radioCustomVk);
+         radioCustomGl = findViewById(R.id.radioCustomGl);
+@@ -411,6 +413,8 @@ public class MainActivity extends AppCompatActivity {
+                 onModeSelectedLcdShader();
+             } else if (checkedId == R.id.radioBlurFill) {
+                 onModeSelectedBlurFill();
++            } else if (checkedId == R.id.radio4x3Cropped) {
++                onModeSelected4x3Cropped();
+             } else if (checkedId == R.id.radioCustomSksl) {
+                 onModeSelectedCustom("custom");
+             } else if (checkedId == R.id.radioCustomVk) {
+@@ -452,6 +456,12 @@ public class MainActivity extends AppCompatActivity {
+         updateGroupsVisibility();
+     }
+ 
++    private void onModeSelected4x3Cropped() {
++        setSystemProperty("persist.gammaos.shader.enable", "1");
++        setSystemProperty("persist.gammaos.shader.type", "4x3-cropped");
++        updateGroupsVisibility();
++    }
++
+     private void onModeSelectedCustom(String type) {
+         customShaderType = type;
+         setSystemProperty("persist.gammaos.shader.enable", "1");
+@@ -504,6 +514,8 @@ public class MainActivity extends AppCompatActivity {
+             radioLcdShader.setChecked(true);
+         } else if (isBlurFillType(type)) {
+             radioBlurFill.setChecked(true);
++        } else if ("4x3-cropped".equals(type)) {
++            radio4x3Cropped.setChecked(true);
+         } else if ("custom-vk".equals(type)) {
+             customShaderType = "custom-vk";
+             // Ensure this button is visible even if hidden by default
+diff --git a/packages/apps/ShaderControl/res/layout/activity_main.xml b/packages/apps/ShaderControl/res/layout/activity_main.xml
+index 302b838df3c..5dfd3d16b00 100755
+--- a/packages/apps/ShaderControl/res/layout/activity_main.xml
++++ b/packages/apps/ShaderControl/res/layout/activity_main.xml
+@@ -93,6 +93,14 @@
+                 android:text="@string/shader_blur_fill"
+                 android:background="@drawable/focusable_background" />
+ 
++            <RadioButton
++                android:id="@+id/radio4x3Cropped"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_marginStart="16dp"
++                android:text="@string/shader_4x3_cropped"
++                android:background="@drawable/focusable_background" />
++
+             <RadioButton
+                 android:id="@+id/radioCustomSksl"
+                 android:layout_width="wrap_content"
+diff --git a/packages/apps/ShaderControl/res/values/strings.xml b/packages/apps/ShaderControl/res/values/strings.xml
+index fb871f32287..45ada4d7170 100755
+--- a/packages/apps/ShaderControl/res/values/strings.xml
++++ b/packages/apps/ShaderControl/res/values/strings.xml
+@@ -9,6 +9,7 @@
+     <string name="shader_lcd3x">LCD3x</string>
+     <string name="shader_lcd_shader">LCD (lcd-shader)</string>
+     <string name="shader_blur_fill">Blur Fill (EXPERIMENTAL)</string>
++    <string name="shader_4x3_cropped" translatable="false">4:3 Cropped</string>
+ 
+     <string name="section_crt_params">CRT parameters</string>
+     <string name="section_lcd3x_params">LCD3x parameters</string>
 diff --git a/packages/modules/Bluetooth/android/app/src/com/android/bluetooth/btservice/BondStateMachine.java b/packages/modules/Bluetooth/android/app/src/com/android/bluetooth/btservice/BondStateMachine.java
 index bd714284560..c59a0520934 100644
 --- a/packages/modules/Bluetooth/android/app/src/com/android/bluetooth/btservice/BondStateMachine.java
