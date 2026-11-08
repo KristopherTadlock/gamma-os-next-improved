@@ -135,7 +135,10 @@ fixes GammaOS Nano bugs:
   screen stayed open;
 - the Wi-Fi and Bluetooth wizards' result screens (Save completed, the
   connection test result, Register completed), in setup and in Settings,
-  showed B for OK, but B went back a screen; they now show A, which continues.
+  showed B for OK, but B went back a screen; they now show A, which continues;
+- small text in the theme's own fonts (the game list's Gilroy, ES-DE's
+  Akrobat) was fully hinted, which left its edges stair-stepped; glyphs are now
+  light-hinted, snapping only vertically.
 
 It also changes Nano:
 

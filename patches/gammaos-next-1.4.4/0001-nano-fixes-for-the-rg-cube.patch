@@ -6856,7 +6856,7 @@ index 00000000000..8a5a3eb1017
 +
 +}  // namespace android
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuRender.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuRender.cpp
-index b0e278f3bc0..07e35432850 100644
+index b0e278f3bc0..9c8ea17b490 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuRender.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuRender.cpp
 @@ -864,7 +864,7 @@ void NanoMenu::ndsCommitSelect(int slot) {
@@ -6912,7 +6912,20 @@ index b0e278f3bc0..07e35432850 100644
              for (int i = firstL; i < lastL; i++) { if (!lines[i].empty()) drawText(lines[i].c_str(), X(bodyLeft), Y(ly), bodyFs, vR, vG, vB, ap); ly += lineH; }
          }
  
-@@ -5594,6 +5598,9 @@ void NanoMenu::render() {
+@@ -4474,6 +4478,12 @@ const GlyphInfo* NanoMenu::ensureGlyph(uint32_t cp, int rasterPx, int preferFace
+ 
+     FT_Int32 loadFlags = FT_LOAD_RENDER;
+     if (isColorFace) loadFlags |= FT_LOAD_COLOR;
++    // Light hinting snaps only vertically (baseline, x-height), so small text stays sharp without
++    // full hinting's stair-stepped horizontal edges; advances stay whole pixels either way. The
++    // DSi theme's DSVec faces are pixel-grid designs and keep full hinting.
++    const bool dsvecFace = (mNdsFontIdx >= 0 && face == mFtFaces[mNdsFontIdx]) ||
++                           (mNdsNumIdx >= 0 && face == mFtFaces[mNdsNumIdx]);
++    if (!isColorFace && !dsvecFace) loadFlags |= FT_LOAD_TARGET_LIGHT;
+     if (FT_Load_Glyph(face, gi, loadFlags) != 0) {
+         // Cache a blank so an unloadable glyph is not re-attempted (and re-read
+         // off EROFS) every frame.
+@@ -5594,6 +5604,9 @@ void NanoMenu::render() {
      // while the wizard runs, so we can see nano's per-frame CPU cost while setup.sh provisions.
      const int64_t sSetupRenderT0 = systemTime(SYSTEM_TIME_MONOTONIC);
      refreshUserFontScale();   // publish the live user Font Size to ps3::gFontScale before any text draws
@@ -6922,7 +6935,7 @@ index b0e278f3bc0..07e35432850 100644
      // Render-thread watchdog heartbeat: bumped every frame so a background thread
      // can detect a hang (e.g. an infinite loop or a stuck GL call inside a render
      // path) and abort into a tombstone instead of leaving the device frozen.
-@@ -6402,8 +6409,11 @@ void NanoMenu::render() {
+@@ -6402,8 +6415,11 @@ void NanoMenu::render() {
          else if (mGpCalibActive) renderGamepadCalib();
          else if (mGpCaptureActive) renderGamepadCapture();
          else if (mCpActive) renderColorPicker();
