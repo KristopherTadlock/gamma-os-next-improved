@@ -326,7 +326,9 @@ screenshots are captured from the games; `tools/pack-in-art` has the scripts.
 
 On Linux with `curl`, 7-Zip (`7zz` or `7z`), `xz`, `zstd`, `unzip`, `e2fsck` and
 `resize2fs`, `setfattr`, `cc`, `python3`, `sudo` (to loop-mount the system
-image), and about 40 GB free:
+image), AOSP's `unpack_bootimg`, `lz4` and `avbtool` on `PATH`, `MKBOOTIMG`
+naming AOSP's `mkbootimg` (or `mkbootimg.py`), `AVB_KEY` naming AOSP's
+`external/avb/test/data/testkey_rsa4096.pem`, and about 40 GB free:
 
 ```sh
 scripts/build.sh
@@ -344,6 +346,27 @@ The tools it uses:
 - `scripts/lptool.py` lists, extracts, and replaces logical partitions
   (`system_a`, `vendor_a`, ...) in the raw `super_full.img`.
 - `tools/crc16arc.c` is the CRC-16/ARC helper `pactool.py fixcrc` uses.
+- `scripts/patch_vendor_boot.py` patches the vendor kernel's DisplayPort
+  driver (`sprd-drm.ko` in `vendor_boot`), then repacks the image and signs it
+  again with the AOSP test key it was signed with.
+
+### External monitors
+
+Plugging a monitor into the 1.2 vendor kernel crashed the console, and it kept
+rebooting while the monitor stayed attached. On plug-in, the vendor composer
+sets the largest mode the monitor lists. For a 3840x2160 mode the driver
+reads the screen buffer's format, but that first commit has no buffer, so the
+kernel panicked. 4K at 60 Hz also needs more than the two DisplayPort lanes the
+Cube trains over USB-C. The driver also discarded the monitor's preferred mode
+(it only ever preferred TV 1080p60), so a 1440p monitor that also accepts 4K got 4K.
+
+The patched driver:
+
+- offers only modes up to the bandwidth of 4K at 30 Hz (a 297 MHz pixel
+  clock): 4K at 30 Hz, 1440p at 60 Hz, 1080p at 120 Hz and everything below;
+- keeps the monitor's preferred mode, so the composer uses it when it fits,
+  and otherwise the largest mode that does (4K at 30 Hz on a 4K TV);
+- treats a missing buffer as RGB instead of crashing.
 
 The build also grows the system partition by about 431 MB, into the
 unallocated space at the end of the `super` image (`scripts/lptool.py grow`);

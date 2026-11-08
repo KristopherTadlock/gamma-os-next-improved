@@ -10,6 +10,10 @@
 #
 # Set ESDE_APK=/path/to/ES-DE.apk to replace Daijisho with ES-DE
 # (mods/37-esde.sh, 1.2 base only); that also needs aapt.
+#
+# The vendor_boot's DisplayPort driver is patched (scripts/patch_vendor_boot.py),
+# which needs unpack_bootimg, lz4 and avbtool on PATH, MKBOOTIMG naming
+# mkbootimg (or mkbootimg.py) and AVB_KEY naming AOSP's testkey_rsa4096.pem.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -38,6 +42,12 @@ if [[ -n "${ESDE_APK:-}" ]]; then
   ESDE_APK="$(realpath "$ESDE_APK")"
   export ESDE_APK
 fi
+
+for tool in unpack_bootimg lz4 avbtool; do
+  command -v "$tool" >/dev/null || { echo "$tool is required (vendor_boot patch)" >&2; exit 1; }
+done
+[[ -n "${MKBOOTIMG:-}" && -f "${AVB_KEY:-}" ]] || {
+  echo "MKBOOTIMG and AVB_KEY are required (vendor_boot patch)" >&2; exit 1; }
 
 mkdir -p "$WORK/bin" "$WORK/images" "$WORK/mnt" "$OUT"
 export CRC16ARC="$WORK/bin/crc16arc"
@@ -92,6 +102,13 @@ echo "writing $pac"
 python3 -I "$ROOT/scripts/lptool.py" replace "$super" system_a "$system"
 cp "$WORK/pac/$NAME.pac" "$pac.partial"
 python3 -I "$ROOT/scripts/pactool.py" replace "$pac.partial" super_full.img "$super"
+vendor_boot="$WORK/images/vendor_boot.img"
+python3 -I "$ROOT/scripts/pactool.py" extract "$WORK/pac/$NAME.pac" VENDORBOOT "$vendor_boot"
+python3 -I "$ROOT/scripts/patch_vendor_boot.py" "$vendor_boot" "$vendor_boot.patched"
+for slot in VENDORBOOT VENDORBOOT_B; do
+  python3 -I "$ROOT/scripts/pactool.py" replace "$pac.partial" "$slot" "$vendor_boot.patched"
+done
+rm -f "$vendor_boot" "$vendor_boot.patched"
 python3 -I "$ROOT/scripts/pactool.py" fixcrc "$pac.partial"
 python3 -I "$ROOT/scripts/pactool.py" setinfo "$pac.partial" "Improved_v$VERSION$VARIANT" RG_Cube_GammaOS_Next_Improved
 mv "$pac.partial" "$pac"
