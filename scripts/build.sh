@@ -48,7 +48,8 @@ fi
 for tool in fsck.erofs mkfs.erofs unpack_bootimg lz4 avbtool; do
   command -v "$tool" >/dev/null || { echo "$tool is required (DisplayPort driver patch)" >&2; exit 1; }
 done
-[[ -n "${MKBOOTIMG:-}" && -f "${AVB_KEY:-}" ]] || {
+mkbootimg="${MKBOOTIMG:-}"; mkbootimg="${mkbootimg%% *}"
+[[ -n "$mkbootimg" && ( -f "$mkbootimg" || -n "$(command -v "$mkbootimg")" ) && -f "${AVB_KEY:-}" ]] || {
   echo "MKBOOTIMG and AVB_KEY are required (DisplayPort driver patch)" >&2; exit 1; }
 
 mkdir -p "$WORK/bin" "$WORK/images" "$WORK/mnt" "$OUT"
