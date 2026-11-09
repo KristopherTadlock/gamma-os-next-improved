@@ -67,8 +67,11 @@ controller (`mods/27-controller-layout.sh`): the bottom button (printed B)
 is A, the right one (printed A) is B, the left one (printed Y) is X and the
 top one (printed X) is Y. The vendor's layout reported them by their print,
 so games put PlayStation Cross on the right button instead of the bottom one.
+RetroArch's profile for the controller and PPSSPP's controls, which were set
+for the print, are swapped to match, so they keep Cross on the bottom button.
 Nano reads the buttons directly, so in its menus A still confirms; ABXY Swap
-stays off.
+stays off. Controller Enable (gammapad) reads only the vendor's layout, so with
+it on, apps see the buttons by their print again.
 
 ### Added emulators
 
@@ -241,8 +244,8 @@ It also changes Nano:
   `persist.gammaos.shader.4x3.window.<package>` is set to `1`. To leave an
   app alone, add it to `persist.gammaos.shader.4x3.exclude`
   (comma-separated). RetroArch is always left alone: it has the same shader
-  as a Vulkan slang preset, `rg_cube_4_3_cropped.slangp`, at the top of its
-  shader list (Shaders > Load). Set RetroArch's Aspect Ratio to Full with it,
+  as a Vulkan slang preset, `rg_cube_4_3_cropped.slangp`, in its shader list
+  (Shaders > Load, after the folders). Set RetroArch's Aspect Ratio to Full with it,
   so the shader has the whole screen to draw on. It sees the core's own
   frame, so it changes only a frame within 5% of 4:3; any other frame, and a
   4:3 frame exactly 720 wide on the panel or 1080 tall at 1080p, is fitted at

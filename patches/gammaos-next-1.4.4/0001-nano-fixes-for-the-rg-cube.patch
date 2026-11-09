@@ -9971,7 +9971,7 @@ index f9a33380b54..de1c6c18109 100644
      mBtWizBusy = true; mBtWizOpOk = false;
      std::string a = addr; int v = variant;
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuSettingsTree.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuSettingsTree.cpp
-index 6ea6d3295dd..35e5bd74d16 100644
+index 6ea6d3295dd..c2934bbdf38 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuSettingsTree.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuSettingsTree.cpp
 @@ -471,7 +471,7 @@ void NanoMenu::buildSettingsTree() {
@@ -9979,7 +9979,7 @@ index 6ea6d3295dd..35e5bd74d16 100644
        b.beginCategory("gos_external", "External Display");
          b.toggle("ext_primary", "External as Primary",
 -                 SettingSource::kProp, "persist.gammaos.ext.primary", "false");
-+                 SettingSource::kProp, "persist.gammaos.ext.primary", "true");
++                 SettingSource::kProp, "persist.gammaos.ext.primary", "1");
          b.toggle("ext_force_mirror", "Force Mirror",
                   SettingSource::kProp, "persist.gammaos.ext.force_mirror", "false");
          b.toggle("ext_mirror_resize", "Mirror Resize",
@@ -10854,7 +10854,7 @@ index 0fa4e98c671..b776193711b 100644
  static int vidCpDefault() {
      for (int i = 0; i < kVidCpCount; i++) if (!strcmp(kVidCp[i].act, "play")) return i;
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp
-index a0824b29e6e..8e8d77fae0b 100644
+index a0824b29e6e..cd0bf376c25 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp
 @@ -293,6 +293,7 @@ static void sortRomEntriesByDisplayName(std::vector<std::string>& roms,
@@ -10995,45 +10995,62 @@ index a0824b29e6e..8e8d77fae0b 100644
                  if (!s.value.empty()) sys.scanSources.push_back(std::move(s));
              }
          }
-@@ -1493,6 +1596,15 @@ static int romScanMaxDepth() {
+@@ -1493,6 +1596,18 @@ static int romScanMaxDepth() {
      bool on = (buf[0] == '1' || strcasecmp(buf, "true") == 0);
      return on ? kRomScanMaxDepth : 0;
  }
-+// The depth to scan one of a system's scan paths at: a folder added with Include Subfolders is
-+// always scanned recursively.
-+static int scanPathDepth(const NanoMenu::XmbSystem& sys, const std::string& path, int maxDepth) {
-+    for (const auto& src : sys.scanSources)
-+        if (src.subfolders && (src.value == path || (!src.rawHint.empty() && src.rawHint == path)))
-+            return kRomScanMaxDepth;
-+    return maxDepth;
++// The paths a folder added with Include Subfolders scans from, which are always scanned
++// recursively. Read with the scan paths, before the scan: the menu can add a folder meanwhile.
++static std::set<std::string> subfolderScanPaths(const NanoMenu::XmbSystem& sys) {
++    std::set<std::string> out;
++    for (const auto& src : sys.scanSources) {
++        if (!src.subfolders) continue;
++        out.insert(src.value);
++        if (!src.rawHint.empty()) out.insert(src.rawHint);
++    }
++    return out;
 +}
 +
  static bool romM3uGroupEnabled() {
      char buf[PROPERTY_VALUE_MAX] = {};
      property_get("persist.gammaos.nano.rom.m3u_group", buf, "1");
-@@ -1626,8 +1738,8 @@ void NanoMenu::scanRomPaths() {
+@@ -1589,6 +1704,7 @@ void NanoMenu::scanRomPaths() {
+         if (sys.scanned) continue;
+ 
+         std::vector<std::string> scanPaths = buildScanCandidates(sys);
++        const std::set<std::string> deepPaths = subfolderScanPaths(sys);
+ 
+         // Build extension set from comma-separated list
+         std::set<std::string> exts;
+@@ -1626,7 +1742,8 @@ void NanoMenu::scanRomPaths() {
          // Scan ALL candidate paths and merge results
          for (const auto& candidatePath : scanPaths) {
              int pathRomCount = 0;
 -            scanSystemDir(candidatePath, 0, maxDepth, exts, seenFilenames,
--                          sys.roms, m3uPaths, pathRomCount);
-+            scanSystemDir(candidatePath, 0, scanPathDepth(sys, candidatePath, maxDepth), exts,
-+                          seenFilenames, sys.roms, m3uPaths, pathRomCount);
++            const int depth = deepPaths.count(candidatePath) ? kRomScanMaxDepth : maxDepth;
++            scanSystemDir(candidatePath, 0, depth, exts, seenFilenames,
+                           sys.roms, m3uPaths, pathRomCount);
  
              if (pathRomCount > 0) {
-                 sys.activePaths.push_back(candidatePath);
-@@ -1723,8 +1835,8 @@ bool NanoMenu::scanOneSystemAsync(int sysIdx) {
+@@ -1692,6 +1809,7 @@ bool NanoMenu::scanOneSystemAsync(int sysIdx) {
+     if (!sys.enabled) return false;   // disabled systems are never scanned
+ 
+     std::vector<std::string> scanPaths = buildScanCandidates(sys);
++    const std::set<std::string> deepPaths = subfolderScanPaths(sys);
+ 
+     // Build extension set
+     std::set<std::string> exts;
+@@ -1723,7 +1841,8 @@ bool NanoMenu::scanOneSystemAsync(int sysIdx) {
  
      for (const auto& candidatePath : scanPaths) {
          int pathRomCount = 0;
 -        scanSystemDir(candidatePath, 0, maxDepth, exts, seenFilenames,
--                      newRoms, m3uPaths, pathRomCount);
-+        scanSystemDir(candidatePath, 0, scanPathDepth(sys, candidatePath, maxDepth), exts,
-+                      seenFilenames, newRoms, m3uPaths, pathRomCount);
++        const int depth = deepPaths.count(candidatePath) ? kRomScanMaxDepth : maxDepth;
++        scanSystemDir(candidatePath, 0, depth, exts, seenFilenames,
+                       newRoms, m3uPaths, pathRomCount);
  
          if (pathRomCount > 0) {
-             newActivePaths.push_back(candidatePath);
-@@ -1811,7 +1923,8 @@ bool NanoMenu::scanOneSystemAsync(int sysIdx) {
+@@ -1811,7 +1930,8 @@ bool NanoMenu::scanOneSystemAsync(int sysIdx) {
  void NanoMenu::forceRescanAllSystems() {
      // Launch a background thread to scan all systems. The thread builds
      // results in mBgScanResults; the render loop swaps them in when ready.
@@ -11043,17 +11060,25 @@ index a0824b29e6e..8e8d77fae0b 100644
      mBgScanThreadRunning = true;
      ALOGI("NanoMenu: launching background scan thread");
      std::thread(&NanoMenu::bgScanThreadFunc, this).detach();
-@@ -1874,7 +1987,8 @@ void NanoMenu::bgScanThreadFunc() {
+@@ -1846,6 +1966,7 @@ void NanoMenu::bgScanThreadFunc() {
+         if (!sys.enabled) continue;   // disabled systems are never scanned
+ 
+         std::vector<std::string> scanPaths = buildScanCandidates(sys);
++        const std::set<std::string> deepPaths = subfolderScanPaths(sys);
+ 
+         // Build extension set
+         std::set<std::string> exts;
+@@ -1874,7 +1995,8 @@ void NanoMenu::bgScanThreadFunc() {
  
          for (const auto& cp : scanPaths) {
              int cnt = 0;
 -            scanSystemDir(cp, 0, maxDepth, exts, seenNames, res.roms, m3uPaths, cnt);
-+            scanSystemDir(cp, 0, scanPathDepth(sys, cp, maxDepth), exts, seenNames, res.roms,
-+                          m3uPaths, cnt);
++            const int depth = deepPaths.count(cp) ? kRomScanMaxDepth : maxDepth;
++            scanSystemDir(cp, 0, depth, exts, seenNames, res.roms, m3uPaths, cnt);
              if (cnt > 0) {
                  res.activePaths.push_back(cp);
                  res.valid = true;
-@@ -2005,6 +2119,8 @@ void NanoMenu::saveCollections() {
+@@ -2005,6 +2127,8 @@ void NanoMenu::saveCollections() {
  // Resolve a stored ROM path to a live (system, rom) index so a collection game reuses the normal
  // PS3_ROM launch/boxart/option-menu path. Returns false if the game's system is gone or disabled.
  bool NanoMenu::collectionResolveRom(const std::string& romPath, int* sysIdx, int* romIdx) {
@@ -11062,7 +11087,7 @@ index a0824b29e6e..8e8d77fae0b 100644
      for (size_t s = 0; s < mXmbSystems.size(); s++) {
          const XmbSystem& sys = mXmbSystems[s];
          for (size_t r = 0; r < sys.roms.size(); r++) {
-@@ -2013,9 +2129,13 @@ bool NanoMenu::collectionResolveRom(const std::string& romPath, int* sysIdx, int
+@@ -2013,9 +2137,13 @@ bool NanoMenu::collectionResolveRom(const std::string& romPath, int* sysIdx, int
                  if (romIdx) *romIdx = (int)r;
                  return true;
              }
@@ -11077,7 +11102,7 @@ index a0824b29e6e..8e8d77fae0b 100644
  }
  
  void NanoMenu::buildCollectionsSubmenu(Ps3Level& out) {
-@@ -2075,7 +2195,8 @@ int NanoMenu::collectionCreate(const std::string& name) {
+@@ -2075,7 +2203,8 @@ int NanoMenu::collectionCreate(const std::string& name) {
  void NanoMenu::collectionAddRom(int colIdx, const std::string& romPath) {
      if (colIdx < 0 || colIdx >= (int)mXmbCollections.size() || romPath.empty()) return;
      auto& roms = mXmbCollections[colIdx].roms;
@@ -11087,7 +11112,7 @@ index a0824b29e6e..8e8d77fae0b 100644
      roms.push_back(romPath);
      saveCollections();
  }
-@@ -2083,50 +2204,82 @@ void NanoMenu::collectionAddRom(int colIdx, const std::string& romPath) {
+@@ -2083,50 +2212,82 @@ void NanoMenu::collectionAddRom(int colIdx, const std::string& romPath) {
  void NanoMenu::collectionRemoveRom(int colIdx, const std::string& romPath) {
      if (colIdx < 0 || colIdx >= (int)mXmbCollections.size()) return;
      auto& roms = mXmbCollections[colIdx].roms;
@@ -11186,7 +11211,7 @@ index a0824b29e6e..8e8d77fae0b 100644
      saveFavorites();
  }
  
-@@ -2160,20 +2313,44 @@ static const char* kHiddenGamesFile = "/data/system/nano_hidden_games.txt";
+@@ -2160,20 +2321,44 @@ static const char* kHiddenGamesFile = "/data/system/nano_hidden_games.txt";
  // One key per game whichever mount path it was reached through: the primary storage is seen as
  // /data/media/0, /storage/emulated/0 and /sdcard, and a card as /mnt/media_rw/X or /storage/X
  // (Recently Played stores the app-visible form, the scan the raw one).
@@ -11238,7 +11263,7 @@ index a0824b29e6e..8e8d77fae0b 100644
  bool NanoMenu::isHiddenGame(const std::string& romPath) const {
      return !romPath.empty() && mHiddenGames.count(hiddenKey(romPath)) != 0;
  }
-@@ -2504,6 +2681,12 @@ void NanoMenu::addXmbRecent(int sysIdx, int gameIdx) {
+@@ -2504,6 +2689,12 @@ void NanoMenu::addXmbRecent(int sysIdx, int gameIdx) {
      e.systemName = sys.shortname;
      e.romDir = sys.romDir;
      e.standalone = sys.isStandalone();
@@ -11251,7 +11276,7 @@ index a0824b29e6e..8e8d77fae0b 100644
  
      // Remove duplicate if already in list
      for (auto it = mXmbRecent.begin(); it != mXmbRecent.end(); ++it) {
-@@ -2526,9 +2709,14 @@ void NanoMenu::addXmbRecent(int sysIdx, int gameIdx) {
+@@ -2526,9 +2717,14 @@ void NanoMenu::addXmbRecent(int sysIdx, int gameIdx) {
  // ---------------------------------------------------------------------------
  
  void NanoMenu::handleLeft() {
@@ -11267,7 +11292,7 @@ index a0824b29e6e..8e8d77fae0b 100644
      if (mOskActive) {
          oskMoveCursor(NavDir::Left);
          return;
-@@ -2564,9 +2752,14 @@ void NanoMenu::handleLeft() {
+@@ -2564,9 +2760,14 @@ void NanoMenu::handleLeft() {
  }
  
  void NanoMenu::handleRight() {
@@ -11283,7 +11308,7 @@ index a0824b29e6e..8e8d77fae0b 100644
      if (mOskActive) {
          oskMoveCursor(NavDir::Right);
          return;
-@@ -2602,6 +2795,190 @@ void NanoMenu::handleRight() {
+@@ -2602,6 +2803,190 @@ void NanoMenu::handleRight() {
      }
  }
  
@@ -11474,7 +11499,7 @@ index a0824b29e6e..8e8d77fae0b 100644
  void NanoMenu::launchXmbGame() {
      // Overlay: the home exit-to-launch handshake (set launch_* props + exit so the framework starts
      // the app) does not apply to the resident overlay - running it would make the overlay
-@@ -2613,6 +2990,7 @@ void NanoMenu::launchXmbGame() {
+@@ -2613,6 +2998,7 @@ void NanoMenu::launchXmbGame() {
      // first was a dead no-op: once an app is behind it the home runs as the resident overlay, so
      // launching from the overlay or after returning to the theme did nothing.
      if (mOverlayMode) { overlayLaunchGame(); return; }
@@ -11482,7 +11507,7 @@ index a0824b29e6e..8e8d77fae0b 100644
      int sysIdx, gameIdx;
  
      // GammaOS Nano: gate the entire XMB launch path until the system
-@@ -2635,6 +3013,12 @@ void NanoMenu::launchXmbGame() {
+@@ -2635,6 +3021,12 @@ void NanoMenu::launchXmbGame() {
          if (mXmbGameIndex < 0 || mXmbGameIndex >= (int)mXmbRecent.size()) return;
          // Take a copy -- the vector reorder below invalidates references.
          XmbRecentEntry re = mXmbRecent[mXmbGameIndex];
@@ -11495,7 +11520,7 @@ index a0824b29e6e..8e8d77fae0b 100644
  
          // A recent entry outlives the file it points at (game deleted, card removed). Refuse the
          // launch and drop the dead row rather than starting an emulator that cannot open it.
-@@ -2800,8 +3184,17 @@ void NanoMenu::launchXmbGame() {
+@@ -2800,8 +3192,17 @@ void NanoMenu::launchXmbGame() {
      }
  
      if (sysIdx < 0 || sysIdx >= (int)mXmbSystems.size()) return;

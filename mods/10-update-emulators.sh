@@ -110,6 +110,23 @@ else
   echo "updated RetroArch core info; removed the PPSSPP core's assets (core not shipped)"
 fi
 
+# The built-in controller reports its face buttons by position
+# (27-controller-layout.sh), so its RetroArch profile and player 1 binds, set
+# for the buttons' print, swap A/B and X/Y back to the RetroPad's positions.
+python3 -I - "$work/tree/$RA_DATA/autoconfig/android/retrogame_joypad.cfg" \
+  "$work/tree/sdcard/Android/data/com.retroarch.aarch64/files/retroarch.cfg" <<'PY'
+import re, sys
+swap = {"96": "97", "97": "96", "99": "100", "100": "99"}
+for path, key in zip(sys.argv[1:], (r"input_[abxy]_btn", r"input_player1_[abxy]_btn")):
+    text = open(path).read()
+    new, n = re.subn(r'^(%s = ")(\d+)(")' % key,
+                     lambda m: m.group(1) + swap.get(m.group(2), m.group(2)) + m.group(3),
+                     text, flags=re.M)
+    if n != 4:
+        sys.exit("%s: %d face-button binds, expected 4" % (path, n))
+    open(path, "w").write(new)
+PY
+
 # RetroArch's copies of the 4:3 and 8:7 Cropped shaders, which skip RetroArch.
 install -m 600 -t "$work/tree/$RA_DATA/shaders/shaders_slang" "$MODS"/retroarch-shaders/rg_cube_{4_3,8_7}_cropped.slang{,p}
 echo "added the rg_cube_4_3_cropped and rg_cube_8_7_cropped shaders"
