@@ -19,8 +19,12 @@ apk  azahar-2126.2.apk  name=Azahar 3DS emulator  package=org.azahar_emu.azahar 
 # WatermelonDS 0.8.0.rc3 (Nintendo DS), a melonDS fork. GPL-3.0.
 apk  WatermelonDS-0.8.0.rc3.apk  name=WatermelonDS DS emulator  package=me.magnum.melondualds  url=https://github.com/SapphireRhodonite/WatermelonDS/releases/download/0.8.0.rc3/WatermelonDS-0.8.0.rc3.apk  sha256=275b16222b9ea7bb7e36f660b7d3d80b535a3707910578fba19ec35259f08456  source=https://github.com/SapphireRhodonite/WatermelonDS/tree/0.8.0.rc3
 
-# hakuX 1.3.0 (original Xbox), needs no BIOS or hard disk image. GPL-3.0-or-later.
-apk  hakuX-1.3.0.apk  name=hakuX Xbox emulator  package=com.rfandango.haku_x  url=https://github.com/rfandango/hakuX/releases/download/v1.3.0/hakuX-1.3.0.apk  sha256=143f9e602ab20a7143f357d3a5fa8eba145bdd6cde90d80cbcfadfd7919e9176  source=https://github.com/rfandango/hakuX/tree/v1.3.0
+# hakuX 1.3.0 (original Xbox) at commit a7cdb5a, which adds custom Vulkan
+# drivers on Mali GPUs; needs no BIOS or hard disk image. GPL-3.0-or-later.
+# Built from source (release variant, signed with this project's key; the
+# native dependencies' revisions are in the mirror's hakuX-build-manifest.json)
+# and mirrored in this repo's releases, as hakuX has no release of it yet.
+apk  hakuX-1.3.0-a7cdb5a.apk  name=hakuX Xbox emulator  package=com.rfandango.haku_x  url=https://github.com/KristopherTadlock/gamma-os-next-improved/releases/download/app-mirror-1/hakuX-1.3.0-a7cdb5a.apk  sha256=58d359d340ef98ea1d150ea15f8d9d4e303d9d731b8bbeaa90cea72c6d789651  source=https://github.com/rfandango/hakuX/tree/a7cdb5a975e31730d488c47f6f10440b16c1e6f4
 
 # Vita3K 0.2.1, build 4277 (PS Vita). GPL-2.0.
 # Vita3K only publishes a rolling "continuous" Android build, so this exact
@@ -36,6 +40,6 @@ apk  scummvm-2026.3.0.apk  name=ScummVM  package=org.scummvm.scummvm  url=https:
 apk  ShatteredPD-v4.0.2-Android.apk  name=Shattered Pixel Dungeon  package=com.shatteredpixel.shatteredpixeldungeon  game=1  url=https://github.com/00-Evan/shattered-pixel-dungeon/releases/download/v4.0.2/ShatteredPD-v4.0.2-Android.apk  sha256=ceef4cdd4beddcb3d85379ac004cb4ab5d918b89dc7366b4ce9c4a3585a5e78e  source=https://github.com/00-Evan/shattered-pixel-dungeon/tree/v4.0.2
 
 # MaliSX2 0.4.0, a Vulkan driver for Mali GPUs (tested on the Mali-G57 of the
-# T820). MIT. 45-armsx2-malisx2.sh pre-installs it in ARMSX2; Dolphin and hakuX
-# only load custom drivers on Adreno GPUs.
+# T820). MIT. 45-armsx2-malisx2.sh pre-installs it in ARMSX2; hakuX can import
+# it; Dolphin only loads custom drivers on Adreno GPUs.
 file  malisx2-0.4.0.zip  dest=GPU Drivers  url=https://github.com/bmdhacks/malisx2/releases/download/v0.4.0/malisx2-0.4.0-63e307e63a.zip  sha256=835f980506ed46fa51925fd279b256d23b0ddf481ffd1ab39be2fee275cf8bf8  source=https://github.com/bmdhacks/malisx2/tree/v0.4.0

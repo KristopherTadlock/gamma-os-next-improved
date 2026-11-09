@@ -93,14 +93,20 @@ linked below.
 | ARMSX2 | PlayStation 2 | 2.9.2 | GPL-3.0 | https://github.com/ARMSX2/ARMSX2/tree/2.9.2 |
 | Azahar | Nintendo 3DS | 2126.2 | GPL-3.0 | https://github.com/azahar-emu/azahar/tree/2126.2 |
 | WatermelonDS | Nintendo DS | 0.8.0.rc3 | GPL-3.0 | https://github.com/SapphireRhodonite/WatermelonDS/tree/0.8.0.rc3 |
-| hakuX | Xbox | 1.3.0 | GPL-3.0+ | https://github.com/rfandango/hakuX/tree/v1.3.0 |
+| hakuX | Xbox | 1.3.0 at `a7cdb5a` (built from source) | GPL-3.0+ | https://github.com/rfandango/hakuX/tree/a7cdb5a975e31730d488c47f6f10440b16c1e6f4 |
 | Vita3K | PS Vita | 0.2.1 (build 4277, mirrored) | GPL-2.0 | https://github.com/Vita3K/Vita3K/tree/2f68c1bf0d44753eddc8263b6a4dd23fcd928f22 |
 | ScummVM | Adventure games | 2026.3.0 | GPL-3.0+ | https://github.com/scummvm/scummvm/tree/v2026.3.0 |
 
 The [MaliSX2](https://github.com/bmdhacks/malisx2/tree/v0.4.0) 0.4.0 Vulkan
 driver (MIT) comes pre-installed and selected in ARMSX2, with the Vulkan
-renderer, and a copy is in `/sdcard/GPU Drivers/`. Dolphin and hakuX only load
-custom drivers on Adreno GPUs, so they can't use it on the RG Cube's Mali-G57.
+renderer, and a copy is in `/sdcard/GPU Drivers/`. hakuX can use it too: import
+the ZIP in hakuX's Settings > Graphics > GPU driver. Dolphin only loads custom
+drivers on Adreno GPUs, so it can't use it on the RG Cube's Mali-G57.
+
+hakuX is built from its source at commit `a7cdb5a` (newer than its 1.3.0
+release), which adds custom Vulkan drivers on Mali GPUs. It is the release
+variant signed with this project's key and mirrored in this repo's
+`app-mirror-1` release, with the revisions of its native dependencies.
 
 [Shattered Pixel Dungeon](https://github.com/00-Evan/shattered-pixel-dungeon/tree/v4.0.2)
 4.0.2 (GPL-3.0), the full game, unmodified, is installed too, so Android Games
