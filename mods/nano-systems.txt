@@ -27,7 +27,7 @@ nds           name=Nintendo DS        short=NDS   icon=builtin:6   player=nds.me
 genesis       name=Genesis            short=GEN   icon=builtin:7   player=genesis.ra64.genesis_plus_gx
 mastersystem  name=Master System      short=SMS   icon=builtin:8   player=master.ra64.genesis_plus_gx
 gamegear      name=Game Gear          short=GG    icon=builtin:9   player=gamegear.ra64.genesis_plus_gx
-psx           name=PlayStation        short=PSX   icon=builtin:10  player=psx.ra64.pcsx_rearmed
+psx           name=PlayStation        short=PSX   icon=builtin:10  player=psx.ra64.mednafen_psx_hw
 psp           name=PSP                short=PSP   icon=builtin:11  package=org.ppsspp.ppsspp  intent=-n org.ppsspp.ppsspp/.PpssppActivity -a android.intent.action.VIEW -d {file.uri} -t application/octet-stream --activity-clear-task --activity-clear-top  exts=.iso,.cso,.pbp
 dreamcast     name=Dreamcast          short=DC    icon=builtin:12  package=com.flycast.emulator  intent=-n com.flycast.emulator/com.flycast.emulator.MainActivity -a android.intent.action.VIEW -d {file.uri}  exts=.cdi,.gdi,.chd,.cue
 ngpc          name=Neo Geo Pocket     short=NGP   icon=builtin:13  player=ngpc.ra64.mednafen_ngp

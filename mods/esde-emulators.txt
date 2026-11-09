@@ -9,7 +9,7 @@
 gb            SameBoy
 gbc           SameBoy
 sgb           SameBoy
-psx           PCSX ReARMed
+psx           Beetle PSX HW
 pcengine      Beetle PCE FAST
 pcenginecd    Beetle PCE FAST
 tg16          Beetle PCE FAST

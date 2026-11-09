@@ -39,6 +39,11 @@ in that file:
 | Game Boy Advance | gpSP | mGBA |
 | NES | Nestopia | Mesen |
 
+PlayStation games run on Beetle PSX HW, which supports RetroArch netplay. It
+needs a PlayStation BIOS (for example `scph5501.bin`) in
+`/sdcard/RetroArch/system`; PCSX ReARMed, which runs without one, is still
+shipped and can be chosen per game or for the system.
+
 RetroArch's core info files are refreshed to match the new cores, and the
 PPSSPP core's assets are removed with the core (PSP uses the standalone
 PPSSPP app). Mupen64Plus FZ stays at 3.0.335 because newer builds

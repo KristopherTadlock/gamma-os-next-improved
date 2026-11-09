@@ -47,9 +47,9 @@ mednafen_saturn        # 7.2 MB  heavy for the T820
 flycast                  # 37.9 MB  Daijisho uses the Flycast app by default
 
 # --- Sony - PlayStation
-D - pcsx_rearmed          # 1.5 MB  fastest; built-in BIOS replacement, a real BIOS improves compatibility
+pcsx_rearmed             # 1.5 MB  fastest; built-in BIOS replacement, a real BIOS improves compatibility
 swanstation              # 4.8 MB  better upscaling; needs a BIOS
-mednafen_psx_hw          # 13.7 MB  Beetle PSX HW: hardware renderer, upscaling
+D - mednafen_psx_hw        # 13.7 MB  Beetle PSX HW: hardware renderer, upscaling, netplay; needs a BIOS
 
 
 # --- Arcade
