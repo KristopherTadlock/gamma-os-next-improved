@@ -378,7 +378,10 @@ The patched driver:
   clock): 4K at 30 Hz, 1440p at 60 Hz, 1080p at 120 Hz and everything below;
 - keeps the monitor's preferred mode, so the composer uses it when it fits,
   and otherwise the largest mode that does (4K at 30 Hz on a 4K TV);
-- treats a missing buffer as RGB instead of crashing.
+- treats a missing buffer as RGB instead of crashing;
+- marks TV 1080p60 user-defined rather than preferred. The vendor composer
+  lists only the preferred and user-defined modes (the monitor's own mode,
+  1080p60 and 640x480), so it stays on offer.
 
 When a display connects, Nano asks which of these modes to use, with the
 display's preferred mode (the first timing in its EDID) selected and the mode

@@ -9,7 +9,9 @@ sprd_dp_connector_mode_valid:
   - rejects modes with a pixel clock above 4K at 30 Hz (about 297 MHz);
   - keeps the monitor's preferred mode preferred, instead of clearing it and
     preferring CEA 1080p60 only, so the composer picks the monitor's own mode
-    when it fits.
+    when it fits;
+  - marks CEA 1080p60 user-defined: the vendor composer lists only preferred
+    and user-defined modes, so it stays on offer.
 sprd_dp_encoder_mode_set:
   - treats a missing framebuffer in bypass as RGB instead of reading through it.
 
@@ -27,8 +29,9 @@ PATCHES = [
     # mode_valid: clock > 0x49000 kHz -> MODE_CLOCK_HIGH; keep the type's preferred bit.
     (0x8cdc, [0xb9403668, 0x36180068, 0x121c7908, 0xb9003668],
              [0xb9403a6a, 0x7141255f, 0x540007a8, 0xb9403668]),
-    # mode_valid: CEA 1080p60 no longer made preferred.
-    (0x8d74, [0x321d0108], [0xd503201f]),
+    # mode_valid: CEA 1080p60 marked user-defined instead of preferred, so the
+    # composer (which keeps only preferred and user-defined modes) still lists it.
+    (0x8d74, [0x321d0108], [0x321b0108]),
     # mode_valid: the CEA 4K60 branch (now unreachable) becomes the MODE_CLOCK_HIGH return.
     (0x8dd8, [0xb9403a69, 0x52820a0a, 0x72a0012a, 0x6b0a013f, 0x54000361, 0x39431289],
              [0xa9447bfd, 0xa9454ff4, 0xf85f8e5e, 0x528001e0, 0x910183ff, 0xd65f03c0]),
