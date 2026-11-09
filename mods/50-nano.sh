@@ -7,6 +7,8 @@
 # ones in nano-systems.txt, with this project's default emulators. The stick
 # LEDs follow the screen's colour, the performance mode is Max Performance,
 # and Nano's Slide Behaviour settings are hidden (the RG Cube does not slide).
+# A connected monitor is the main screen (External as Primary on, Force Mirror
+# off).
 # These are build.prop defaults, so choices made later in Nano, or "Boot
 # Android" in the power menu, stick. Runs after 40-added-apps.sh.
 #
@@ -89,8 +91,8 @@ EOF
 add_setup_steps "$SYSTEM" "$work/setup-steps.sh"
 
 sudo cat "$SYSTEM/build.prop" >"$work/build.prop"
-if grep -qE '^(persist\.(bootanim\.skip_nano|gammaos\.nano\.(ndstheme|esde\.|nav_sounds|minima\.bg)|gammaos\.performance_mode|gammargb\.control)|ro\.gammaos\.nano\.no_slide)' "$work/build.prop"; then
-  echo "build.prop already sets Nano's boot, theme, sounds, LEDs or performance mode" >&2
+if grep -qE '^(persist\.(bootanim\.skip_nano|gammaos\.nano\.(ndstheme|esde\.|nav_sounds|minima\.bg)|gammaos\.performance_mode|gammargb\.control|gammaos\.ext\.(primary|force_mirror))|ro\.gammaos\.nano\.no_slide)' "$work/build.prop"; then
+  echo "build.prop already sets Nano's boot, theme, sounds, LEDs, performance mode or external display" >&2
   exit 1
 fi
 cat >>"$work/build.prop" <<EOF
@@ -112,6 +114,10 @@ persist.gammargb.control=on
 persist.gammaos.performance_mode=max
 # No global display shader until one is chosen
 persist.gammaos.shader.enable=0
+# A connected monitor is the main screen (the console's screen takes its size and
+# its backlight goes off), not a mirror of the console's screen
+persist.gammaos.ext.primary=1
+persist.gammaos.ext.force_mirror=false
 EOF
 write_through "$work/build.prop" "$SYSTEM/build.prop"
 

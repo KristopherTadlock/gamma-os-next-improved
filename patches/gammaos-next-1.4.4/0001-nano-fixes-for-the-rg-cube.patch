@@ -2984,10 +2984,10 @@ index 2d621760914..0660262413f 100644
  }  // namespace android
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuExtDisplay.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuExtDisplay.cpp
 new file mode 100644
-index 00000000000..f4e66b7e82d
+index 00000000000..aad21066822
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuExtDisplay.cpp
-@@ -0,0 +1,483 @@
+@@ -0,0 +1,487 @@
 +/*
 + * GammaOS Nano: display mode chooser for an external display.
 + *
@@ -3209,6 +3209,8 @@ index 00000000000..f4e66b7e82d
 +// window, so the monitor showed the game and never Nano. Put a mirror of Nano's layer on the
 +// monitor's layer stack above WindowManager's, scaled to fit and centred as WindowManager places
 +// the console's screen there (ContentRecorder.updateMirroredSurface), so it lines up with the game.
++// Nano's surface is what is fitted: with External as Primary the console's screen takes the
++// monitor's size, which a Nano surface still at the panel's size does not fill.
 +void NanoMenu::extMirrorUpdate() {
 +    ui::DisplayState monitor, panel;
 +    bool placed = false;
@@ -3232,7 +3234,9 @@ index 00000000000..f4e66b7e82d
 +        }
 +        return;
 +    }
-+    const ui::Size in = panel.layerStackSpaceRect, out = monitor.layerStackSpaceRect;
++    const ui::Size in(mWidth > 0 ? mWidth : panel.layerStackSpaceRect.width,
++                      mHeight > 0 ? mHeight : panel.layerStackSpaceRect.height);
++    const ui::Size out = monitor.layerStackSpaceRect;
 +    if (mExtMirrorRoot != nullptr && monitor.layerStack.id == mExtMirrorStack &&
 +        out.width == mExtMirrorOut[0] && out.height == mExtMirrorOut[1] &&
 +        in.width == mExtMirrorIn[0] && in.height == mExtMirrorIn[1])
@@ -5033,7 +5037,7 @@ index 95933cb3497..57ada25b5fd 100644
  
  // ---------------------------------------------------------------------------
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Data.h b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Data.h
-index 166225b4864..9b49ca61838 100644
+index 166225b4864..19b8bbcb468 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Data.h
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Data.h
 @@ -46,6 +46,18 @@ namespace android {
@@ -5100,7 +5104,7 @@ index 166225b4864..9b49ca61838 100644
 +// HDMI / DisplayPort output (persist.gammaos.ext.*, read on the next hotplug), the same settings
 +// as the External Docking, External Mirror and External Resize Quick Settings tiles.
 +static const Ps3DataItem kExternalDisplayCh[] = {
-+  {"External as Primary",22,"Makes the external display the main screen while it is connected.","Off",1,nullptr,0},
++  {"External as Primary",22,"Makes the external display the main screen while it is connected.","On",1,nullptr,0},
 +  {"Force Mirror",22,"Shows the same picture on the external display as on this screen.","Off",1,nullptr,0},
 +  {"Resize to External Display",22,"Resizes the mirrored picture to fit the external display.","Off",1,nullptr,0},
 +  {"Secondary Display Apps",22,"Opens the apps in Secondary Display Packages on the external display.","Off",1,nullptr,0},
@@ -6031,7 +6035,7 @@ index a778ea7da0d..638c4463dd0 100644
  // aspect bucket so the Test Controller / Calibration buttons get the identical glass
  // relight as the console icons (bevelFromRGBA), refracting the live XMB wave. round =
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
-index c6a8e9c9dc1..75a25614c35 100644
+index c6a8e9c9dc1..1e80fe70960 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 @@ -25,6 +25,7 @@
@@ -7116,6 +7120,15 @@ index c6a8e9c9dc1..75a25614c35 100644
      {"Immersive Mode", SettingSource::kProp, "persist.gammaos.immersive", "0", "0:Off,1:On"},
      // Scheduler.cpp reads refresh.lock via GetIntProperty(...)==1, so store 0/1 (a
      // "true" string parses to 0 = the HW-VSYNC keepalive never engages).
+@@ -9145,7 +9447,7 @@ static const Ps3SettingBinding kPs3Bindings[] = {
+     {"Dual Focus Mode", SettingSource::kProp, "persist.gammaos.multidisplay.dual_focus", "false", "false:Off,true:On"},
+     {"Split Brightness", SettingSource::kProp, "persist.gammaos.multidisplay.split_brightness", "0", "0:Off,1:On"},
+     // External display (persist.gammaos.ext.* - DMS/WM consume on the next HDMI/DP hotplug).
+-    {"External as Primary", SettingSource::kProp, "persist.gammaos.ext.primary", "0", "0:Off,1:On"},
++    {"External as Primary", SettingSource::kProp, "persist.gammaos.ext.primary", "1", "0:Off,1:On"},
+     {"Force Mirror", SettingSource::kProp, "persist.gammaos.ext.force_mirror", "false", "false:Off,true:On"},
+     {"Resize to External Display", SettingSource::kProp, "persist.gammaos.ext.mirror_resize", "false", "false:Off,true:On"},
+     // Secondary display apps (ActivityStarter getBoolean; the toggle is inert without a package list).
 @@ -9155,7 +9457,8 @@ static const Ps3SettingBinding kPs3Bindings[] = {
      // the chooser + updates the row instantly); the authoritative radio/policy change
      // is the cmd run in closePs3Dialog (a bare settings write does not flip the radio).
@@ -9700,9 +9713,18 @@ index f9a33380b54..de1c6c18109 100644
      mBtWizBusy = true; mBtWizOpOk = false;
      std::string a = addr; int v = variant;
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuSettingsTree.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuSettingsTree.cpp
-index 6ea6d3295dd..7541fec9e90 100644
+index 6ea6d3295dd..35e5bd74d16 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuSettingsTree.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuSettingsTree.cpp
+@@ -471,7 +471,7 @@ void NanoMenu::buildSettingsTree() {
+       // -- External Display --
+       b.beginCategory("gos_external", "External Display");
+         b.toggle("ext_primary", "External as Primary",
+-                 SettingSource::kProp, "persist.gammaos.ext.primary", "false");
++                 SettingSource::kProp, "persist.gammaos.ext.primary", "true");
+         b.toggle("ext_force_mirror", "Force Mirror",
+                  SettingSource::kProp, "persist.gammaos.ext.force_mirror", "false");
+         b.toggle("ext_mirror_resize", "Mirror Resize",
 @@ -1115,17 +1115,9 @@ void NanoMenu::handleSettingsTreeSelect() {
          } else if (node.id == "factory_reset") {
              property_set("sys.gammaos.nano.factory_reset", "1");

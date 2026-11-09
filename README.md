@@ -404,8 +404,16 @@ The patched driver:
 
 Android mirrors the console's windows onto a connected monitor, but Nano's
 own screen is a SurfaceFlinger layer, not a window, so the mirror left it out.
-Nano puts a mirror of its layer on the monitor, scaled and centred as Android
-places the console's screen there, so its menus show over the game.
+Nano puts a mirror of its layer on the monitor, scaled to fit and centred,
+so its menus show over the game.
+
+A connected monitor is the main screen by default: External as Primary is
+on and Force Mirror off (`persist.gammaos.ext.primary=1`,
+`persist.gammaos.ext.force_mirror=false` in `build.prop`, so a change in
+Nano's External Display settings sticks). With External as Primary, when the
+monitor connects the console's screen takes the monitor's size and the
+Cube's backlight goes off, so games render at the monitor's resolution. The
+settings apply when the monitor next connects.
 
 When a display connects, Nano sets 1920 x 1080 at the rate nearest 60 Hz
 without asking (a display without 1080p keeps the mode it came up in). With
