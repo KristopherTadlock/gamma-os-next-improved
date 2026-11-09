@@ -376,20 +376,23 @@ The patched driver:
 
 - offers only modes up to the bandwidth of 4K at 30 Hz (a 297 MHz pixel
   clock): 4K at 30 Hz, 1440p at 60 Hz, 1080p at 120 Hz and everything below;
-- keeps the monitor's preferred mode, so the composer uses it when it fits,
-  and otherwise the largest mode that does (4K at 30 Hz on a 4K TV);
-- treats a missing buffer as RGB instead of crashing;
-- marks TV 1080p60 user-defined rather than preferred. The vendor composer
-  lists only the preferred and user-defined modes (the monitor's own mode,
-  1080p60 and 640x480), so it stays on offer.
+- keeps TV 1080p60 the only preferred mode, as the vendor driver does, so the
+  composer sets 1080p at 60 Hz as soon as a monitor connects. The vendor
+  composer lists only the modes the driver marks preferred or user-defined,
+  so the monitor's own preferred mode becomes user-defined instead of being
+  dropped (the list is then the monitor's own mode, 1080p60 and 640x480);
+- treats a missing buffer as RGB instead of crashing.
 
-When a display connects, Nano asks which of these modes to use, with the
-display's preferred mode (the first timing in its EDID) selected and the mode
-in use marked. The choice is saved for that display in Android's display
-settings and used whenever it reconnects; Cancel keeps the current mode. Nano
-asks once per connection. Connected during a game, it opens the Quick Menu over
-the game (pausing it) with the chooser on top, and goes back to the game once
-a mode is chosen or the chooser is cancelled.
+When a display connects, Nano sets 1920 x 1080 at the rate nearest 60 Hz
+without asking (a display without 1080p keeps the mode it came up in). With
+`persist.gammaos.nano.ext_ask` set to 1, Nano asks instead which of these
+modes to use, with the display's preferred mode (the first timing in its
+EDID) selected and the mode in use marked. The choice is saved for that
+display in Android's display settings and used whenever it reconnects;
+Cancel keeps the current mode. Nano asks once per connection. Connected
+during a game, it opens the Quick Menu over the game (pausing it) with the
+chooser on top, and goes back to the game once a mode is chosen or the
+chooser is cancelled.
 
 The build also grows the system partition by about 431 MB, into the
 unallocated space at the end of the `super` image (`scripts/lptool.py grow`);

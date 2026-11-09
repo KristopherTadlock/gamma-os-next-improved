@@ -7,11 +7,10 @@ the kernel panicked; and 4K at 60 Hz needs more than the Cube's two DP lanes.
 
 sprd_dp_connector_mode_valid:
   - rejects modes with a pixel clock above 4K at 30 Hz (about 297 MHz);
-  - keeps the monitor's preferred mode preferred, instead of clearing it and
-    preferring CEA 1080p60 only, so the composer picks the monitor's own mode
-    when it fits;
-  - marks CEA 1080p60 user-defined: the vendor composer lists only preferred
-    and user-defined modes, so it stays on offer.
+  - keeps CEA 1080p60 the only preferred mode, as the vendor driver does, so
+    the composer sets 1080p at 60 Hz when a monitor connects; the monitor's own
+    preferred mode becomes user-defined instead of being dropped, since the
+    vendor composer lists only preferred and user-defined modes.
 sprd_dp_encoder_mode_set:
   - treats a missing framebuffer in bypass as RGB instead of reading through it.
 
@@ -29,9 +28,22 @@ PATCHES = [
     # mode_valid: clock > 0x49000 kHz -> MODE_CLOCK_HIGH; keep the type's preferred bit.
     (0x8cdc, [0xb9403668, 0x36180068, 0x121c7908, 0xb9003668],
              [0xb9403a6a, 0x7141255f, 0x540007a8, 0xb9403668]),
-    # mode_valid: CEA 1080p60 marked user-defined instead of preferred, so the
-    # composer (which keeps only preferred and user-defined modes) still lists it.
-    (0x8d74, [0x321d0108], [0x321b0108]),
+    # mode_valid: every mode but CEA 1080p60 (other CEA codes, non-CEA modes, a
+    # 1080p at another clock, 640x480 at another clock) goes to the stub below,
+    # which makes a preferred mode user-defined, so the composer still lists it
+    # and CEA 1080p60 stays the only preferred mode.
+    (0x8d04, [0x54000a81], [0x54000461]),   # b.ne stub
+    (0x8d18, [0x540009e1], [0x540003c1]),   # b.ne stub
+    (0x8d88, [0x54000661], [0x54000041]),   # b.ne stub
+    # CEA 640x480 skips its log line (its space holds the stub) and stays
+    # user-defined; then the stub.
+    (0x8d8c, [0xb940b663, 0x29479a65, 0x2948a667, 0x294a2e6a, 0x294b366c, 0xb940666e],
+             [0x1400002f,               # b    0x8e48: type |= user-defined
+              0xb9403668,               # ldr  w8, [x19, #0x34]   (type)
+              0x36180608,               # tbz  w8, #3, return     (not preferred)
+              0x121c7908,               # and  w8, w8, #~preferred
+              0x321b0108,               # orr  w8, w8, #user-defined
+              0x1400002c]),             # b    0x8e50: store type, return
     # mode_valid: the CEA 4K60 branch (now unreachable) becomes the MODE_CLOCK_HIGH return.
     (0x8dd8, [0xb9403a69, 0x52820a0a, 0x72a0012a, 0x6b0a013f, 0x54000361, 0x39431289],
              [0xa9447bfd, 0xa9454ff4, 0xf85f8e5e, 0x528001e0, 0x910183ff, 0xd65f03c0]),

@@ -1104,7 +1104,7 @@ index dcd7bbaf475..a988777b7f7 100644
          if (!mDrmBootPath) {
              setupSecondaryEglSurfaces();
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenu.h b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
-index 88e7cae6699..c78f4244933 100644
+index 88e7cae6699..a29bff428d7 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 @@ -79,6 +79,7 @@ static inline void nanoThreadNormalPriority() {
@@ -1180,7 +1180,7 @@ index 88e7cae6699..c78f4244933 100644
      void updateSetupTransition();
      void buildTimezoneList();
      void startSetupScript();
-@@ -982,6 +1001,27 @@ private:
+@@ -982,6 +1001,28 @@ private:
      // screen" for it; "Don't ask again" adds it to persist.gammaos.nano.dualscreen_dismissed.
      void openDualScreenPrompt(const std::string& pkg);
      void pollDualScreenDetect();
@@ -1191,6 +1191,7 @@ index 88e7cae6699..c78f4244933 100644
 +    void pollExternalDisplay();
 +    void raiseForExternalDisplay();
 +    void openExtModeChooser(uint64_t physicalId);
++    bool extAutoMode(uint64_t physicalId);
 +    void extModeAccept();
 +    void extModeCancel();
 +    std::vector<ExtMode> mExtModes;
@@ -1208,7 +1209,7 @@ index 88e7cae6699..c78f4244933 100644
      // True on a physical dual-screen device (e.g. RG DS): physical display count > 1, cached.
      bool hasSecondaryDisplay();
      std::string mLastOrientToken;                 // last force_orientation we wrote
-@@ -1208,7 +1248,7 @@ private:
+@@ -1208,7 +1249,7 @@ private:
      float mCpVal = 1.0f;           // 0..1
      const Ps3SettingBinding* mCpBinding = nullptr;  // colour prop to write on confirm (mode 0)
      std::string mCpTitle;          // header label (the colour row name)
@@ -1217,7 +1218,7 @@ index 88e7cae6699..c78f4244933 100644
      // Calibration wizard (port of LineageParts GamepadCalibrationDialogFragment).
      // Steps: 0 centre, 1 left-stick range, 2 right-stick range, 3 triggers,
      // 4 deadzone, 5 sensitivity, 6 done.
-@@ -1228,6 +1268,7 @@ private:
+@@ -1228,6 +1269,7 @@ private:
      // accelerating cadence while a direction is held, so users don't
      // have to tap repeatedly to scroll long lists.
      NavDir  mNavHeldDir      = NavDir::None;
@@ -1225,7 +1226,7 @@ index 88e7cae6699..c78f4244933 100644
      int64_t mNavHeldStartMs  = 0; // when the current direction was pressed
      int64_t mNavLastRepeatMs = 0; // when we last fired a repeat (or initial fire)
      int     mNavRepeatCount  = 0; // repeat fires so far, used for acceleration
-@@ -1236,6 +1277,7 @@ private:
+@@ -1236,6 +1278,7 @@ private:
      // direction press, or a scripted nav injection). The PS3 XMB idle frame-
      // rate drop in threadLoop only engages a full minute after this stamp.
      int64_t mLastInputMs = 0;
@@ -1233,7 +1234,7 @@ index 88e7cae6699..c78f4244933 100644
  
      // Brightness / power
      bool mSelectHeld;
-@@ -1276,6 +1318,10 @@ private:
+@@ -1276,6 +1319,10 @@ private:
      std::string mWifiSsid;         // connected SSID, empty otherwise
      BtLevel mBtLevel;
      int mBtConnectedCount;         // bonded AND currently connected devices
@@ -1244,7 +1245,7 @@ index 88e7cae6699..c78f4244933 100644
      bool mNetPollInitialised;      // first poll landed, safe to draw
      // Worker thread handles for the net poller. Started from the ctor
      // after mSession is wired up; joined from the dtor.
-@@ -1332,10 +1378,13 @@ private:
+@@ -1332,10 +1379,13 @@ private:
      // game (NextUI-style). A flat list of full ROM paths, persisted one-per-line to
      // /data/system/nano_favorites.txt. Shown as its own "Favorites" entry under Game when non-empty.
      std::vector<std::string> mXmbFavorites;
@@ -1258,7 +1259,7 @@ index 88e7cae6699..c78f4244933 100644
      // buildFavoritesSubmenu takes Ps3Level& so it is declared with the other builders below.
      // Hidden games: games taken out of every game list without deleting the file. Keyed by
      // hiddenKey (the same game reached through /data/media/0, /storage/emulated/0 or /sdcard is
-@@ -1347,6 +1396,7 @@ private:
+@@ -1347,6 +1397,7 @@ private:
      bool loadHiddenGames();                            // true when the set changed
      void saveHiddenGames();
      static std::string hiddenKey(const std::string& romPath);
@@ -1266,7 +1267,7 @@ index 88e7cae6699..c78f4244933 100644
      bool isHiddenGame(const std::string& romPath) const;
      void hideGame(const std::string& romPath);         // persists, drops it from every open list
      void unhideGame(const std::string& key);           // persists, rescans so it returns
-@@ -1398,6 +1448,8 @@ private:
+@@ -1398,6 +1449,8 @@ private:
          PS3_GS_AUTOADD,   // "Auto-add Systems from Folder..." row (ES-DE style bulk import)
          PS3_GS_EMUROW,    // an emulator/core row in the emulator picker (a = catalog index)
          PS3_GS_EMU_CUSTOM,// "Custom..." row in the emulator picker (type a core/package by hand)
@@ -1275,7 +1276,7 @@ index 88e7cae6699..c78f4244933 100644
          PS3_GS_SCANSRC,   // a configured scan-folder row (a = scanSources index; Y removes it)
          PS3_GS_DEFFOLDER,     // an active default scan folder (Y removes it; payloadStr = alias)
          PS3_GS_DEFFOLDER_OFF, // a removed default scan folder (Y restores it; payloadStr = alias)
-@@ -1513,6 +1565,7 @@ private:
+@@ -1513,6 +1566,7 @@ private:
                                   // lets a track/file's option menu there offer Remove from Playlist + Reorder.
          std::string itemHideCatId;  // the category id an ITEM_HIDE editor level is editing (set by
                                      // buildCatItemVisibilityList); lets itemHideToggle rebuild it in place.
@@ -1283,7 +1284,7 @@ index 88e7cae6699..c78f4244933 100644
      };
      bool mPs3Xmb = false;         // persist.gammaos.nano.ps3xmb
      bool mNdsTheme = false;       // persist.gammaos.nano.ndstheme (DSi System Menu theme, takes priority)
-@@ -1593,8 +1646,16 @@ private:
+@@ -1593,8 +1647,16 @@ private:
      // ready / none) and sets *outAR to the native aspect ratio.
      GLuint esdeGameMediaTex(const std::string& romPath, const std::string& imageType, float* outAR);
      std::string esdeGameMediaPath(const std::string& romPath, const std::string& imageType);  // resolved file ("" = none)
@@ -1300,7 +1301,7 @@ index 88e7cae6699..c78f4244933 100644
      void esdeReloadForSystem(int sysIdx);         // re-parse per-system data (systeminfo/colours) on
                                                    // a settled system change (XML only, no GL reload)
      int  mEsdeSysSel = 0;                         // selected system (system view)
-@@ -1676,6 +1737,102 @@ private:
+@@ -1676,6 +1738,102 @@ private:
          bool installed = false;
      };
      bool         mEsdeMenuActive = false;         // menu open
@@ -1403,7 +1404,7 @@ index 88e7cae6699..c78f4244933 100644
      bool         mEsdeMenuClosing = false;        // fade-out in progress
      float        mEsdeMenuAnim = 0.0f;            // 0..1 open ease
      EsdeMenuPage mEsdeMenuPage = ESDE_PG_ROOT;
-@@ -1757,6 +1914,13 @@ private:
+@@ -1757,6 +1915,13 @@ private:
      void ensureEsdeTheme();
      void esdeSdcardThemesTick();                  // watch /sdcard/ES-DE/themes for user-dropped themes
      void esdeRebuildSysList();
@@ -1417,7 +1418,7 @@ index 88e7cae6699..c78f4244933 100644
      // ES-DE variant triggers (ViewController per-system scan): a system with no matching game
      // media renders with the selected variant's <override useVariant> instead of the variant
      // itself. nano keeps one scraped image per game (the box, reused for the video element), so
-@@ -1781,6 +1945,12 @@ private:
+@@ -1781,6 +1946,12 @@ private:
      void esdeNav(int dx, int dy);
      bool esdeSelect();
      bool esdeBack();
@@ -1430,7 +1431,7 @@ index 88e7cae6699..c78f4244933 100644
      bool mPs3BottomClock = false; // persist.gammaos.nano.ps3xmb.bottomclock (PSP clock on the bottom panel, dual-screen XMB)
      // Half Resolution (XMB theme only, three INDEPENDENT Theme Settings toggles). Each renders only its
      // subsystem at half resolution and sharp-linear upscales it; the rest stays full-res. Perf for weak
-@@ -2071,6 +2241,13 @@ private:
+@@ -2071,6 +2242,13 @@ private:
      // boot clock (accumulated clamped mFrameDt, NOT mEffectTime which wraps).
      bool   mPs3BootActive = false;
      bool   mPs3BootWizardAfter = false;  // fresh setup -> show the wizard after the intro
@@ -1444,7 +1445,7 @@ index 88e7cae6699..c78f4244933 100644
      double mPs3BootElapsedMs = 0.0;      // monotonic boot clock
      float  mPs3BootLabelReveal = 1.0f;   // category-label fade-in (1 = fully shown)
      float  mPs3BootIconReveal = 1.0f;    // category-icon / item / clock pop-in (1 = shown)
-@@ -2296,6 +2473,7 @@ private:
+@@ -2296,6 +2474,7 @@ private:
      struct VidPending { bool isStream = false; std::string file; std::string url; int w = 0, h = 0;
                          int resumeChoice = -1; double resumeSec = 0.0; int vidIdx = 0; };
      VidPending mVidPending;                         // params captured at vidBeginOpen, applied on adopt
@@ -1452,7 +1453,7 @@ index 88e7cae6699..c78f4244933 100644
      void   vidBeginOpen(const VidPending& p);       // render: GL alloc + spawn the open worker
      bool   vidOpenTitleRun();                       // worker: blocking title open (reads mVidPending)
      bool   vidOpenStreamRun();                      // worker: blocking IPTV stream open
-@@ -2427,9 +2605,28 @@ private:
+@@ -2427,9 +2606,28 @@ private:
      std::atomic<bool> mEsdeBgVideoOpenDone{false};
      std::atomic<bool> mEsdeBgVideoOpenOk{false};
      bool   mEsdeBgVideoAdopted = false;
@@ -1483,7 +1484,7 @@ index 88e7cae6699..c78f4244933 100644
      // Live hover preview in the Video Wallpaper picker: decode the currently-focused video and draw it
      // into its grid cell. Only ONE decoder runs at a time (the single HW decoder), so the tick stops the
      // video wallpaper while previewing and lets wpVideoTick re-adopt it on leaving the picker. Mirrors
-@@ -2809,15 +3006,51 @@ private:
+@@ -2809,15 +3007,51 @@ private:
      // performance-mode side-panel chooser, and the kill-apps backend.
      void buildQuickPowerSubmenu(Ps3Level& out);
      void openQuickPowerMenu();   // power-hold (menu visible) -> Quick Menu Power submenu, all themes
@@ -1541,7 +1542,7 @@ index 88e7cae6699..c78f4244933 100644
      void buildGamepadSubmenu(Ps3Level& out);         // top-level Gamepad Settings section list
      // Gamepad Settings sub-sections (grouped for readability) + shared row helpers.
      void gpLeaf(Ps3Level& out, const char* label, const char* bindLabel, int icon);
-@@ -2829,6 +3062,9 @@ private:
+@@ -2829,6 +3063,9 @@ private:
      void buildGpRumble(Ps3Level& out);
      void buildGpMapping(Ps3Level& out);
      void buildGpTouch(Ps3Level& out);
@@ -1551,7 +1552,7 @@ index 88e7cae6699..c78f4244933 100644
      void gamepadTestOpen();                          // enter the live controller test screen
      void gamepadCalibOpen();                         // enter the analog calibration wizard
      void gpCaptureEvent(int fd, int type, int code, int value); // mirror a raw event -> maps
-@@ -2839,7 +3075,7 @@ private:
+@@ -2839,7 +3076,7 @@ private:
      void gpDialogHeader(const char* title, int iconIdx, float ap); // icon + title + top/bottom dividers
      float gpAxisNorm(int absCode);                   // latest axis value normalised to [-1,1]
      // Full-screen HSV colour picker (all themes) - see the mCp* state block above.
@@ -1560,7 +1561,7 @@ index 88e7cae6699..c78f4244933 100644
      void renderColorPicker();                        // draw the Hue/Brightness field + preview + hints
      bool colorPickerHandleKey(int code, int value);  // confirm / cancel / saturation / hold-exit (press edges)
      void colorPickerTick();                          // per-frame cursor move from held d-pad / stick / hat
-@@ -2955,7 +3191,7 @@ private:
+@@ -2955,7 +3192,7 @@ private:
      void buildShaderBrowser(const std::string& path, Ps3Level& out);  // custom-preset file browser
      void shaderOpenBrowserDefault();                  // open the browser at the RetroArch subfolder for the active type (still traversable up)
      void shaderSelectPreset(const std::string& path);                 // point the shader loader at a custom preset (SF reads it in place) + arm meta poll
@@ -1569,7 +1570,7 @@ index 88e7cae6699..c78f4244933 100644
      void openShaderOptChooser(const std::string& spec); // discrete-option chooser (key|opts|title)
      std::string shaderOptCurrentLabel(const std::string& spec); // display label of a shader-opt row's current value
      void openShaderParamSlider(int idx);             // live slider for mShaderParams[idx]
-@@ -3038,10 +3274,41 @@ private:
+@@ -3038,10 +3275,41 @@ private:
      void loadEmuCatalog();                     // parse the bundled Daijishou JSONs once
      void buildEmulatorPicker(Ps3Level& out);   // build the filtered emulator list screen
      void gsOpenEmulatorPicker();               // open the emulator chooser for mGsEditIdx
@@ -1611,7 +1612,7 @@ index 88e7cae6699..c78f4244933 100644
  
      // ---- Add / remove custom systems ----
      void gsAddSystem();                        // "Add New System" -> emulator picker in add mode
-@@ -3073,6 +3340,28 @@ private:
+@@ -3073,6 +3341,28 @@ private:
      std::vector<std::string> mountedShareNames() const;
      void gsFolderSelect(const std::string& path); // add a folder as a rawpath scan source
      void drasticDataFolderSelect(const std::string& path); // #90: set persist.gammaos.drastic.data_dir (folder-picker target 5)
@@ -1640,7 +1641,7 @@ index 88e7cae6699..c78f4244933 100644
      void drasticCheatsFolderSelect(const std::string& path); // persist.gammaos.drastic.cheats_dir (folder-picker target 8)
      void drasticPerfRestoreCheck();            // put back the global performance mode a per-game one parked
      void mouseModeHomeGuard();                 // gammapad mouse mode off whenever the home is the foreground
-@@ -3251,7 +3540,7 @@ private:
+@@ -3251,7 +3541,7 @@ private:
          std::string m3uPath;              // non-empty: derived from this .m3u (regenerated on scan);
                                            // empty: user-created (preserved across scans)
      };
@@ -1649,7 +1650,7 @@ index 88e7cae6699..c78f4244933 100644
      std::vector<std::string> mMusicFolders;
      std::vector<MusicTrack>  mMusicTracks;
      std::vector<MusicPlaylist> mMusicPlaylists;
-@@ -3303,6 +3592,13 @@ private:
+@@ -3303,6 +3593,13 @@ private:
          // altemulator string enables the altemulator badge when non-empty.
          bool favorite = false, completed = false, kidgame = false, broken = false;
          std::string controller, altemulator;
@@ -1663,7 +1664,7 @@ index 88e7cae6699..c78f4244933 100644
      };
      std::unordered_map<std::string, ScrapeEntry> mScrapeIndex;
      bool mScrapeIndexLoaded = false;
-@@ -3332,9 +3628,28 @@ private:
+@@ -3332,9 +3629,28 @@ private:
      // scrape store which can differ (e.g. a timezone-shifted release date). Loaded lazily per system
      // and merged with the scrape store's cover paths; absent gamelist.xml -> falls back to the store.
      std::unordered_map<std::string, ScrapeEntry> mEsdeGamelistMeta;  // full romPath -> gamelist metadata
@@ -1693,7 +1694,7 @@ index 88e7cae6699..c78f4244933 100644
      // Per-game title override (Rename / Edit Title). A user-typed name that overrides
      // the basename-minus-extension display name everywhere (columns / recents / search /
      // Info) AND becomes the scraper search query so a corrected title can match. Stored
-@@ -3400,30 +3715,32 @@ private:
+@@ -3400,30 +3716,32 @@ private:
          int engine = 0;                    // nanoscraper::Engine
          nanoscraper::Credentials cred;
          nanoscraper::PlatformIds plat;
@@ -1743,7 +1744,7 @@ index 88e7cae6699..c78f4244933 100644
      // scrape worker state
      std::mutex mScrapeMutex;
      bool mScrapeRunning = false;           // worker alive
-@@ -3432,6 +3749,11 @@ private:
+@@ -3432,6 +3750,11 @@ private:
      bool mScrapeDoneFlag = false;          // worker finished -> show summary
      int  mScrapeDone = 0, mScrapeTotal = 0, mScrapeHits = 0, mScrapeFail = 0;
      std::string mScrapeStatus;             // "System / Game" current line (under mutex)
@@ -1755,7 +1756,7 @@ index 88e7cae6699..c78f4244933 100644
      std::string mScrapeError;              // terminal message (creds missing / network)
      std::vector<std::pair<std::string, ScrapeEntry>> mScrapePending;  // finished -> merge on drain
      bool mScrapeBox = true, mScrapeFan = true;   // snapshot of the enabled-media toggles for the worker
-@@ -3445,10 +3767,14 @@ private:
+@@ -3445,10 +3768,14 @@ private:
      int64_t mScrapeDirPollMs = 0;          // availability probe throttle (once a second, uptime)
      std::string mScrapeMoveSrc, mScrapeMoveDst;   // relocation in flight: old/new folder ("" = none)
      bool mScrapeMoveMode = false;          // the progress modal fronts a relocation (wording), until the next scrape
@@ -1770,7 +1771,7 @@ index 88e7cae6699..c78f4244933 100644
      void scrapeMoveThreadFunc(std::vector<std::pair<std::string, ScrapeEntry>> entries,
                                std::string src, std::string dst);
      void gsOpenClearArtConfirm();          // Game Systems editor: Clear Boxart confirm (theme key 49)
-@@ -3457,8 +3783,11 @@ private:
+@@ -3457,8 +3784,11 @@ private:
      // cartridge icon, freed when leaving the Game category and on sleep/occlusion.
      // ar = width/height. pixel = a PICO-8 cart label: 128x128 pixel art uploaded NEAREST, drawn at an
      // integer multiple of its size (cartPixelSize) so every cart pixel stays square.
@@ -1783,7 +1784,7 @@ index 88e7cae6699..c78f4244933 100644
      bool mScrapeBoxartOn = false;        // per-frame cache of scraperBoxartEnabled()
      bool mNdsTileIcon = false;           // per-frame cache of persist.gammaos.nano.nds.tileicon (DS Icons On Tiles)
      // Data-loss guards: a loader sets its flag true when the on-disk file EXISTS but could not be
-@@ -4915,6 +5244,9 @@ private:
+@@ -4915,6 +5245,9 @@ private:
      // it red) and beveled into a normal map for the XMB glass relight. Lazily built + cached.
      GLuint mHeartIconTex = 0, mHeartNmapTex = 0;
      void   ensureHeartIcon();               // build mHeartIconTex + mHeartNmapTex once
@@ -1793,7 +1794,7 @@ index 88e7cae6699..c78f4244933 100644
      GLuint gpGlassNmap(bool round, float wpx, float hpx);    // cached bevel nmap for a gamepad-tester button shape
      // Resolve a system iconRef (builtin:/retroarch:/core:/file:) to a (colour
      // tex, glass bevel nmap) pair, cached by ref string. See NanoMenuPS3Icons.cpp.
-@@ -4940,6 +5272,7 @@ private:
+@@ -4940,6 +5273,7 @@ private:
      std::vector<BgScanResult> mBgScanResults; // one per system, guarded by mutex
      bool mBgScanResultReady;                  // set by thread, cleared by render loop
      bool mBgScanThreadRunning;                // true while thread is active
@@ -1801,7 +1802,7 @@ index 88e7cae6699..c78f4244933 100644
      void bgScanThreadFunc();                  // the thread entry point
  
      // Settings column. Pinned as the leftmost XMB column at sentinel index -2.
-@@ -5086,6 +5419,7 @@ private:
+@@ -5086,6 +5420,7 @@ private:
      std::string mBtWizInPasskey;              // inbound passkey to display for confirmation
      std::atomic<bool> mBtWizRadioOn{true};    // cached real radio state (dumpsys enabled:)
      std::atomic<bool> mBtWizToggling{false};  // a radio enable/disable is settling
@@ -1809,7 +1810,7 @@ index 88e7cae6699..c78f4244933 100644
      float mBtWizManageRefreshT = -999.0f;     // last live-refresh time while sitting on Manage
      void btWizToggleRadioAsync(bool on);      // enable/disable the radio + settle + refresh
  
-@@ -5176,6 +5510,7 @@ private:
+@@ -5176,6 +5511,7 @@ private:
      bool    mCursorVisible = false;             // shown while recently moved/clicked
      int64_t mLastPointerMs = 0;                 // last pointer activity (auto-hide timer)
      bool    mTouchFromPointer = false;          // current touch frame is a mouse click, not a finger
@@ -1817,7 +1818,7 @@ index 88e7cae6699..c78f4244933 100644
      bool    mKbdShiftHeld = false;              // physical-keyboard shift state (for OSK typing)
      void    drawPointerCursor();                // draw the mouse cursor overlay (NanoMenuRender.cpp)
      int     kbdCodeToCp(int code, bool shift);  // USB-keyboard keycode -> printable codepoint (0 = none)
-@@ -5400,6 +5735,33 @@ private:
+@@ -5400,6 +5736,33 @@ private:
                                    // globe on black until ready so the one-time texture
                                    // load spike isn't charged against the 360ms fade
      int mTzSelOnOpen = 0;         // mTzSelected when the globe opened (restore on cancel)
@@ -2958,10 +2959,10 @@ index 2d621760914..0660262413f 100644
  }  // namespace android
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuExtDisplay.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuExtDisplay.cpp
 new file mode 100644
-index 00000000000..b31cda37e1c
+index 00000000000..119e0cfc61d
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuExtDisplay.cpp
-@@ -0,0 +1,380 @@
+@@ -0,0 +1,414 @@
 +/*
 + * GammaOS Nano: display mode chooser for an external display.
 + *
@@ -2999,6 +3000,8 @@ index 00000000000..b31cda37e1c
 +// The physical display the chooser was last shown for; cleared once it disconnects, so the home
 +// and the overlay ask once per connection.
 +constexpr const char* kPromptedProp = "sys.gammaos.nano.ext_prompted";
++// 1: ask for the mode when a display connects; otherwise 1080p at 60 Hz is set without asking.
++constexpr const char* kAskProp = "persist.gammaos.nano.ext_ask";
 +
 +std::string readFile(const std::string& path, size_t max) {
 +    std::string out;
@@ -3175,6 +3178,47 @@ index 00000000000..b31cda37e1c
 +    return external.empty() || askedThisConnection ? 0 : external.front().value;
 +}
 +
++// Sets the display's mode through DisplayManager, waiting a few seconds for its logical display. Off
++// the render thread: dumpsys can take a moment.
++static void setExtMode(uint64_t physicalId, int w, int h, float hz) {
++    std::thread([physicalId, w, h, hz] {
++        int displayId = -1;
++        for (int i = 0; i < 10 && (displayId = logicalDisplayId(physicalId)) < 0; i++) sleep(1);
++        if (displayId < 0) {
++            ALOGW("external display %" PRIu64 ": no logical display, mode not set", physicalId);
++            return;
++        }
++        // DisplayManager matches the refresh rate's exact float bits; %.9g round-trips a float.
++        char cmd[160];
++        snprintf(cmd, sizeof(cmd), "cmd display set-user-preferred-display-mode %d %d %.9g %d 2>&1",
++                 w, h, (double)hz, displayId);
++        const std::string out = shellOut(cmd);
++        ALOGI("external display %d: %dx%d %.2f Hz%s%s", displayId, w, h, hz,
++              out.empty() ? "" : ": ", out.c_str());
++    }).detach();
++}
++
++// A display just connected: 1920 x 1080 at the rate nearest 60 Hz, without asking. A display
++// without 1080p keeps the mode it came up in. False while its modes are not reported yet.
++bool NanoMenu::extAutoMode(uint64_t physicalId) {
++    ui::DynamicDisplayInfo dyn;
++    if (SurfaceComposerClient::getDynamicDisplayInfoFromId(physicalId, &dyn) != NO_ERROR ||
++        dyn.supportedDisplayModes.empty())
++        return false;
++    property_set(kPromptedProp, std::to_string(physicalId).c_str());
++    const ui::DisplayMode* best = nullptr;
++    for (const ui::DisplayMode& m : dyn.supportedDisplayModes)
++        if (m.resolution.width == 1920 && m.resolution.height == 1080 &&
++            (!best || fabsf(m.peakRefreshRate - 60.0f) < fabsf(best->peakRefreshRate - 60.0f)))
++            best = &m;
++    if (!best) {
++        ALOGI("external display %" PRIu64 ": no 1920x1080 mode, keeping its own", physicalId);
++        return true;
++    }
++    setExtMode(physicalId, 1920, 1080, best->peakRefreshRate);
++    return true;
++}
++
 +void NanoMenu::pollExternalDisplay() {
 +    const int64_t now = uptimeMillis();
 +    // NanoPauseActivity lets the game go after a minute unless asked again.
@@ -3184,6 +3228,7 @@ index 00000000000..b31cda37e1c
 +    mExtPollMs = now;
 +    const uint64_t display = extDisplayPending();
 +    if (!display) return;
++    if (!property_get_bool(kAskProp, false)) { extAutoMode(display); return; }
 +
 +    // Only over Nano's own screen, with nothing else open.
 +    if (mOverlayMode && !mOverlayShown) return;
@@ -3212,6 +3257,10 @@ index 00000000000..b31cda37e1c
 +    sLastMs = now;
 +    // First, so a monitor unplugged while nothing asked is forgotten whatever the gates below say.
 +    const uint64_t display = extDisplayPending();
++    if (!property_get_bool(kAskProp, false)) {   // no chooser to raise for
++        if (display) extAutoMode(display);
++        return;
++    }
 +    // When PhoneWindowManager would open the Quick Menu over the app (nanoOverApp).
 +    if (!property_get_bool("sys.gammaos.nano.app_launched", false) ||
 +        !property_get_bool("service.bootanim.exit", false) ||
@@ -3305,21 +3354,7 @@ index 00000000000..b31cda37e1c
 +    extModeCancel();
 +    if (sel < 0 || sel >= (int)mExtModes.size()) return;
 +    const ExtMode m = mExtModes[sel];
-+    // dumpsys can take a moment; keep it off the render thread.
-+    std::thread([physicalId, m] {
-+        const int displayId = logicalDisplayId(physicalId);
-+        if (displayId < 0) {
-+            ALOGW("external display %" PRIu64 ": no logical display, mode not set", physicalId);
-+            return;
-+        }
-+        // DisplayManager matches the refresh rate's exact float bits; %.9g round-trips a float.
-+        char cmd[160];
-+        snprintf(cmd, sizeof(cmd), "cmd display set-user-preferred-display-mode %d %d %.9g %d 2>&1",
-+                 m.w, m.h, (double)m.hz, displayId);
-+        const std::string out = shellOut(cmd);
-+        ALOGI("external display %d: %dx%d %.2f Hz%s%s", displayId, m.w, m.h, m.hz,
-+              out.empty() ? "" : ": ", out.c_str());
-+    }).detach();
++    setExtMode(physicalId, m.w, m.h, m.hz);
 +}
 +
 +void NanoMenu::extModeCancel() {
