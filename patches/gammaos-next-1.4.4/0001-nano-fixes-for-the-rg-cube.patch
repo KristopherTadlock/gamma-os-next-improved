@@ -13748,6 +13748,147 @@ index c46516e1ccb..3d7fe338d4c 100644
              }
              System.out.println("OK");
              return 0;
+diff --git a/frameworks/base/packages/SystemUI/src/com/android/systemui/qs/tiles/ExternalDockingTile.java b/frameworks/base/packages/SystemUI/src/com/android/systemui/qs/tiles/ExternalDockingTile.java
+index ba9349c9439..ac4287f2564 100755
+--- a/frameworks/base/packages/SystemUI/src/com/android/systemui/qs/tiles/ExternalDockingTile.java
++++ b/frameworks/base/packages/SystemUI/src/com/android/systemui/qs/tiles/ExternalDockingTile.java
+@@ -81,7 +81,7 @@ public class ExternalDockingTile extends QSTileImpl<BooleanState> {
+               statusBarStateController, activityStarter, qsLogger);
+ 
+         // 1) Read persisted prop (default to OFF)
+-        currentState = SystemProperties.getInt(PROP_CONTROL, STATE_DISABLED);
++        currentState = readState();
+         // 2) Re-apply it in case it's changed externally
+         applyState(currentState);
+         // 3) Listen for screen-off and boot to re-sync
+@@ -103,7 +103,7 @@ public class ExternalDockingTile extends QSTileImpl<BooleanState> {
+     protected void handleSetListening(boolean listening) {
+         super.handleSetListening(listening);
+         if (listening) {
+-            int newState = SystemProperties.getInt(PROP_CONTROL, STATE_DISABLED);
++            int newState = readState();
+             if (newState != currentState) {
+                 currentState = newState;
+                 refreshState();
+@@ -148,6 +148,11 @@ public class ExternalDockingTile extends QSTileImpl<BooleanState> {
+         return VIEW_UNKNOWN;
+     }
+ 
++    // The property is a boolean: "1"/"0" or "true"/"false", as Nano's settings write it.
++    private static int readState() {
++        return SystemProperties.getBoolean(PROP_CONTROL, false) ? STATE_ENABLED : STATE_DISABLED;
++    }
++
+     /**
+      * Persist the current state into the system property.
+      */
+@@ -178,7 +183,7 @@ public class ExternalDockingTile extends QSTileImpl<BooleanState> {
+             String action = intent.getAction();
+             if (Intent.ACTION_SCREEN_OFF.equals(action)
+              || Intent.ACTION_BOOT_COMPLETED.equals(action)) {
+-                int newState = SystemProperties.getInt(PROP_CONTROL, STATE_DISABLED);
++                int newState = readState();
+                 if (newState != currentState) {
+                     currentState = newState;
+                     applyState(currentState);
+diff --git a/frameworks/base/packages/SystemUI/src/com/android/systemui/qs/tiles/ExternalMirrorTile.java b/frameworks/base/packages/SystemUI/src/com/android/systemui/qs/tiles/ExternalMirrorTile.java
+index 9eb21438745..8aadc4ff337 100755
+--- a/frameworks/base/packages/SystemUI/src/com/android/systemui/qs/tiles/ExternalMirrorTile.java
++++ b/frameworks/base/packages/SystemUI/src/com/android/systemui/qs/tiles/ExternalMirrorTile.java
+@@ -81,7 +81,7 @@ public class ExternalMirrorTile extends QSTileImpl<BooleanState> {
+               statusBarStateController, activityStarter, qsLogger);
+ 
+         // 1) Read persisted prop (default to OFF)
+-        currentState = SystemProperties.getInt(PROP_CONTROL, STATE_ENABLED);
++        currentState = readState();
+         // 2) Re-apply it in case it's changed externally
+         applyState(currentState);
+         // 3) Listen for screen-off and boot to re-sync
+@@ -103,7 +103,7 @@ public class ExternalMirrorTile extends QSTileImpl<BooleanState> {
+     protected void handleSetListening(boolean listening) {
+         super.handleSetListening(listening);
+         if (listening) {
+-            int newState = SystemProperties.getInt(PROP_CONTROL, STATE_DISABLED);
++            int newState = readState();
+             if (newState != currentState) {
+                 currentState = newState;
+                 refreshState();
+@@ -148,11 +148,16 @@ public class ExternalMirrorTile extends QSTileImpl<BooleanState> {
+         return VIEW_UNKNOWN;
+     }
+ 
++    // The property is a boolean: "1"/"0" or "true"/"false", as Nano's settings write it.
++    private static int readState() {
++        return SystemProperties.getBoolean(PROP_CONTROL, false) ? STATE_ENABLED : STATE_DISABLED;
++    }
++
+     /**
+      * Persist the current state into the system property.
+      */
+     private void applyState(int state) {
+-        SystemProperties.set(PROP_CONTROL, Integer.toString(state));
++        SystemProperties.set(PROP_CONTROL, state == STATE_ENABLED ? "true" : "false");
+         if (Log.isLoggable("ExternalMirrorTile", Log.DEBUG)) {
+             Log.d("ExternalMirrorTile", PROP_CONTROL + "=" + state);
+         }
+@@ -178,7 +183,7 @@ public class ExternalMirrorTile extends QSTileImpl<BooleanState> {
+             String action = intent.getAction();
+             if (Intent.ACTION_SCREEN_OFF.equals(action)
+              || Intent.ACTION_BOOT_COMPLETED.equals(action)) {
+-                int newState = SystemProperties.getInt(PROP_CONTROL, STATE_DISABLED);
++                int newState = readState();
+                 if (newState != currentState) {
+                     currentState = newState;
+                     applyState(currentState);
+diff --git a/frameworks/base/packages/SystemUI/src/com/android/systemui/qs/tiles/ExternalResizeTile.java b/frameworks/base/packages/SystemUI/src/com/android/systemui/qs/tiles/ExternalResizeTile.java
+index 5e56fab58b1..248a24d063f 100755
+--- a/frameworks/base/packages/SystemUI/src/com/android/systemui/qs/tiles/ExternalResizeTile.java
++++ b/frameworks/base/packages/SystemUI/src/com/android/systemui/qs/tiles/ExternalResizeTile.java
+@@ -81,7 +81,7 @@ public class ExternalResizeTile extends QSTileImpl<BooleanState> {
+               statusBarStateController, activityStarter, qsLogger);
+ 
+         // 1) Read persisted prop (default to OFF)
+-        currentState = SystemProperties.getInt(PROP_CONTROL, STATE_DISABLED);
++        currentState = readState();
+         // 2) Re-apply it in case it's changed externally
+         applyState(currentState);
+         // 3) Listen for screen-off and boot to re-sync
+@@ -103,7 +103,7 @@ public class ExternalResizeTile extends QSTileImpl<BooleanState> {
+     protected void handleSetListening(boolean listening) {
+         super.handleSetListening(listening);
+         if (listening) {
+-            int newState = SystemProperties.getInt(PROP_CONTROL, STATE_DISABLED);
++            int newState = readState();
+             if (newState != currentState) {
+                 currentState = newState;
+                 refreshState();
+@@ -148,11 +148,16 @@ public class ExternalResizeTile extends QSTileImpl<BooleanState> {
+         return VIEW_UNKNOWN;
+     }
+ 
++    // The property is a boolean: "1"/"0" or "true"/"false", as Nano's settings write it.
++    private static int readState() {
++        return SystemProperties.getBoolean(PROP_CONTROL, false) ? STATE_ENABLED : STATE_DISABLED;
++    }
++
+     /**
+      * Persist the current state into the system property.
+      */
+     private void applyState(int state) {
+-        SystemProperties.set(PROP_CONTROL, Integer.toString(state));
++        SystemProperties.set(PROP_CONTROL, state == STATE_ENABLED ? "true" : "false");
+         if (Log.isLoggable("ExternalResizeTile", Log.DEBUG)) {
+             Log.d("ExternalResizeTile", PROP_CONTROL + "=" + state);
+         }
+@@ -178,7 +183,7 @@ public class ExternalResizeTile extends QSTileImpl<BooleanState> {
+             String action = intent.getAction();
+             if (Intent.ACTION_SCREEN_OFF.equals(action)
+              || Intent.ACTION_BOOT_COMPLETED.equals(action)) {
+-                int newState = SystemProperties.getInt(PROP_CONTROL, STATE_DISABLED);
++                int newState = readState();
+                 if (newState != currentState) {
+                     currentState = newState;
+                     applyState(currentState);
 diff --git a/frameworks/base/services/core/java/com/android/server/policy/GammaHotkeyController.java b/frameworks/base/services/core/java/com/android/server/policy/GammaHotkeyController.java
 new file mode 100644
 index 00000000000..c88863fc79b

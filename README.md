@@ -443,7 +443,10 @@ so its menus show over the game.
 A connected monitor is the main screen by default: External as Primary is
 on and Force Mirror off (`persist.gammaos.ext.primary=1`,
 `persist.gammaos.ext.force_mirror=false` in `build.prop`, so a change in
-Nano's External Display settings sticks). With External as Primary, when the
+Nano's External Display settings sticks). The External Docking, External
+Mirror and External Resize Quick Settings tiles read these as on/off values;
+before, the mirror tile could not read `false` and turned Force Mirror on
+whenever System UI started. With External as Primary, when the
 monitor connects the console's screen takes the monitor's size and the
 Cube's backlight goes off, so games render at the monitor's resolution. The
 settings apply when the monitor next connects.
