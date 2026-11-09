@@ -127,7 +127,7 @@ for path, key in zip(sys.argv[1:], (r"input_[abxy]_btn", r"input_player1_[abxy]_
     open(path, "w").write(new)
 PY
 
-# RetroArch's copies of the 4:3 and 8:7 Cropped shaders, which skip RetroArch.
+# RetroArch's copies of the 4:3 and 8:7 Cropped shaders.
 install -m 600 -t "$work/tree/$RA_DATA/shaders/shaders_slang" "$MODS"/retroarch-shaders/rg_cube_{4_3,8_7}_cropped.slang{,p}
 echo "added the rg_cube_4_3_cropped and rg_cube_8_7_cropped shaders"
 

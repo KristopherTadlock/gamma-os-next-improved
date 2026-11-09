@@ -252,7 +252,11 @@ It also changes Nano:
   draws its game straight into its window is left alone unless
   `persist.gammaos.shader.4x3.window.<package>` is set to `1`. To leave an
   app alone, add it to `persist.gammaos.shader.4x3.exclude`
-  (comma-separated). RetroArch is always left alone: it has the same shader
+  (comma-separated). RetroArch is filtered too: it draws its game into its
+  window, so it counts as set for that property, and its own menu is scaled
+  with the game. Use RetroArch's 4:3 or Core Provided aspect ratio with the
+  global shader, not one of the presets below, or the game is cropped twice.
+  RetroArch also has the same shader
   as a Vulkan slang preset, `rg_cube_4_3_cropped.slangp`, in its shader list
   (Shaders > Load, after the folders). Set RetroArch's Aspect Ratio to Full with it,
   so the shader has the whole screen to draw on. It projects every frame the
