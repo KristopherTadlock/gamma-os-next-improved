@@ -82,6 +82,11 @@ The [MaliSX2](https://github.com/bmdhacks/malisx2/tree/v0.4.0) 0.4.0 Vulkan
 driver (MIT) comes pre-installed and selected in ARMSX2, with the Vulkan
 renderer, and a copy is in `/sdcard/GPU Drivers/`. Dolphin and hakuX only load
 custom drivers on Adreno GPUs, so they can't use it on the RG Cube's Mali-G57.
+
+[Shattered Pixel Dungeon](https://github.com/00-Evan/shattered-pixel-dungeon/tree/v4.0.2)
+4.0.2 (GPL-3.0), the full game, unmodified, is installed too, so Android Games
+starts with a game. It plays with a controller and fits the square screen.
+
 Edit `mods/added-apps.txt` to change the apps.
 
 ### ES-DE

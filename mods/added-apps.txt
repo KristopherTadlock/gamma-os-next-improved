@@ -31,6 +31,10 @@ apk  vita3k-0.2.1.apk  name=Vita3K PS Vita emulator  package=org.vita3k.emulator
 # 2026.4.0 has no Android build yet.
 apk  scummvm-2026.3.0.apk  name=ScummVM  package=org.scummvm.scummvm  url=https://downloads.scummvm.org/frs/scummvm/2026.3.0/scummvm-2026.3.0-android-arm64-v8a.apk  sha256=26e25a59496eb94a4dc76f282bb3234d6d36f7f393c3e699e0a62e1a5c3e412b  source=https://github.com/scummvm/scummvm/tree/v2026.3.0
 
+# Shattered Pixel Dungeon 4.0.2, the full game (roguelike) with controller
+# support; preseeds Android Games. GPL-3.0.
+apk  ShatteredPD-v4.0.2-Android.apk  name=Shattered Pixel Dungeon  package=com.shatteredpixel.shatteredpixeldungeon  url=https://github.com/00-Evan/shattered-pixel-dungeon/releases/download/v4.0.2/ShatteredPD-v4.0.2-Android.apk  sha256=ceef4cdd4beddcb3d85379ac004cb4ab5d918b89dc7366b4ce9c4a3585a5e78e  source=https://github.com/00-Evan/shattered-pixel-dungeon/tree/v4.0.2
+
 # MaliSX2 0.4.0, a Vulkan driver for Mali GPUs (tested on the Mali-G57 of the
 # T820). MIT. 45-armsx2-malisx2.sh pre-installs it in ARMSX2; Dolphin and hakuX
 # only load custom drivers on Adreno GPUs.
