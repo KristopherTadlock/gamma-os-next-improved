@@ -2932,10 +2932,10 @@ index 2d621760914..0660262413f 100644
  }  // namespace android
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuExtDisplay.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuExtDisplay.cpp
 new file mode 100644
-index 00000000000..3bc4ddcbf8f
+index 00000000000..b31cda37e1c
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuExtDisplay.cpp
-@@ -0,0 +1,371 @@
+@@ -0,0 +1,380 @@
 +/*
 + * GammaOS Nano: display mode chooser for an external display.
 + *
@@ -2955,6 +2955,7 @@ index 00000000000..3bc4ddcbf8f
 +#include <stdio.h>
 +#include <unistd.h>
 +#include <algorithm>
++#include <atomic>
 +#include <string>
 +#include <thread>
 +#include <vector>
@@ -3041,15 +3042,18 @@ index 00000000000..3bc4ddcbf8f
 +    return -1;
 +}
 +
++// The monitor kept switched on, 0 for none: keepDisplayEnabled runs while it is this display.
++std::atomic<uint64_t> sKeepEnabledFor{0};
++
 +// Android keeps a newly connected external display off until the user agrees to use it, through a
-+// System UI prompt Nano covers, and turns it off again as it takes the connection in. So for a
-+// while after it connects, a display found off is switched on (it then mirrors the console, as
-+// GammaOS sets up), until it has stayed on for a few checks.
++// System UI prompt Nano covers, and turns it off again as it takes each connection in (a replug or
++// a dropout included). So while the monitor is connected, a display found off is switched on; it
++// then mirrors the console (DisplayContent.setDisplayMirroring allows the display named in
++// sys.gammaos.nano.ext_mirror, set before this starts).
 +void keepDisplayEnabled(uint64_t physicalId) {
 +    const std::string key = "uniqueId \"local:" + std::to_string(physicalId) + "\"";
-+    int onInARow = 0;
-+    for (int i = 0; i < 20 && onInARow < 3; i++) {
-+        if (i) sleep(1);
++    for (int i = 0; sKeepEnabledFor.load() == physicalId; i++) {
++        if (i) sleep(i < 20 ? 1 : 2);
 +        const std::string out = shellOut("dumpsys display 2>/dev/null");
 +        // A logical display's dump: mIsEnabled=..., then mBaseDisplayInfo=DisplayInfo{..., displayId N, ...
 +        // uniqueId "local:<physical id>", ...}.
@@ -3059,13 +3063,12 @@ index 00000000000..3bc4ddcbf8f
 +            if (out.compare(lineStart, 16, "mBaseDisplayInfo") == 0 ||
 +                out.find("mBaseDisplayInfo=", lineStart) < p) { at = p; break; }
 +        }
-+        if (at == std::string::npos) { onInARow = 0; continue; }
++        if (at == std::string::npos) continue;
 +        const size_t enabledAt = out.rfind("mIsEnabled=", at);
 +        const size_t lineStart = out.rfind('\n', at) + 1;
 +        const size_t idAt = out.substr(lineStart, at - lineStart).rfind(", displayId ");
-+        if (enabledAt == std::string::npos || idAt == std::string::npos) { onInARow = 0; continue; }
-+        if (out.compare(enabledAt + 11, 4, "true") == 0) { onInARow++; continue; }
-+        onInARow = 0;
++        if (enabledAt == std::string::npos || idAt == std::string::npos) continue;
++        if (out.compare(enabledAt + 11, 4, "true") == 0) continue;
 +        const int displayId = atoi(out.c_str() + lineStart + idAt + 12);
 +        char cmd[64];
 +        snprintf(cmd, sizeof(cmd), "cmd display enable-display %d 2>&1", displayId);
@@ -3127,11 +3130,17 @@ index 00000000000..3bc4ddcbf8f
 +    const bool askedThisConnection = prompted[0] && !gone(strtoull(prompted, nullptr, 10));
 +    if (prompted[0] && !askedThisConnection) property_set(kPromptedProp, "");
 +    if (mExtRaisedFor && gone(mExtRaisedFor)) { mExtRaisedFor = 0; mExtRaisePending = false; }
-+    if (mExtEnabledFor && gone(mExtEnabledFor)) mExtEnabledFor = 0;
-+    // Each connection, once Android has finished booting (it turns displays off until then).
++    if (mExtEnabledFor && gone(mExtEnabledFor)) {
++        mExtEnabledFor = 0;
++        sKeepEnabledFor = 0;
++        property_set("sys.gammaos.nano.ext_mirror", "");
++    }
++    // Once Android has finished booting (it turns displays off until then).
 +    if (!external.empty() && external.front().value != mExtEnabledFor &&
 +        property_get_bool("sys.boot_completed", false)) {
 +        mExtEnabledFor = external.front().value;
++        property_set("sys.gammaos.nano.ext_mirror", ("local:" + std::to_string(mExtEnabledFor)).c_str());
++        sKeepEnabledFor = mExtEnabledFor;
 +        std::thread(keepDisplayEnabled, mExtEnabledFor).detach();
 +    }
 +    if (mPs3DlgActive && mPs3DlgExtMode && mPs3DlgTitle == "External Display" &&
@@ -13570,6 +13579,26 @@ index 0d7e69d0a6b..790532e33ec 100644
                  // GammaOS Nano: in the DRM-home XMB the home nano owns the power
                  // button over evdev (short press = sleep, hold = shutdown), but only
                  // when it grabs input exclusively (persist.gammaos.nano.grab_input),
+diff --git a/frameworks/base/services/core/java/com/android/server/wm/DisplayContent.java b/frameworks/base/services/core/java/com/android/server/wm/DisplayContent.java
+index 8acaf22efc7..153183ce0be 100644
+--- a/frameworks/base/services/core/java/com/android/server/wm/DisplayContent.java
++++ b/frameworks/base/services/core/java/com/android/server/wm/DisplayContent.java
+@@ -7016,8 +7016,13 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
+         // display may temporarily lack content (SecondaryDisplayLauncher not yet started),
+         // and the Content Recording fallback creates a display-level mirror with incorrect
+         // scaling that breaks DualStack rendering. Each display should maintain its own
+-        // unique content — DualStack handles the split when needed.
+-        if (android.os.SystemProperties.getBoolean("sys.gammaos.minimal_boot", false)) {
++        // unique content — DualStack handles the split when needed. The exception is the
++        // monitor nano found on DisplayPort/HDMI (its uniqueId in
++        // sys.gammaos.nano.ext_mirror), which mirrors the console like any external display;
++        // a second built-in panel may also be typed external, so the type alone cannot tell.
++        if (android.os.SystemProperties.getBoolean("sys.gammaos.minimal_boot", false)
++                && (mDisplayInfo.uniqueId == null || !mDisplayInfo.uniqueId.equals(
++                        android.os.SystemProperties.get("sys.gammaos.nano.ext_mirror", "")))) {
+             return false;
+         }
+ 
 diff --git a/frameworks/base/services/core/java/com/android/server/wm/RootWindowContainer.java b/frameworks/base/services/core/java/com/android/server/wm/RootWindowContainer.java
 index 2d1141f2ad2..15fc4cbbe5f 100644
 --- a/frameworks/base/services/core/java/com/android/server/wm/RootWindowContainer.java
@@ -13595,28 +13624,31 @@ index 2d1141f2ad2..15fc4cbbe5f 100644
                      String launchRom = getNanoLaunchRom();
                      String launchCore = android.os.SystemProperties.get(
 diff --git a/frameworks/base/services/java/com/android/server/SystemServer.java b/frameworks/base/services/java/com/android/server/SystemServer.java
-index a58ef30a45b..bbf9ad2a02a 100644
+index a58ef30a45b..acb8a07e0a9 100644
 --- a/frameworks/base/services/java/com/android/server/SystemServer.java
 +++ b/frameworks/base/services/java/com/android/server/SystemServer.java
-@@ -2898,6 +2898,18 @@ public final class SystemServer implements Dumpable {
-                 } catch (Throwable e) {
-                     Slog.e(TAG, "GammaOS Nano: MediaRouterService failed", e);
-                 }
-+                // RestrictionsManagerService: Chromium browsers (Brave, Chrome) read managed
-+                // policies through getSystemService(RESTRICTIONS_SERVICE) at startup and crash with
-+                // a NullPointerException on RestrictionsManager when it is not registered. Start it
-+                // in nano boot too (full boot starts it below in the !minimalBoot block). Without
-+                // DevicePolicyManager it reports no restrictions.
+@@ -2944,6 +2944,21 @@ public final class SystemServer implements Dumpable {
+                 t.traceEnd();
+             }
+ 
++            // GammaOS Nano: RestrictionsManagerService must run in minimal boot too. Chromium
++            // browsers (Brave, Chrome) read managed policies through
++            // getSystemService(RESTRICTIONS_SERVICE) at startup and crash with a
++            // NullPointerException on RestrictionsManager when it is not registered. Full boot
++            // starts it inside the !minimalBoot block below.
++            if (minimalBoot) {
++                t.traceBegin("StartRestrictionManager");
 +                try {
-+                    Slog.i(TAG, "GammaOS Nano: starting RestrictionsManagerService");
 +                    mSystemServiceManager.startService(RestrictionsManagerService.class);
-+                    Slog.i(TAG, "GammaOS Nano: RestrictionsManagerService ready");
 +                } catch (Throwable e) {
-+                    Slog.e(TAG, "GammaOS Nano: RestrictionsManagerService failed", e);
++                    Slog.w(TAG, "GammaOS Nano: RestrictionsManagerService failed", e);
 +                }
-                 try {
-                     if (context.getPackageManager().hasSystemFeature(
-                             PackageManager.FEATURE_BLUETOOTH)) {
++                t.traceEnd();
++            }
++
+             // GammaOS Nano: ColorDisplayService must run in minimal boot too. It owns the display
+             // colour transform behind LiveDisplay's colour temperature (night display) and the
+             // nano menu's saturation control, so without it those rows would have nothing to talk
 diff --git a/frameworks/native/libs/renderengine/Android.bp b/frameworks/native/libs/renderengine/Android.bp
 index d8cac0c21e4..6307bfe7f06 100644
 --- a/frameworks/native/libs/renderengine/Android.bp
