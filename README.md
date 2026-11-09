@@ -62,6 +62,14 @@ File Transfer (MTP) is the default USB mode (Developer options → Default USB
 configuration), so a computer sees the device's storage as soon as it's
 plugged in (`mods/25-usb-mtp.sh`).
 
+The built-in controller reports its face buttons by position, like an Xbox
+controller (`mods/27-controller-layout.sh`): the bottom button (printed B)
+is A, the right one (printed A) is B, the left one (printed Y) is X and the
+top one (printed X) is Y. The vendor's layout reported them by their print,
+so games put PlayStation Cross on the right button instead of the bottom one.
+Nano reads the buttons directly, so in its menus A still confirms; ABXY Swap
+stays off.
+
 ### Added emulators
 
 These standalone emulators are added and installed on first boot. Each is

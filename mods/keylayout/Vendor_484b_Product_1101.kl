@@ -1,0 +1,39 @@
+# The RG Cube's built-in controller, with its face buttons reported by position
+# like an Xbox controller's: the bottom button (printed B) is BUTTON_A, the
+# right one (printed A) BUTTON_B, the left one (printed Y) BUTTON_X and the top
+# one (printed X) BUTTON_Y. Otherwise the vendor's
+# /vendor/usr/keylayout/Vendor_484b_Product_1101.kl.
+
+key 304   BUTTON_B
+key 305   BUTTON_A
+key 306   BUTTON_C
+key 307   BUTTON_Y
+key 308   BUTTON_X
+key 309   BUTTON_Z
+key 310   BUTTON_L1
+key 311   BUTTON_R1
+
+key 317   BUTTON_THUMBL
+key 318   BUTTON_THUMBR
+
+# Left and right stick.
+axis 0x00 X flat 4096
+axis 0x01 Y flat 4096
+axis 0x03 Z flat 4096
+axis 0x04 RZ flat 4096
+
+# Triggers.
+axis 0x02 LTRIGGER
+axis 0x05 RTRIGGER
+
+# Hat.
+axis 0x10 HAT_X
+axis 0x11 HAT_Y
+
+key 314   BUTTON_SELECT
+key 316   BUTTON_MODE
+key 315   BUTTON_START
+key 158   BACK
+key 312   BUTTON_L2
+key 313   BUTTON_R2
+key 68    F10
