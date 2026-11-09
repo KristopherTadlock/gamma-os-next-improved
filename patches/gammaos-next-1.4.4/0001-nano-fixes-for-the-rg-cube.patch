@@ -1824,19 +1824,20 @@ index 88e7cae6699..86294061ed1 100644
      // System Language picker (Settings -> System Settings -> System Language).
      bool mPs3LangActive = false;  // gates the XMB fullscreen language picker
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuDrasticPark.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuDrasticPark.cpp
-index 62e77314ccd..1fa9573cbcf 100644
+index 62e77314ccd..f3a9ac592be 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuDrasticPark.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuDrasticPark.cpp
-@@ -265,6 +265,8 @@ bool NanoMenu::drasticParkSession() {
+@@ -265,6 +265,9 @@ bool NanoMenu::drasticParkSession() {
          while (read(fd, ev, sizeof(ev)) > 0) {}
      }
      mWaitForRelease = false;
 +    mSsHeld[0] = mSsHeld[1] = false;   // their releases were among the dropped events
++    navRelease(NavDir::None);
 +    mSelectHeld = false;
  
      // Brightness: the game may have changed it (drastic-nano writes the same
      // persist property); adopt it and relight the panel on our value.
-@@ -285,6 +287,7 @@ bool NanoMenu::drasticParkSession() {
+@@ -285,6 +288,7 @@ bool NanoMenu::drasticParkSession() {
      // Return like a fresh home would: drill back to the launched card from the
      // path saved at launch and replay the DSi entrance cascade.
      ndsRestoreReturnPath();
@@ -1845,7 +1846,7 @@ index 62e77314ccd..1fa9573cbcf 100644
      property_set("sys.gammaos.nano.menu_active", "1");
      property_set("sys.gammaos.nano.drop_input", "0");
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuDrm.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuDrm.cpp
-index cecc918f549..4306e86479b 100644
+index cecc918f549..08a300f1287 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuDrm.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuDrm.cpp
 @@ -427,13 +427,19 @@ bool drmCreateDumbBuffer(int fd, uint32_t w, uint32_t h, DrmBuffer* out) {
@@ -1879,7 +1880,7 @@ index cecc918f549..4306e86479b 100644
      }
      out->handle = create.handle;
      out->fbId = fbCmd.fb_id;
-@@ -600,6 +606,195 @@ static int drmAtomicModesetFallback(int fd, uint32_t crtcId, uint32_t connId,
+@@ -600,6 +606,196 @@ static int drmAtomicModesetFallback(int fd, uint32_t crtcId, uint32_t connId,
      return ioctl(fd, DRM_IOCTL_MODE_ATOMIC, &atomic);
  }
  
@@ -2017,7 +2018,8 @@ index cecc918f549..4306e86479b 100644
 +                                          [&](const DrmDisplay& d) { return d.crtcId == pref->drivenBy; });
 +            const uint32_t theirBit = bitOf(pref->drivenBy);
 +            const bool replaceable = std::any_of(panels.begin(), panels.end(), [&](const Panel& q) {
-+                return q.id != pref->id && !q.drivenBy && (q.mask & theirBit);
++                return q.id != pref->id && !q.drivenBy && (q.mask & theirBit) &&
++                       q.connection != 2 /* disconnected */;
 +            });
 +            if (!ours && replaceable) out.push_back(pref->id);
 +        }
@@ -2075,7 +2077,7 @@ index cecc918f549..4306e86479b 100644
  // Try to bring up a single DRM CRTC with the given connector. Returns true
  // if the CRTC was added to sDrmDisplays. Non-blocking: if the mode is not
  // valid (display not ready), returns false immediately -- caller can retry
-@@ -609,26 +804,26 @@ bool drmTryAddDisplay(int fd, uint32_t crtcId, uint32_t connId, const char* stag
+@@ -609,26 +805,26 @@ bool drmTryAddDisplay(int fd, uint32_t crtcId, uint32_t connId, const char* stag
      crtc.crtc_id = crtcId;
      ioctl(fd, DRM_IOCTL_MODE_GETCRTC, &crtc);
  
@@ -2122,7 +2124,7 @@ index cecc918f549..4306e86479b 100644
          }
      }
  
-@@ -638,7 +833,7 @@ bool drmTryAddDisplay(int fd, uint32_t crtcId, uint32_t connId, const char* stag
+@@ -638,7 +834,7 @@ bool drmTryAddDisplay(int fd, uint32_t crtcId, uint32_t connId, const char* stag
      DrmBuffer buf0, buf1;
      if (!drmCreateDumbBuffer(fd, w, h, &buf0)) return false;
      if (!drmCreateDumbBuffer(fd, w, h, &buf1)) {
@@ -2131,7 +2133,7 @@ index cecc918f549..4306e86479b 100644
          return false;
      }
  
-@@ -674,8 +869,8 @@ bool drmTryAddDisplay(int fd, uint32_t crtcId, uint32_t connId, const char* stag
+@@ -674,8 +870,8 @@ bool drmTryAddDisplay(int fd, uint32_t crtcId, uint32_t connId, const char* stag
      }
  
      if (ret != 0) {
@@ -4417,7 +4419,7 @@ index 3f568ae08a5..25d9ba2700b 100644
      mPs3DlgThemeKey = 0;
      mPs3DlgBinding = nullptr;
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuOverlay.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuOverlay.cpp
-index afbd4bb49c5..8d86e42a122 100644
+index afbd4bb49c5..dd65b78c715 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuOverlay.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuOverlay.cpp
 @@ -44,6 +44,7 @@
@@ -4437,7 +4439,7 @@ index afbd4bb49c5..8d86e42a122 100644
  #include <sched.h>
  #include <sys/ioctl.h>
  #include <linux/input.h>
-@@ -360,19 +363,46 @@ void NanoMenu::pspClockFreezeApp(bool freeze) {
+@@ -360,19 +363,47 @@ void NanoMenu::pspClockFreezeApp(bool freeze) {
      // render thread never stalls on am. Only meaningful when a real foreground app is under the summon.
      if (mOverlayPausedPkg.empty()) return;
      ALOGI("pspclock: %s %s via NanoPauseActivity", freeze ? "pause" : "resume", mOverlayPausedPkg.c_str());
@@ -4489,10 +4491,11 @@ index afbd4bb49c5..8d86e42a122 100644
 +    mAnbernicArmed = false;
 +    mSsHeld[0] = mSsHeld[1] = false;
 +    mKeyReplay.clear();
++    navRelease(NavDir::None);   // its release may be among the events dropped while hidden
      if (mFlingerSurfaceControl == nullptr) {
          ALOGW("overlay: show requested but no SF surface control; clearing request");
          property_set("sys.gammaos.nano.show_overlay", "0");
-@@ -389,8 +419,8 @@ void NanoMenu::overlayShow() {
+@@ -389,8 +420,8 @@ void NanoMenu::overlayShow() {
      // Clear any stale SELECT-held on the app->menu raise. Emulators (RetroArch/DraStic) EVIOCGRAB
      // the pad and the RetroArch back-override synthesizes a BTN_SELECT (via sendevent) while the
      // user holds BACK to exit; that write sets the kernel key bitmap, and when the app eats the
@@ -4503,7 +4506,7 @@ index afbd4bb49c5..8d86e42a122 100644
      // real BTN_SELECT event, so forcing it false here means SELECT+volume=brightness can only fire
      // after a genuine fresh Select press again - the stuck synthesized SELECT no longer hijacks it.
      mSelectHeld = false;
-@@ -473,6 +503,7 @@ void NanoMenu::overlayShow() {
+@@ -473,6 +504,7 @@ void NanoMenu::overlayShow() {
          mPspClockStandalone = true;
          mPspClockRaisedOverlay = true;
          if (!mPspClockOn) mPspIconSeed += 17;  // fresh per-summon entrance avalanche
@@ -4511,7 +4514,7 @@ index afbd4bb49c5..8d86e42a122 100644
          mPspClockOn = true;
          mPspGlyphBurst = 1.0f;
      }
-@@ -496,7 +527,23 @@ void NanoMenu::overlayShow() {
+@@ -496,7 +528,23 @@ void NanoMenu::overlayShow() {
      // Re-reading here makes the list always reflect the most recently launched game.
      loadXmbRecent();
      loadCollections();
@@ -4536,7 +4539,7 @@ index afbd4bb49c5..8d86e42a122 100644
      // Games hidden or shown again from the home since the last raise: filter the lists now, and
      // rescan when one came back (the lists no longer hold it).
      {
-@@ -567,6 +614,7 @@ void NanoMenu::overlayShow() {
+@@ -567,6 +615,7 @@ void NanoMenu::overlayShow() {
          mPs3AnimItem = 0.0f; mPs3ItemAnimStart = -1.0f; mPs3SubAnimStart = -1.0f;
          mPs3CatAnimActive = false; mPs3CatT = 1.0f; mPs3CatFromOffset = 0.0f;
      }
@@ -4544,7 +4547,7 @@ index afbd4bb49c5..8d86e42a122 100644
  
      // DSi theme, app-EXIT return only (wallpaper/launcher raise, app_launched=0): replay the
      // card-drop entrance cascade like a fresh home (user request), and reflect the Recently
-@@ -620,6 +668,8 @@ void NanoMenu::overlayShow() {
+@@ -620,6 +669,8 @@ void NanoMenu::overlayShow() {
  void NanoMenu::overlayGpuPark() {
      if (mOverlayGpuParked) return;
      mOverlayGpuParked = true;
@@ -4553,7 +4556,7 @@ index afbd4bb49c5..8d86e42a122 100644
      // The open submenu levels (mPs3Stack) are NOT rebuilt on the raise: their items keep the
      // icon and normal-map handles they were built with, by value. Freeing those left every icon
      // of the open level black after returning from an app, and once GL handed the freed ids to
-@@ -674,6 +724,7 @@ void NanoMenu::overlayGpuPark() {
+@@ -674,6 +725,7 @@ void NanoMenu::overlayGpuPark() {
      }
      for (auto& kv : mEsdeTexCache) if (kv.second) glDeleteTextures(1, &kv.second);
      mEsdeTexCache.clear();
@@ -4561,7 +4564,7 @@ index afbd4bb49c5..8d86e42a122 100644
      for (auto& kv : mEsdeSvgCache) if (kv.second.tex) glDeleteTextures(1, &kv.second.tex);
      mEsdeSvgCache.clear();
      for (auto& kv : mEsdeAnimCache) for (GLuint t : kv.second.frames) if (t) glDeleteTextures(1, &t);
-@@ -784,6 +835,15 @@ void NanoMenu::overlayPageOutSelf() {
+@@ -784,6 +836,16 @@ void NanoMenu::overlayPageOutSelf() {
  
  void NanoMenu::overlayHide() {
      if (!mOverlayShown) return;
@@ -4574,10 +4577,11 @@ index afbd4bb49c5..8d86e42a122 100644
 +    mAnbernicArmed = false;
 +    mSsHeld[0] = mSsHeld[1] = false;
 +    mKeyReplay.clear();
++    navRelease(NavDir::None);   // its release may be among the events dropped while hidden
  
      // Drop any input up to NOW before restoring the app's input - notably the BACK
      // press that dismissed the overlay. The overlay reads BACK via evdev and clears
-@@ -1610,6 +1670,21 @@ void NanoMenu::overlayPoll() {
+@@ -1610,6 +1672,21 @@ void NanoMenu::overlayPoll() {
      bool want = (v[0] == '1' && v[1] == '\0');
      if (want && !mOverlayShown) {
          overlayShow();   // snaps to the Quick Menu by default in scrim-over-app mode
@@ -4599,7 +4603,7 @@ index afbd4bb49c5..8d86e42a122 100644
      } else if (!want && mOverlayShown) {
          // Do NOT lower the overlay while a standalone clock summon is still retracting:
          // let drawPspClock's teardown clear show_overlay once the clock reaches reveal 0,
-@@ -1653,6 +1728,13 @@ void NanoMenu::overlayLaunchGame() {
+@@ -1653,6 +1730,13 @@ void NanoMenu::overlayLaunchGame() {
              romName = sys.displayNames[mXmbGameIndex];
      }
      if (romPath.empty()) return;
@@ -4613,7 +4617,7 @@ index afbd4bb49c5..8d86e42a122 100644
      // Same check as the home launcher: a game whose file is gone (deleted, or its card is not
      // mounted) must say so instead of replacing the running app with an emulator that then dies.
      if (!romLaunchExists(romPath)) {
-@@ -1752,6 +1834,7 @@ void NanoMenu::overlayLaunchGame() {
+@@ -1752,6 +1836,7 @@ void NanoMenu::overlayLaunchGame() {
          // DSi theme: the process exits below, so persist the carousel nav path for the fresh
          // home after the session (the same save the DRM home makes before its hand-off).
          if (mNdsTheme && mPs3Xmb) ndsSaveReturnPath();
@@ -4621,7 +4625,7 @@ index afbd4bb49c5..8d86e42a122 100644
          // The app the overlay is sitting over (a RetroArch game, say) must be gone
          // before drastic-nano takes DRM master: left running it keeps rendering and
          // holding the GPU and CPU under the DS session, and SurfaceFlinger keeps
-@@ -1833,7 +1916,7 @@ void NanoMenu::overlayLaunchGame() {
+@@ -1833,7 +1918,7 @@ void NanoMenu::overlayLaunchGame() {
                " -a android.intent.action.MAIN -c android.intent.category.LAUNCHER"
                " --activity-clear-task --activity-clear-top"
                " --es ROM " + overlayShq(rom) +
