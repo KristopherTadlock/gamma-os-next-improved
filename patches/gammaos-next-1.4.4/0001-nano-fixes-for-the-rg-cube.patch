@@ -1845,10 +1845,41 @@ index 62e77314ccd..1fa9573cbcf 100644
      property_set("sys.gammaos.nano.menu_active", "1");
      property_set("sys.gammaos.nano.drop_input", "0");
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuDrm.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuDrm.cpp
-index cecc918f549..03477854cd9 100644
+index cecc918f549..553d3ca44b1 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuDrm.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuDrm.cpp
-@@ -600,6 +600,173 @@ static int drmAtomicModesetFallback(int fd, uint32_t crtcId, uint32_t connId,
+@@ -427,13 +427,19 @@ bool drmCreateDumbBuffer(int fd, uint32_t w, uint32_t h, DrmBuffer* out) {
+     create.width = w; create.height = h; create.bpp = 32;
+     if (ioctl(fd, DRM_IOCTL_MODE_CREATE_DUMB, &create) != 0) return false;
+ 
++    struct drm_gem_close gc = {};
++    gc.handle = create.handle;
+     struct drm_mode_map_dumb mapReq = {};
+     mapReq.handle = create.handle;
+-    if (ioctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &mapReq) != 0) return false;
++    if (ioctl(fd, DRM_IOCTL_MODE_MAP_DUMB, &mapReq) != 0) {
++        ioctl(fd, DRM_IOCTL_GEM_CLOSE, &gc); return false;
++    }
+ 
+     void* mapped = mmap(nullptr, create.size, PROT_READ | PROT_WRITE,
+                        MAP_SHARED, fd, mapReq.offset);
+-    if (mapped == MAP_FAILED) return false;
++    if (mapped == MAP_FAILED) {
++        ioctl(fd, DRM_IOCTL_GEM_CLOSE, &gc); return false;
++    }
+ 
+     // Fill with dark background so the display isn't garbage on first scanout
+     uint32_t* px = (uint32_t*)mapped;
+@@ -444,7 +450,7 @@ bool drmCreateDumbBuffer(int fd, uint32_t w, uint32_t h, DrmBuffer* out) {
+     fbCmd.pitch = create.pitch; fbCmd.bpp = 32; fbCmd.depth = 24;
+     fbCmd.handle = create.handle;
+     if (ioctl(fd, DRM_IOCTL_MODE_ADDFB, &fbCmd) != 0) {
+-        munmap(mapped, create.size); return false;
++        munmap(mapped, create.size); ioctl(fd, DRM_IOCTL_GEM_CLOSE, &gc); return false;
+     }
+     out->handle = create.handle;
+     out->fbId = fbCmd.fb_id;
+@@ -600,6 +606,180 @@ static int drmAtomicModesetFallback(int fd, uint32_t crtcId, uint32_t connId,
      return ioctl(fd, DRM_IOCTL_MODE_ATOMIC, &atomic);
  }
  
@@ -1958,10 +1989,17 @@ index cecc918f549..03477854cd9 100644
 +    auto panelOf = [&](uint32_t id) {
 +        return std::find_if(panels.begin(), panels.end(), [&](const Panel& p) { return p.id == id; });
 +    };
-+    // The callers pair connectors[c] with crtcs[c] for the first two CRTCs.
++    // The callers pair connectors[c] with crtcs[c] for the first two CRTCs; a CRTC Nano has added
++    // or that a panel already drives is not waiting for its pair.
++    auto taken = [&](uint32_t crtc) {
++        return std::any_of(sDrmDisplays.begin(), sDrmDisplays.end(),
++                           [&](const DrmDisplay& d) { return d.crtcId == crtc; }) ||
++               std::any_of(panels.begin(), panels.end(),
++                           [&](const Panel& p) { return p.drivenBy == crtc; });
++    };
 +    auto reserved = [&](uint32_t id) {
 +        for (size_t c = 0; c < 2 && c < crtcs.size() && c < conns.size(); c++) {
-+            if (crtcs[c] == crtcId || conns[c] != id) continue;
++            if (crtcs[c] == crtcId || conns[c] != id || taken(crtcs[c])) continue;
 +            const auto p = panelOf(id);
 +            if (p != panels.end() && (p->mask & (1u << c))) return true;
 +        }
@@ -2022,7 +2060,7 @@ index cecc918f549..03477854cd9 100644
  // Try to bring up a single DRM CRTC with the given connector. Returns true
  // if the CRTC was added to sDrmDisplays. Non-blocking: if the mode is not
  // valid (display not ready), returns false immediately -- caller can retry
-@@ -609,26 +776,26 @@ bool drmTryAddDisplay(int fd, uint32_t crtcId, uint32_t connId, const char* stag
+@@ -609,26 +789,26 @@ bool drmTryAddDisplay(int fd, uint32_t crtcId, uint32_t connId, const char* stag
      crtc.crtc_id = crtcId;
      ioctl(fd, DRM_IOCTL_MODE_GETCRTC, &crtc);
  
@@ -2069,7 +2107,7 @@ index cecc918f549..03477854cd9 100644
          }
      }
  
-@@ -638,7 +805,7 @@ bool drmTryAddDisplay(int fd, uint32_t crtcId, uint32_t connId, const char* stag
+@@ -638,7 +818,7 @@ bool drmTryAddDisplay(int fd, uint32_t crtcId, uint32_t connId, const char* stag
      DrmBuffer buf0, buf1;
      if (!drmCreateDumbBuffer(fd, w, h, &buf0)) return false;
      if (!drmCreateDumbBuffer(fd, w, h, &buf1)) {
@@ -2078,7 +2116,7 @@ index cecc918f549..03477854cd9 100644
          return false;
      }
  
-@@ -674,8 +841,8 @@ bool drmTryAddDisplay(int fd, uint32_t crtcId, uint32_t connId, const char* stag
+@@ -674,8 +854,8 @@ bool drmTryAddDisplay(int fd, uint32_t crtcId, uint32_t connId, const char* stag
      }
  
      if (ret != 0) {
