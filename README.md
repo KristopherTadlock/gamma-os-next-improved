@@ -390,6 +390,11 @@ The patched driver:
   dropped (the list is then the monitor's own mode, 1080p60 and 640x480);
 - treats a missing buffer as RGB instead of crashing.
 
+Android mirrors the console's windows onto a connected monitor, but Nano's
+own screen is a SurfaceFlinger layer, not a window, so the mirror left it out.
+Nano puts a mirror of its layer on the monitor, scaled and centred as Android
+places the console's screen there, so its menus show over the game.
+
 When a display connects, Nano sets 1920 x 1080 at the rate nearest 60 Hz
 without asking (a display without 1080p keeps the mode it came up in). With
 `persist.gammaos.nano.ext_ask` set to 1, Nano asks instead which of these
