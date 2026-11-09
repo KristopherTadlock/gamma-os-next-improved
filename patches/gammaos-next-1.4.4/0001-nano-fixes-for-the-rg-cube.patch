@@ -15412,6 +15412,25 @@ index 6707406864c..7af42f11720 100644
  
  ## SELinux Policy
  
+diff --git a/frameworks/native/services/inputflinger/reader/EventHub.cpp b/frameworks/native/services/inputflinger/reader/EventHub.cpp
+index 2697ae1d368..267ca54c233 100644
+--- a/frameworks/native/services/inputflinger/reader/EventHub.cpp
++++ b/frameworks/native/services/inputflinger/reader/EventHub.cpp
+@@ -660,6 +660,14 @@ bool EventHub::Device::hasKeycodeLocked(int keycode) const {
+     }
+ 
+     std::vector<int32_t> scanCodes = keyMap.keyLayoutMap->findScanCodesForKey(keycode);
++    // GammaOS: the virtual keyboard, which has no key bits, can inject any key its layout maps.
++    // Reporting the function keys lets apps that list a device's keys from hasKeys (Dolphin) map
++    // the keys universal hotkeys inject; other keys stay unreported, as Android asks hasKeys about
++    // keys such as Menu and Back to decide what to show.
++    if (classes.test(InputDeviceClass::VIRTUAL) && keycode >= AKEYCODE_F1 &&
++        keycode <= AKEYCODE_F12) {
++        return !scanCodes.empty();
++    }
+     const size_t N = scanCodes.size();
+     for (size_t i = 0; i < N && i <= KEY_MAX; i++) {
+         int32_t sc = scanCodes[i];
 diff --git a/frameworks/native/services/surfaceflinger/CompositionEngine/include/compositionengine/LayerFECompositionState.h b/frameworks/native/services/surfaceflinger/CompositionEngine/include/compositionengine/LayerFECompositionState.h
 index 11759b855f2..da95fe8c03e 100644
 --- a/frameworks/native/services/surfaceflinger/CompositionEngine/include/compositionengine/LayerFECompositionState.h

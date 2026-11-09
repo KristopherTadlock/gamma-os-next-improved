@@ -92,7 +92,7 @@ There are no on-screen messages from the hotkeys. This build skips SystemUI, so 
 
 | Driver | What it does |
 |---|---|
-| `key` | Taps a keyboard key (virtual keyboard, `SOURCE_KEYBOARD`). `"mods": ["CTRL", "SHIFT", "ALT"]` puts the modifiers on the event, and also presses and releases the modifier keys around it |
+| `key` | Taps a keyboard key (virtual keyboard, `SOURCE_KEYBOARD`). `"mods": ["CTRL", "SHIFT", "ALT"]` puts the modifiers on the event, and also presses and releases the modifier keys around it. The virtual keyboard reports F1–F12 in `InputDevice.hasKeys`, for emulators that only map keys a device says it has |
 | `key_toggle` | Taps a key the emulator treats as a toggle |
 | `key_hold` | Key down when toggled on, key up when toggled off |
 | `retroarch_cmd` | Sends `"command"` (e.g. `SAVE_STATE`) as a UDP datagram to `"port"` (default 55355). RetroArch needs `network_cmd_enable = "true"` |
@@ -216,7 +216,7 @@ Bindings come from each emulator's source code at the shipped version.
 | ScummVM | — | — | Ctrl+F (SCUMM games) | — | Ctrl+Q, then `exit` | Built-in ScummVM keys |
 | drastic-nano | slot 0 | slot 0 | toggle | — | saves, then exits | Built in |
 | DraStic (app) | — | — | — | — | `exit` (Esc) | Its keymap is shared with drastic-nano, so it is left alone |
-| Dolphin 2609-197 | — | — | — | — | `exit` | This build has Android hotkeys (`Hotkeys.kt`), but Nano doesn't bind them yet |
+| Dolphin 2609-197 | F2 (selected slot) | F4 | F6 (toggle) | — | `exit` | `Config/Hotkeys.ini` `[Hotkeys]`, bound to `` `Android/0/Virtual:F2` `` and so on. Dolphin only maps keys a device reports in `hasKeys`, so the virtual keyboard reports F1–F12 (`EventHub.cpp`) |
 | M64Plus FZ | — | — | — | — | `exit` | Hotkeys live in private controller profiles and need long holds |
 | hakuX | — | — | — | — | `exit` | Save states only from its in-game menu; no fast forward |
 | Vita3K | — | — | — | — | `exit` | No save states or fast forward |

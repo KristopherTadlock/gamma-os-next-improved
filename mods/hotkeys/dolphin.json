@@ -2,12 +2,35 @@
   "id": "dolphin",
   "name": "Dolphin",
   "packages": ["org.dolphinemu.dolphinemu", "org.dolphinemu.mmjr"],
-  "note": "Dolphin's Android hotkeys aren't bound yet, so only quit is universal.",
+  "note": "Save and load use Dolphin's selected state slot (slot 1 unless changed in a game). Fast forward turns the emulation speed limit off and on. Dolphin has no rewind. Dolphin MMJR has no hotkeys, so only quit works there.",
   "actions": {
-    "save_state": {"driver": "none"},
-    "load_state": {"driver": "none"},
-    "fast_forward": {"driver": "none"},
+    "save_state": {"driver": "key", "key": "F2"},
+    "load_state": {"driver": "key", "key": "F4"},
+    "fast_forward": {"driver": "key_toggle", "key": "F6"},
     "rewind": {"driver": "none"},
     "quit": {"driver": "exit"}
-  }
+  },
+  "provision": [
+    {
+      "file": "${sdcard}/Android/data/org.dolphinemu.dolphinemu/files/Config/Hotkeys.ini",
+      "format": "ini",
+      "section": "Hotkeys",
+      "template": "[Hotkeys]\n",
+      "values": {
+        "Save State/Save to Selected Slot": "`Android/0/Virtual:F2`",
+        "Load State/Load from Selected Slot": "`Android/0/Virtual:F4`",
+        "Emulation Speed/Disable Emulation Speed Limit": "`Android/0/Virtual:F6`"
+      }
+    },
+    {
+      "file": "${sdcard}/dolphin-emu/Config/Hotkeys.ini",
+      "format": "ini",
+      "section": "Hotkeys",
+      "values": {
+        "Save State/Save to Selected Slot": "`Android/0/Virtual:F2`",
+        "Load State/Load from Selected Slot": "`Android/0/Virtual:F4`",
+        "Emulation Speed/Disable Emulation Speed Limit": "`Android/0/Virtual:F6`"
+      }
+    }
+  ]
 }
