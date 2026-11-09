@@ -6078,7 +6078,7 @@ index a778ea7da0d..638c4463dd0 100644
  // aspect bucket so the Test Controller / Calibration buttons get the identical glass
  // relight as the console icons (bevelFromRGBA), refracting the live XMB wave. round =
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
-index c6a8e9c9dc1..a16b4d5b40d 100644
+index c6a8e9c9dc1..991779b66f6 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 @@ -25,6 +25,7 @@
@@ -7490,15 +7490,16 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
      static const char* kPerfOpts[] = {"Normal", "Max Performance", "Power Saver"};
      for (const char* s : kPerfOpts) { mPs3DlgOptions.push_back(s); mPs3DlgSwatch.push_back(-1); }
      char cur[PROPERTY_VALUE_MAX]; property_get("persist.gammaos.performance_mode", cur, "stock");
-@@ -10658,6 +11042,7 @@ const GsType kShaderTypes[] = {
+@@ -10658,6 +11042,8 @@ const GsType kShaderTypes[] = {
      {"LCD3x",           "lcd3x"},
      {"LCD",             "lcd-shader"},
      {"Blur Fill",       "blur-fill"},
 +    {"4:3 Cropped",     "4x3-cropped"},
++    {"8:7 Cropped",     "8x7-cropped"},
      {"Custom (Vulkan)", "custom-vk"},
      {"Custom (GLSL)",   "custom-gl"},
  };
-@@ -10876,9 +11261,20 @@ void NanoMenu::buildShaderSubmenu(Ps3Level& out) {
+@@ -10876,9 +11262,20 @@ void NanoMenu::buildShaderSubmenu(Ps3Level& out) {
          it.iconTex = iconTexForIcon(icon); it.nmapTex = nmapForIcon(icon); it.iconR = it.iconG = it.iconB = 1.0f;
          out.items.push_back(it);
      };
@@ -7517,11 +7518,11 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
 +        if (on) out.sel = i;
 +    }
      if (type.empty()) return;   // Off: nothing else to configure
-+    if (type == "4x3-cropped") return;   // nothing to configure
++    if (type == "4x3-cropped" || type == "8x7-cropped") return;   // nothing to configure
      if (custom) {
          // Empty payload -> the browser opens at the RetroArch subfolder for this type;
          // the row's inline value (the current preset name) comes from resolvePs3ItemValue.
-@@ -10960,29 +11356,17 @@ void NanoMenu::openShaderDisclaimer() {
+@@ -10960,29 +11357,17 @@ void NanoMenu::openShaderDisclaimer() {
      mPs3DlgActive = true; mPs3DlgAnim = 0.0f; mPs3DlgClosing = false; mPs3DlgBlurValid = false;
  }
  
@@ -7561,7 +7562,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
  }
  
  // Given a shader-opt spec "key|v1:l1,v2:l2,...|title", return the display label of the
-@@ -11283,6 +11667,8 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
+@@ -11283,6 +11668,8 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
                  // For a half-hour zone with no clean Etc/GMT, Off falls back to the
                  // Olson zone (those few zones keep automatic DST).
                  std::string target = on ? olson : (etc.empty() ? olson : etc);
@@ -7570,7 +7571,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
                  std::thread([target]{
                      system("settings put global auto_time_zone 0 2>/dev/null");
                      std::string c = "cmd alarm set-timezone " + target + " 2>/dev/null";
-@@ -11346,6 +11732,22 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
+@@ -11346,6 +11733,22 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
              if (sel == 1 && mGsEditIdx >= 0) gsRemoveSystem(mGsEditIdx);
              break;
          }
@@ -7593,7 +7594,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
          case 49: {  // Game Systems editor: clear the system's scraped boxart (sel 1 = clear)
              if (sel == 1 && mGsEditIdx >= 0) gsClearSystemArt(mGsEditIdx);
              break;
-@@ -11387,7 +11789,7 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
+@@ -11387,7 +11790,7 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
                      // Progress modal: stays up until the list refresh shows the app gone
                      // (closed from the apps_generation handler), or a ~10s timeout.
                      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -7602,7 +7603,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
                      mPs3DlgIllust = 0; mPs3DlgNotice.clear();
                      mPs3DlgRomInfo = false; mPs3DlgAppInfo = false;
                      mPs3DlgTitle = "Uninstalling";
-@@ -11442,20 +11844,6 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
+@@ -11442,20 +11845,6 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
              stDialogResult(themeKey, sel);   // Syncthing choosers and confirms
              break;
          }
@@ -7623,7 +7624,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
          case 42:    // GammaShader: custom-shader disclaimer answered (Apply = option 1)
              if (sel == 1 && mShaderPendingTypeSel >= 0) shaderApplyType(mShaderPendingTypeSel);
              mShaderPendingTypeSel = -1;
-@@ -11606,6 +11994,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11606,6 +11995,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
          else otaEndFlow();
          return;
      }
@@ -7631,7 +7632,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
      // GammaShader parameter slider (no binding): the value was written live as the
      // user slid; confirm keeps it, cancel reverts to the value at open. Then refresh
      // the open Parameters row's inline value.
-@@ -11627,10 +12016,17 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11627,10 +12017,17 @@ void NanoMenu::closePs3Dialog(bool apply) {
          // so the row value updates immediately.
          const Ps3SettingBinding* b = mPs3DlgBinding;
          mPs3DlgBinding = nullptr;
@@ -7649,7 +7650,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
              if (!strcmp(b->options, "@rgbeffect")) {
                  // Off -> gammargb.control=off; any effect -> control=on + rgb.effect.
                  auto list = ps3RgbEffectList();
-@@ -11675,6 +12071,23 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11675,6 +12072,23 @@ void NanoMenu::closePs3Dialog(bool apply) {
                      applyRgbSolidColor(ps3SwatchHex(sw), b);
                  }
                  mDisplayDirty = true;
@@ -7673,7 +7674,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
              } else if (mPs3DlgSlider) {
                  std::string v = ps3FormatNum(mPs3DlgSldVal, mPs3DlgSldScale);
                  writeSettingValue(b->source, b->key, v);
-@@ -11685,6 +12098,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11685,6 +12099,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
                  std::vector<SettingListOption> opts = parseListOptions(b->options);
                  if (mPs3DlgSel >= 0 && mPs3DlgSel < (int)opts.size()) {
                      const std::string& v = opts[mPs3DlgSel].value;
@@ -7681,7 +7682,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
                      writeSettingValue(b->source, b->key, v);
                      mPs3BindCache[b->label] = v;
                      refreshBoundValuesInStack();   // update the DSi/Minima frozen row-value snapshot live
-@@ -11695,6 +12109,8 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11695,6 +12110,8 @@ void NanoMenu::closePs3Dialog(bool apply) {
                      // overlay process (restarting gammaos-nano would not touch it). The persist
                      // prop was already written above, so the choice survives a reboot.
                      if (!strcmp(b->label, "Home Theme")) {
@@ -7690,7 +7691,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
                          int  tv       = atoi(v.c_str());   // 0 XMB, 1 DSi, 2 Minima, 3 ES-DE
                          bool wantDsi  = (tv == 1);
                          bool wantMin  = (tv == 2);
-@@ -11703,6 +12119,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11703,6 +12120,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
                              mNdsTheme = wantDsi;
                              mMinimaTheme = wantMin;
                              mEsdeTheme = wantEsde;
@@ -7698,7 +7699,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
                              if (wantDsi) ensureNdsAssets();
                              if (wantEsde) {   // force a (re)load of the ES-DE theme set, reset its view
                                  mEsdeLoaded = false; mEsdeInGamelist = false;
-@@ -11723,7 +12140,9 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11723,7 +12141,9 @@ void NanoMenu::closePs3Dialog(bool apply) {
                              mMinimaScroll = 0.0f; mMinimaSelAnim = 0.0f; mMinimaPrevDepth = -1;
                              mMinimaSfxDepth = -1; mMinimaSfxSel = -1; mMinimaTransStart = 0;
                          }
@@ -7708,7 +7709,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
                      // DSi Dark Theme on/off: apply LIVE. mNdsDark is read every frame by ndsPal()
                      // in each DSi renderer, so flipping the member repaints the DSi home dark/light
                      // with no restart (the persist prop was already written above for reboot).
-@@ -11828,6 +12247,10 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11828,6 +12248,10 @@ void NanoMenu::closePs3Dialog(bool apply) {
                      // Screen Map: mirror the volatile active flag and show/hide the
                      // cosmetic button-hint overlay service (functional effect is the
                      // two props, consumed by the gammapad daemon).
@@ -7719,7 +7720,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
                      if (!strcmp(b->label, "Screen Map")) {
                          bool on = (v == "1" || v == "true");
                          writeSettingValue(SettingSource::kProp, "sys.gammaos.screenmap.active", on ? "1" : "0");
-@@ -11847,9 +12270,21 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11847,9 +12271,21 @@ void NanoMenu::closePs3Dialog(bool apply) {
                          else if (!strcmp(b->label, "Wi-Fi"))
                              cmd = on ? "cmd wifi set-wifi-enabled enabled 2>/dev/null"
                                       : "cmd wifi set-wifi-enabled disabled 2>/dev/null";
@@ -7742,7 +7743,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
                          else if (!strcmp(b->label, "Do Not Disturb"))
                              cmd = on ? "cmd notification set_dnd on 2>/dev/null"
                                       : "cmd notification set_dnd off 2>/dev/null";
-@@ -11867,7 +12302,19 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11867,7 +12303,19 @@ void NanoMenu::closePs3Dialog(bool apply) {
              // Confirmation toast: one brief self-fading pill on a successful settings-bound
              // commit. Inside `if (apply)`, so never on cancel; a slider commits only here on
              // close, so never per-frame/per-drag.
@@ -7763,7 +7764,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
          }
      } else if (mPs3DlgThemeKey == 21 && !apply) {
          // Icon-tint cancel: restore the exact original tint (not the nearest
-@@ -11896,7 +12343,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11896,7 +12344,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
              // wifi-radio, delete-playlist).
              switch (committedKey) {
                  case 6: case 22: case 23: case 30: case 31: case 32:
@@ -7772,7 +7773,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
                      break;                                   // confirm/action, not a setting
                  default:
                      photoShowBanner(trDyn("Setting changed"));
-@@ -12295,6 +12742,7 @@ void NanoMenu::openXmbOpt() {
+@@ -12295,6 +12743,7 @@ void NanoMenu::openXmbOpt() {
              // (columns / recents / search / Info) and the scraper search query; Scrape
              // This Game re-fetches just this ROM (forcing overwrite) using that query.
              add("Rename / Edit Title", "romrename", false);
@@ -7780,7 +7781,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
              add("Scrape This Game", "romscrape", false);
              // One-off scrape with a typed-in search name (does NOT rename the game): useful when the
              // filename does not match the database (a region tag, a fan-translation title, etc.).
-@@ -12332,6 +12780,11 @@ void NanoMenu::openXmbOpt() {
+@@ -12332,6 +12781,11 @@ void NanoMenu::openXmbOpt() {
              // Pin to / Remove from the Game-home "Pinned Apps" shortcut list (label reflects state).
              if (!p.empty())
                  add(isAppPinned(p) ? "Remove from Home" : "Pin to Home", "togpin", false);
@@ -7792,7 +7793,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
              // Per-app Screen Orientation override. While this app is foreground nano
              // enforces the chosen orientation (via sys.gammaos.nano.force_orientation);
              // Default hands back to the app's own requested orientation. Offered for any
-@@ -12565,7 +13018,10 @@ bool NanoMenu::xmbTouchLive() const {
+@@ -12565,7 +13019,10 @@ bool NanoMenu::xmbTouchLive() const {
          && !mPs3WizActive && !mPs3TzActive && !mPs3LangActive
          && !mGSearchActive && !mPhotoMultiActive && !mPs3BrightSlider
          && !(mOverlayMode && mOverlayLaunchPending)
@@ -7804,7 +7805,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
  }
  
  // Shared raw-digitizer -> logical-pixel mapping (the exact chain oskTouchFrame uses,
-@@ -13260,7 +13716,7 @@ void NanoMenu::xmbOptApplySub(const Ps3OptSub& sr) {
+@@ -13260,7 +13717,7 @@ void NanoMenu::xmbOptApplySub(const Ps3OptSub& sr) {
  // been closed by the caller, so the dialog draws over the home column.
  void NanoMenu::mediaDeleteConfirm(const std::string& title, const std::string& body) {
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -7813,7 +7814,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
      mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false;
      mPs3DlgTitle = title; mPs3DlgBody = body;
      mPs3DlgOptions.push_back("Cancel"); mPs3DlgSwatch.push_back(-1);
-@@ -13277,7 +13733,7 @@ void NanoMenu::mediaDeleteConfirm(const std::string& title, const std::string& b
+@@ -13277,7 +13734,7 @@ void NanoMenu::mediaDeleteConfirm(const std::string& title, const std::string& b
  void NanoMenu::mediaCopyToClipboard(const std::string& name) {
      feOpen();   // enter the File Explorer at the storage roots (mFeClipPath already set by the caller)
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -7822,7 +7823,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
      mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false;
      mPs3DlgTitle = "Copy";
      mPs3DlgBody = std::string("Copied \"") + name +
-@@ -13313,6 +13769,11 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13313,6 +13770,11 @@ void NanoMenu::xmbOptAction(const std::string& act) {
          mDisplayDirty = true;
          return;
      }
@@ -7834,7 +7835,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
      if (act == "hidegame") {
          std::string romPath, name = mPs3OptCtxLabel;
          if (mPs3OptCtxKind == PS3_ROM && mPs3OptCtxA >= 0 && mPs3OptCtxA < (int)mXmbSystems.size()
-@@ -13333,11 +13794,18 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13333,11 +13795,18 @@ void NanoMenu::xmbOptAction(const std::string& act) {
          if (mPs3OptCtxKind == PS3_ROM && mPs3OptCtxA >= 0 && mPs3OptCtxA < (int)mXmbSystems.size()
              && mPs3OptCtxB >= 0 && mPs3OptCtxB < (int)mXmbSystems[mPs3OptCtxA].roms.size())
              romPath = mXmbSystems[mPs3OptCtxA].roms[mPs3OptCtxB];
@@ -7854,7 +7855,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
          // If we just un-starred a game while viewing the Favorites list itself, rebuild it in place
          // so the row disappears immediately (title is set only by buildFavoritesSubmenu).
          if (wasFav && !mPs3Stack.empty() && mPs3Stack.back().title == "Favorites") {
-@@ -13357,8 +13825,11 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13357,8 +13826,11 @@ void NanoMenu::xmbOptAction(const std::string& act) {
          if (mPs3OptCtxKind == PS3_ROM && mPs3OptCtxA >= 0 && mPs3OptCtxA < (int)mXmbSystems.size()
              && mPs3OptCtxB >= 0 && mPs3OptCtxB < (int)mXmbSystems[mPs3OptCtxA].roms.size())
              romPath = mXmbSystems[mPs3OptCtxA].roms[mPs3OptCtxB];
@@ -7867,7 +7868,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
          if (romPath.empty()) return;
          if (act == "addcol") { openAddToCollectionDialog(romPath); return; }
          // rmcol: remove from the collection whose game list we are viewing, then rebuild it in place.
-@@ -13511,7 +13982,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13511,7 +13983,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              body = mPs3OptCtxDesc.empty() ? std::string("No information is available.") : mPs3OptCtxDesc;
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -7876,7 +7877,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false; mPs3DlgAppInfo = false;
          mPs3DlgTitle = title;
          mPs3DlgBody  = body;
-@@ -13584,6 +14055,21 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13584,6 +14056,21 @@ void NanoMenu::xmbOptAction(const std::string& act) {
          }
          return;
      }
@@ -7898,7 +7899,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
      if (act == "romrename") {
          // Per-game title override. Resolve the focused ROM path + current display name
          // exactly the way "rominfo" does, then open the OSK prefilled with the current
-@@ -13640,6 +14126,16 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13640,6 +14127,16 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              // tops, not open stack levels), with the highlight kept on the renamed game:
              // the new title re-sorts the list, so its old index points at another game.
              if (owner >= 0) rebuildOpenRomLevels(owner, romPath);
@@ -7915,7 +7916,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
              // Also rebuild an open Recently Played list in place (it is not sysIdx-tagged;
              // identify it by its first item being a PS3_RECENT row).
              for (auto& lvl : mPs3Stack) {
-@@ -13765,7 +14261,10 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13765,7 +14262,10 @@ void NanoMenu::xmbOptAction(const std::string& act) {
          if (mPs3DlgBoxTex) { glDeleteTextures(1, &mPs3DlgBoxTex); mPs3DlgBoxTex = 0; }
          mPs3DlgFanW = mPs3DlgFanH = 0; mPs3DlgBoxW = mPs3DlgBoxH = 0;
  
@@ -7927,7 +7928,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
          bool rich = se && (!se->box.empty() || !se->fan.empty() ||
                             !se->synopsis.empty() || !se->genre.empty() ||
                             !se->developer.empty() || !se->publisher.empty() ||
-@@ -13773,7 +14272,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13773,7 +14273,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
                             !se->releaseDate.empty());
  
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -7936,7 +7937,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear();
          mPs3DlgTitle = name.empty() ? std::string("Information") : name;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14042,7 +14541,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -14042,7 +14542,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              row("Path", dir);
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -7945,7 +7946,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false;
          mPs3DlgTitle = title; mPs3DlgBody = body;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14117,7 +14616,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -14117,7 +14617,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              body = b;
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -7954,7 +7955,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear();
          mPs3DlgTitle = title; mPs3DlgBody = body;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14138,7 +14637,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -14138,7 +14638,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              body = b;
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -7963,7 +7964,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear();
          mPs3DlgTitle = title; mPs3DlgBody = body;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14530,9 +15029,15 @@ void NanoMenu::renderPs3Dialog() {
+@@ -14530,9 +15030,15 @@ void NanoMenu::renderPs3Dialog() {
              float fs = ps3::fontScale((sel ? 26.0f : 22.0f) * fb);
              float ty = cyDev - 0.45f * ps3::emPx(fs);   // web textBaseline='middle'
              const char* optTxt = trDyn(mPs3DlgOptions[i].c_str());
@@ -7981,7 +7982,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
          }
  
          // (4) Up/down scroll arrows at the text x when items scroll off-window.
-@@ -14894,7 +15399,7 @@ enum WizScr {
+@@ -14894,7 +15400,7 @@ enum WizScr {
      // the real gammaos-net bt scan/pair/connect/disconnect/unpair), BD Remote
      // Control Registration, and Audio Device Settings.
      WS_BT_MANAGE, WS_BT_REGISTER_INFO, WS_BT_SCANNING, WS_BT_DEVICE_LIST,
@@ -7990,7 +7991,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
      WS_BT_DEVICE_OPTS, WS_BT_CONNECTING, WS_BT_DISCONNECTING,
      WS_BT_DELETE_CONFIRM, WS_BT_DELETING, WS_BT_INFO,
      WS_BT_BD_REMOTE,
-@@ -14939,9 +15444,6 @@ static const char* btTypeLabel(int cod) {
+@@ -14939,9 +15445,6 @@ static const char* btTypeLabel(int cod) {
          default:     return "Bluetooth Device";
      }
  }
@@ -8000,7 +8001,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
  // Build the pass-key instruction shown while pairing. gammaos-net publishes the
  // system-generated code in sys.gammaos.bt.passkey and the SSP variant in
  // sys.gammaos.bt.pk_variant (2=numeric compare, 4=display passkey, 5=display PIN).
-@@ -14972,7 +15474,7 @@ enum WizField { WF_SSID = 0, WF_WEP_KEY, WF_WPA_KEY, WF_IP_ADDR, WF_IP_SUBNET,
+@@ -14972,7 +15475,7 @@ enum WizField { WF_SSID = 0, WF_WEP_KEY, WF_WPA_KEY, WF_IP_ADDR, WF_IP_SUBNET,
                  WF_IP_ROUTER, WF_IP_PDNS, WF_IP_SDNS, WF_DNS_PDNS, WF_DNS_SDNS,
                  WF_MTU, WF_PROXY_ADDR, WF_PROXY_PORT, WF_PPPOE_USER, WF_PPPOE_PASS,
                  WF_DHCP_HOST, WF_EAP_USER, WF_EAP_PASS,
@@ -8009,7 +8010,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
  struct WizDesc {
      int kind = WK_INFO;
      const char* title = "Internet Connection Settings";
-@@ -15119,7 +15621,12 @@ static void wizDesc(int id, WizDesc& d) {
+@@ -15119,7 +15622,12 @@ static void wizDesc(int id, WizDesc& d) {
      case WS_BT_DEVICE_LIST: d.kind = WK_SCANLIST; d.title = "Register Bluetooth® Device";
          d.body = "Select the Bluetooth® device to register."; break;
      case WS_BT_PASSKEY: d.kind = WK_TEXT; d.title = "Register Bluetooth® Device";
@@ -8023,7 +8024,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
      case WS_BT_REGISTERING: d.kind = WK_PROGRESS; d.title = "Register Bluetooth® Device";
          d.body = "Registering...\nPlease wait."; d.autoNext = WS_BT_REGISTER_DONE; break;
      case WS_BT_REGISTER_DONE: d.kind = WK_RESULT; d.title = "Register Bluetooth® Device";
-@@ -15178,6 +15685,89 @@ void NanoMenu::startNetWizard() {
+@@ -15178,6 +15686,89 @@ void NanoMenu::startNetWizard() {
      wizEnter(WS_INTRO, 1);
  }
  
@@ -8113,7 +8114,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
  // First-run setup only: bring up the XMB "waiting for services" progress screen (a WK_PROGRESS
  // net-wizard page) while the setup wizard holds before the Wi-Fi step until sys.boot_completed.
  // Lives here because the WizScr enum is file-local to this translation unit; the setup wizard
-@@ -15257,6 +15847,13 @@ void NanoMenu::btWizStopReceive() {
+@@ -15257,6 +15848,13 @@ void NanoMenu::btWizStopReceive() {
  }
  
  void NanoMenu::wizEnter(int id, int dir) {
@@ -8127,7 +8128,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
      mPs3WizId = id;
      mPs3WizSel = 0;
      mPs3WizScroll = 0;
-@@ -15269,8 +15866,12 @@ void NanoMenu::wizEnter(int id, int dir) {
+@@ -15269,8 +15867,12 @@ void NanoMenu::wizEnter(int id, int dir) {
      mPs3WizSlideStart = mEffectTime;
      mPs3WizScreenStart = mEffectTime;
      WizDesc d; wizDesc(id, d);
@@ -8142,7 +8143,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
      // Side effects on entering certain screens.
      if (id == WS_SCANNING) startWifiScanAsync();               // real scan
      // Accessory: Bluetooth wizard side effects (the real gammaos-net bt backend on
-@@ -15280,7 +15881,10 @@ void NanoMenu::wizEnter(int id, int dir) {
+@@ -15280,7 +15882,10 @@ void NanoMenu::wizEnter(int id, int dir) {
          std::lock_guard<std::mutex> lk(mBtWizMutex); mBtWizScan.clear(); mBtWizPin.clear();
      }
      if (id == WS_BT_SCANNING)      btWizScanAsync();                    // real inquiry -> device list (accumulates)
@@ -8154,7 +8155,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
      if (id == WS_BT_CONNECTING)    btWizConnectAsync(mBtWizSelAddr);    // real profile connect
      if (id == WS_BT_DISCONNECTING) btWizDisconnectAsync(mBtWizSelAddr); // real profile disconnect
      if (id == WS_BT_DELETING)      btWizUnpairAsync(mBtWizSelAddr);     // real removeBond
-@@ -15304,35 +15908,17 @@ void NanoMenu::wizEnter(int id, int dir) {
+@@ -15304,35 +15909,17 @@ void NanoMenu::wizEnter(int id, int dir) {
      // Date and Time: Set via Internet -> enable Android automatic time + time zone
      // (NTP) and nudge a refresh on a background thread (the 2.6s dwell is real work).
      if (id == WS_DT_SVI_PROGRESS) {
@@ -8200,7 +8201,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
          }).detach();
          // auto_time_zone is now on; the Olson tz captures DST automatically and the
          // "Daylight Saving" row reflects it live (drawPs3Clock -> mPs3DstNow).
-@@ -15384,7 +15970,7 @@ void NanoMenu::wizOpenTextField(int field) {
+@@ -15384,7 +15971,7 @@ void NanoMenu::wizOpenTextField(int field) {
      case WF_DHCP_HOST: cur = &mPs3WizDhcpHost; break;
      case WF_EAP_USER: cur = &mPs3WizEapUser; break;   case WF_EAP_PASS: cur = &mPs3WizEapPass; break;
      case WF_DT_DATE: cur = &mPs3DtDate; break;        case WF_DT_TIME: cur = &mPs3DtTime; break;
@@ -8209,7 +8210,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
      }
      mOskQuery = cur ? *cur : "";
      openOskForPassword(prompt, [this, field](const std::string& val) {
-@@ -15402,6 +15988,14 @@ void NanoMenu::wizOpenTextField(int field) {
+@@ -15402,6 +15989,14 @@ void NanoMenu::wizOpenTextField(int field) {
          case WF_EAP_USER: mPs3WizEapUser = val; break;   case WF_EAP_PASS: mPs3WizEapPass = val; break;
          case WF_DT_DATE: mPs3DtDate = val; break;        case WF_DT_TIME: mPs3DtTime = val; break;
          case WF_BT_PIN: mBtWizPin = val.empty() ? "0000" : val; break;   // default PIN 0000
@@ -8224,7 +8225,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
          }
          // Optional fields (secondary DNS, the BT PIN which defaults to 0000) may be
          // left blank; everything else treats an empty submit as a cancel.
-@@ -15411,6 +16005,13 @@ void NanoMenu::wizOpenTextField(int field) {
+@@ -15411,6 +16006,13 @@ void NanoMenu::wizOpenTextField(int field) {
          std::string err = validateWizField(field, val);
          if (!err.empty()) { mPs3WizFieldError = err; mPs3WizPendingTextField = field; return; }
          mPs3WizFieldError.clear();
@@ -8238,7 +8239,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
          int nxt = wizNextScreen(mPs3WizId, 0);
          if (nxt == WS_NONE) { mPs3WizExit = 1; mPs3WizActive = false; }
          else { mPs3WizStack.push_back(mPs3WizId); wizEnter(nxt, 1); }
-@@ -15476,6 +16077,16 @@ std::string NanoMenu::validateWizField(int field, const std::string& val) {
+@@ -15476,6 +16078,16 @@ std::string NanoMenu::validateWizField(int field, const std::string& val) {
              return "MTU must be 576-9000";
          return "";
      }
@@ -8255,7 +8256,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
      case WF_BT_PIN: {   // empty -> 0000; otherwise 1-16 numeric digits (BT PIN spec)
          if (val.size() > 16) return "PIN must be 1-16 digits";
          for (char c : val) if (c < '0' || c > '9') return "PIN must be digits only";
-@@ -15508,6 +16119,12 @@ void NanoMenu::wizConfirm() {
+@@ -15508,6 +16120,12 @@ void NanoMenu::wizConfirm() {
          }
          return;
      }
@@ -8268,7 +8269,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
      if (mPs3WizId == WS_BT_INBOUND_CONFIRM) {
          if (mPs3WizSel == 0) {   // Yes -> accept + wait for the bond
              mPs3WizStack.push_back(mPs3WizId); wizEnter(WS_BT_INBOUND_PAIRING, 1);
-@@ -15534,7 +16151,8 @@ void NanoMenu::wizConfirm() {
+@@ -15534,7 +16152,8 @@ void NanoMenu::wizConfirm() {
          // connect it, or delete it and register fresh - matching Android's behaviour
          // when you pick an already-paired device from "pair new device".
          if (scan[mPs3WizSel].bonded) { wizEnter(WS_BT_DEVICE_OPTS, 1); return; }
@@ -8278,7 +8279,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
          return;
      }
      if (mPs3WizId == WS_BT_REGISTER_DONE) {   // loop back to the Manage root (BD remote closes)
-@@ -15634,6 +16252,15 @@ void NanoMenu::wizBack() {
+@@ -15634,6 +16253,15 @@ void NanoMenu::wizBack() {
      if (mPs3WizId == WS_DT_SVI_DONE || mPs3WizId == WS_DT_SM_DONE) {
          mPs3WizExit = 1; mPs3WizActive = false; return;
      }
@@ -8294,7 +8295,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
      if (mPs3WizStack.empty()) { mPs3WizExit = -1; mPs3WizActive = false; return; }
      int prev = mPs3WizStack.back(); mPs3WizStack.pop_back();
      // Don't land back on a transient progress/test screen (mirrors web wizBack). If
-@@ -15788,6 +16415,8 @@ int NanoMenu::wizNextScreen(int id, int sel) {
+@@ -15788,6 +16416,8 @@ int NanoMenu::wizNextScreen(int id, int sel) {
      // ---- Accessory: Bluetooth ----
      case WS_BT_REGISTER_INFO: return WS_BT_SCANNING;
      case WS_BT_PASSKEY:       return WS_BT_REGISTERING;
@@ -8303,7 +8304,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
      case WS_BT_BD_REMOTE:     return WS_BT_SCANNING;
      case WS_BT_DEVICE_OPTS:
          return (sel == 0) ? WS_BT_CONNECTING
-@@ -15844,6 +16473,45 @@ void NanoMenu::renderNetWizard() {
+@@ -15844,6 +16474,45 @@ void NanoMenu::renderNetWizard() {
              wizDesc(mPs3WizId, d);
          }
      }
@@ -8349,7 +8350,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
      // The receive screen advances when the BondStateMachine patch publishes a
      // remote-initiated pairing request to sys.gammaos.bt.inbound.
      if (mPs3WizId == WS_BT_INBOUND_WAIT) {
-@@ -16111,6 +16779,9 @@ void NanoMenu::renderNetWizard() {
+@@ -16111,6 +16780,9 @@ void NanoMenu::renderNetWizard() {
              if (!mBtWizInPasskey.empty()) cbody += "\n\nPass Key:  " + mBtWizInPasskey;
              cbody += "\n\nAccept this device?";
          }
@@ -8359,7 +8360,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
          std::vector<std::string> bl = wrap(cbody, fs);
          float ty = Y((innerTop + innerBot) * 0.5f) - (float)((int)bl.size() - 1) * lh * 0.5f - DS(50.0f);
          for (auto& ln : bl) { if (!ln.empty()) ps3DlgText(ln.c_str(), bodyCx, ty, fs, 0.95f, 0.95f, 0.95f, ap, 1); ty += lh; }
-@@ -16292,7 +16963,8 @@ void NanoMenu::renderNetWizard() {
+@@ -16292,7 +16964,8 @@ void NanoMenu::renderNetWizard() {
      } else if (d.kind == WK_PROGRESS) {
          // no input
      } else if (d.kind == WK_RESULT || mPs3WizId == WS_BT_INFO || (d.kind == WK_TEST && !mPs3NetTestActive)) {
@@ -8369,7 +8370,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
      } else if (d.kind == WK_TEST) {
          // running: no hints
      } else if (mPs3WizId == WS_APLIST || mPs3WizId == WS_BT_DEVICE_LIST) {
-@@ -16555,6 +17227,9 @@ void NanoMenu::renderNdsNetWizardBody(float rx, float ry, float rw, float rh) {
+@@ -16555,6 +17228,9 @@ void NanoMenu::renderNdsNetWizardBody(float rx, float ry, float rw, float rh) {
              if (!mBtWizInPasskey.empty()) cbody += "\n\nPass Key:  " + mBtWizInPasskey;
              cbody += "\n\nAccept this device?";
          }
@@ -8379,7 +8380,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
          auto lines = wrapDs(trDyn(cbody.c_str()), 12.0f, 224.0f);
          centeredBlock(lines, 80.0f, 15.0f, 12.0f, 0.93f, 0.93f, 0.93f);
          // Yes / No glossy buttons (dialog capsule geometry: h32 r4).
-@@ -16583,7 +17258,7 @@ void NanoMenu::renderNdsNetWizardBody(float rx, float ry, float rw, float rh) {
+@@ -16583,7 +17259,7 @@ void NanoMenu::renderNdsNetWizardBody(float rx, float ry, float rw, float rh) {
      } else if (d.kind == WK_SCANLIST && id == WS_BT_DEVICE_LIST) {
          std::vector<BtDevEntry> devs; { std::lock_guard<std::mutex> lk(mBtWizMutex); devs = mBtWizScan; }
          if (d.body[0]) textCenter(trDyn(d.body), 30.0f, 12.0f, 0.93f, 0.93f, 0.93f);
@@ -8388,7 +8389,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
          else {
              std::vector<std::string> labels; for (auto& b : devs) labels.push_back(b.name.empty() ? b.address : b.name);
              drawGlossyList(labels, [&](int i, float rowDevY){
-@@ -16599,9 +17274,9 @@ void NanoMenu::renderNdsNetWizardBody(float rx, float ry, float rw, float rh) {
+@@ -16599,9 +17275,9 @@ void NanoMenu::renderNdsNetWizardBody(float rx, float ry, float rw, float rh) {
          if (d.body[0]) textCenter(trDyn(d.body), 30.0f, 12.0f, 0.93f, 0.93f, 0.93f);
          if (aps.empty()) {
              bool radioOn; { std::lock_guard<std::mutex> lk(mNetStateMutex); radioOn = mWifiRadioOn; }
@@ -8400,7 +8401,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
                         100.0f, 12.0f, 0.85f, 0.85f, 0.85f);
          }
          else {
-@@ -16978,6 +17653,9 @@ void NanoMenu::renderMinimaNetWizardBody(float rx, float ry, float rw, float rh)
+@@ -16978,6 +17654,9 @@ void NanoMenu::renderMinimaNetWizardBody(float rx, float ry, float rw, float rh)
              if (!mBtWizInPasskey.empty()) cbody += "\n\nPass Key:  " + mBtWizInPasskey;
              cbody += "\n\nAccept this device?";
          }
@@ -8410,7 +8411,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
          auto lines = wrap(trDyn(cbody.c_str()), fsRow, rw - pad * 3.0f);
          centeredBlock(lines, g.bodyTop + (g.bodyBot - g.bodyTop) * 0.32f, rowH * 0.9f, fsRow, 0.90f, 0.90f, 0.92f);
          float pillH = rowH, by = g.footerTop - rowH - g.btnMg;
-@@ -17178,6 +17856,30 @@ float NanoMenu::ps3TzFadeAlpha() {
+@@ -17178,6 +17857,30 @@ float NanoMenu::ps3TzFadeAlpha() {
  // it opens already showing that location (web initGlobe sets tzGlobe lon/lat =
  // target = the selected zone, then renderGlobe; the fade only cross-fades the
  // composite, not the rotation).
@@ -8441,7 +8442,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
  void NanoMenu::beginTzGlobeFade() {
      // Warm up first: the globe textures load on the render thread on the first
      // render (GL has no context here on the input thread), which spikes one frame.
-@@ -17201,6 +17903,13 @@ void NanoMenu::openTimezoneGlobe() {
+@@ -17201,6 +17904,13 @@ void NanoMenu::openTimezoneGlobe() {
  }
  
  void NanoMenu::closeTimezoneGlobe(bool apply) {
@@ -8455,7 +8456,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
      if (apply && mTzSelected >= 0 && mTzSelected < (int)mTzEntries.size()) {
          char cmd[256];
          snprintf(cmd, sizeof(cmd), "setprop persist.sys.timezone %s",
-@@ -17237,6 +17946,7 @@ void NanoMenu::tzGlobeNav(int dir) {
+@@ -17237,6 +17947,7 @@ void NanoMenu::tzGlobeNav(int dir) {
      int n = (int)mTzEntries.size();
      if (n <= 0) return;
      mTzSelected = (mTzSelected + dir + n) % n;
@@ -8463,7 +8464,7 @@ index c6a8e9c9dc1..a16b4d5b40d 100644
      const TimezoneEntry& z = mTzEntries[mTzSelected];
      ps3globe::setTarget(z.lon * (float)M_PI / 180.0f, z.lat * (float)M_PI / 180.0f);
  }
-@@ -17453,6 +18163,26 @@ void NanoMenu::renderTimezoneGlobe() {
+@@ -17453,6 +18164,26 @@ void NanoMenu::renderTimezoneGlobe() {
      // Caption "Select a time zone." (web XCF(V.W*0.04), yT+56, 24px, left).
      ps3DlgText("Select a time zone.", XC(VW * 0.04f), Y(innerTop + 56.0f), FS(24.0f),
                 1, 1, 1, 0.95f * ap, 0);
@@ -10527,7 +10528,7 @@ index c35725069eb..7af0f0e0524 100644
      mPs3DlgOptions.push_back(trDyn("Cancel")); mPs3DlgSwatch.push_back(-1);
      mPs3DlgOptions.push_back(trDyn(action)); mPs3DlgSwatch.push_back(-1);
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuVideo.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuVideo.cpp
-index 0fa4e98c671..23650d68d86 100644
+index 0fa4e98c671..b776193711b 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuVideo.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuVideo.cpp
 @@ -2652,6 +2652,7 @@ void NanoMenu::vidBeginOpen(const VidPending& p) {
@@ -10765,8 +10766,8 @@ index 0fa4e98c671..23650d68d86 100644
  // enables it. Kept local to the video player so it needs no cross-file coupling.
 -static const char* kVidShaderLabels[] = { "Off", "CRT", "LCD3x", "LCD", "Blur Fill", "Custom (Vulkan)", "Custom (GLSL)" };
 -static const char* kVidShaderTypes[]  = { "",    "crt-simple", "lcd3x", "lcd-shader", "blur-fill", "custom-vk", "custom-gl" };
-+static const char* kVidShaderLabels[] = { "Off", "CRT", "LCD3x", "LCD", "Blur Fill", "4:3 Cropped", "Custom (Vulkan)", "Custom (GLSL)" };
-+static const char* kVidShaderTypes[]  = { "",    "crt-simple", "lcd3x", "lcd-shader", "blur-fill", "4x3-cropped", "custom-vk", "custom-gl" };
++static const char* kVidShaderLabels[] = { "Off", "CRT", "LCD3x", "LCD", "Blur Fill", "4:3 Cropped", "8:7 Cropped", "Custom (Vulkan)", "Custom (GLSL)" };
++static const char* kVidShaderTypes[]  = { "",    "crt-simple", "lcd3x", "lcd-shader", "blur-fill", "4x3-cropped", "8x7-cropped", "custom-vk", "custom-gl" };
  static const int   kVidShaderCount = (int)(sizeof(kVidShaderLabels) / sizeof(kVidShaderLabels[0]));
  static int vidCpDefault() {
      for (int i = 0; i < kVidCpCount; i++) if (!strcmp(kVidCp[i].act, "play")) return i;
@@ -14466,10 +14467,10 @@ index d8cac0c21e4..6307bfe7f06 100644
  
 diff --git a/frameworks/native/libs/renderengine/include/renderengine/GammaSurfaceFilter.h b/frameworks/native/libs/renderengine/include/renderengine/GammaSurfaceFilter.h
 new file mode 100644
-index 00000000000..127045427b2
+index 00000000000..e754aca9fa2
 --- /dev/null
 +++ b/frameworks/native/libs/renderengine/include/renderengine/GammaSurfaceFilter.h
-@@ -0,0 +1,103 @@
+@@ -0,0 +1,125 @@
 +/*
 + * Copyright 2026 The GammaOS Next Improved Project
 + *
@@ -14504,37 +14505,49 @@ index 00000000000..127045427b2
 +enum class GammaShaderMode { Off, Composition, Surface };
 +
 +inline constexpr const char* kGammaShader4x3Cropped = "4x3-cropped";
++inline constexpr const char* kGammaShader8x7Cropped = "8x7-cropped";
++
++// The cropped surface shaders, by the shape of the game area they look for.
++enum class GammaCrop { k4x3, k8x7 };
++
++// The cropped surface shader that is on, if one is.
++inline std::optional<GammaCrop> gammaSurfaceCrop() {
++    if (!base::GetBoolProperty("persist.gammaos.shader.enable", false)) return std::nullopt;
++    const std::string type = base::GetProperty("persist.gammaos.shader.type", "crt-simple");
++    if (type == kGammaShader4x3Cropped) return GammaCrop::k4x3;
++    if (type == kGammaShader8x7Cropped) return GammaCrop::k8x7;
++    return std::nullopt;
++}
 +
 +inline GammaShaderMode gammaShaderMode() {
 +    if (!base::GetBoolProperty("persist.gammaos.shader.enable", false)) {
 +        return GammaShaderMode::Off;
 +    }
-+    return base::GetProperty("persist.gammaos.shader.type", "crt-simple") == kGammaShader4x3Cropped
-+            ? GammaShaderMode::Surface
-+            : GammaShaderMode::Composition;
++    return gammaSurfaceCrop() ? GammaShaderMode::Surface : GammaShaderMode::Composition;
 +}
 +
 +inline bool gammaCompositionShaderOn() {
 +    return gammaShaderMode() == GammaShaderMode::Composition;
 +}
 +
-+// 4:3 Cropped marks the emulator's game layer (it has no settings). A picture within 5% of 4:3 is
-+// projected at one display pixel per projected pixel, centred, to 800x600 on the 720x720 panel or
-+// 1600x1200 on a 1080p display, cropped to the display with black around it. Any other picture, or
-+// one exactly the display's width (720) or height (1080), is drawn unmodified. See
-+// GammaSurfaceScaler.
-+struct GammaSurfaceFilter {};
++// 4:3 Cropped and 8:7 Cropped mark the emulator's game layer (they have no settings). The game area
++// is projected at one display pixel per projected pixel, centred, cropped to the display with black
++// around it: 4:3 to 800x600 on the 720x720 panel or 1600x1200 on a 1080p display, 8:7 to 800x720 or
++// 1200x1080. See gammaCropProjection and GammaSurfaceScaler.
++struct GammaSurfaceFilter {
++    GammaCrop crop = GammaCrop::k4x3;
++};
 +
-+static inline bool operator==(const GammaSurfaceFilter&, const GammaSurfaceFilter&) {
-+    return true;
++static inline bool operator==(const GammaSurfaceFilter& lhs, const GammaSurfaceFilter& rhs) {
++    return lhs.crop == rhs.crop;
 +}
 +
 +static inline bool operator!=(const GammaSurfaceFilter& lhs, const GammaSurfaceFilter& rhs) {
 +    return !(lhs == rhs);
 +}
 +
-+static inline void PrintTo(const GammaSurfaceFilter&, ::std::ostream* os) {
-+    *os << "GammaSurfaceFilter {}";
++static inline void PrintTo(const GammaSurfaceFilter& f, ::std::ostream* os) {
++    *os << "GammaSurfaceFilter { .crop = " << (f.crop == GammaCrop::k8x7 ? "8:7" : "4:3") << " }";
 +}
 +
 +struct GammaProjection {
@@ -14549,24 +14562,34 @@ index 00000000000..127045427b2
 +};
 +
 +// The projection for a picture of this size (in its own pixels) on a display of this size, or none
-+// when the picture is drawn unmodified. A picture within 5% of 4:3 is the game area, and is drawn
-+// unmodified when it is exactly 720 wide on the panel or 1080 tall at 1080p. Any other picture is
-+// the emulator's letterboxed view, and its largest centred 4:3 rectangle is the game area.
-+inline std::optional<GammaProjection> gamma4x3Projection(float pictureW, float pictureH,
-+                                                         float displayW, float displayH) {
++// when the picture is drawn unmodified. A picture within 5% of the crop's shape is the game area,
++// and is drawn unmodified when it is exactly 720 wide on the panel or 1080 tall at 1080p. Any other
++// picture is the emulator's letterboxed view, and its largest centred rectangle of that shape is
++// the game area.
++inline std::optional<GammaProjection> gammaCropProjection(GammaCrop crop, float pictureW,
++                                                          float pictureH, float displayW,
++                                                          float displayH) {
 +    if (pictureW <= 0.f || pictureH <= 0.f || displayW <= 0.f || displayH <= 0.f) {
 +        return std::nullopt;
 +    }
-+    constexpr float kAspect = 4.f / 3.f;
++    const bool k8x7 = crop == GammaCrop::k8x7;
++    const float aspect = k8x7 ? 8.f / 7.f : 4.f / 3.f;
 +    const bool hd = displayH >= 1080.f;
-+    GammaProjection p{0.f, 0.f, pictureW, pictureH, hd ? 1600.f : 800.f, hd ? 1200.f : 600.f};
-+    if (std::abs(pictureW / pictureH / kAspect - 1.f) <= 0.05f) {
++    GammaProjection p{0.f, 0.f, pictureW, pictureH, 0.f, 0.f};
++    if (k8x7) {
++        p.width = hd ? 1200.f : 800.f;
++        p.height = hd ? 1080.f : 720.f;
++    } else {
++        p.width = hd ? 1600.f : 800.f;
++        p.height = hd ? 1200.f : 600.f;
++    }
++    if (std::abs(pictureW / pictureH / aspect - 1.f) <= 0.05f) {
 +        if (hd ? std::lround(pictureH) == 1080 : std::lround(pictureW) == 720) return std::nullopt;
-+    } else if (pictureW > pictureH * kAspect) {
-+        p.gameW = pictureH * kAspect;
++    } else if (pictureW > pictureH * aspect) {
++        p.gameW = pictureH * aspect;
 +        p.gameX = (pictureW - p.gameW) / 2.f;
 +    } else {
-+        p.gameH = pictureW / kAspect;
++        p.gameH = pictureW / aspect;
 +        p.gameY = (pictureH - p.gameH) / 2.f;
 +    }
 +    return p;
@@ -14574,7 +14597,7 @@ index 00000000000..127045427b2
 +
 +} // namespace android::renderengine
 diff --git a/frameworks/native/libs/renderengine/include/renderengine/LayerSettings.h b/frameworks/native/libs/renderengine/include/renderengine/LayerSettings.h
-index 8ac0af47c64..93a3f832ece 100644
+index 8ac0af47c64..28c19a14c33 100644
 --- a/frameworks/native/libs/renderengine/include/renderengine/LayerSettings.h
 +++ b/frameworks/native/libs/renderengine/include/renderengine/LayerSettings.h
 @@ -19,6 +19,7 @@
@@ -14589,7 +14612,7 @@ index 8ac0af47c64..93a3f832ece 100644
  
      StretchEffect stretchEffect;
  
-+    // GammaOS: draw the buffer through the 4:3 Cropped surface filter.
++    // GammaOS: draw the buffer through the 4:3 or 8:7 Cropped surface filter.
 +    std::optional<GammaSurfaceFilter> gammaSurfaceFilter;
 +
      // Name associated with the layer for debugging purposes.
@@ -14617,7 +14640,7 @@ index 8ac0af47c64..93a3f832ece 100644
      *os << "\n}";
  }
 diff --git a/frameworks/native/libs/renderengine/skia/SkiaRenderEngine.cpp b/frameworks/native/libs/renderengine/skia/SkiaRenderEngine.cpp
-index 389e4d91820..e1ec88887b7 100644
+index 389e4d91820..4b26dfcaf69 100644
 --- a/frameworks/native/libs/renderengine/skia/SkiaRenderEngine.cpp
 +++ b/frameworks/native/libs/renderengine/skia/SkiaRenderEngine.cpp
 @@ -86,6 +86,7 @@
@@ -14667,7 +14690,7 @@ index 389e4d91820..e1ec88887b7 100644
          SkPaint paint;
          if (layer.source.buffer.buffer) {
              ATRACE_NAME("DrawImage");
-@@ -1046,7 +1049,14 @@ void SkiaRenderEngine::drawLayersInternal(
+@@ -1046,7 +1049,15 @@ void SkiaRenderEngine::drawLayersInternal(
  
              sk_sp<SkShader> shader;
  
@@ -14675,7 +14698,8 @@ index 389e4d91820..e1ec88887b7 100644
 +            if (layer.gammaSurfaceFilter) {
 +                gammaScaled = GammaSurfaceScaler::make(image, texMatrix,
 +                                                       {bounds.width(), bounds.height()},
-+                                                       getSkRect(display.clip));
++                                                       getSkRect(display.clip),
++                                                       layer.gammaSurfaceFilter->crop);
 +            }
 +            if (gammaScaled) {
 +                shader = gammaScaled->shader;
@@ -14683,7 +14707,7 @@ index 389e4d91820..e1ec88887b7 100644
                  shader = image->makeShader(SkTileMode::kClamp, SkTileMode::kClamp,
                                             SkSamplingOptions(
                                                     {SkFilterMode::kLinear, SkMipmapMode::kNone}),
-@@ -1170,15 +1180,25 @@ void SkiaRenderEngine::drawLayersInternal(
+@@ -1170,15 +1181,25 @@ void SkiaRenderEngine::drawLayersInternal(
              }
          }
  
@@ -14717,7 +14741,7 @@ index 389e4d91820..e1ec88887b7 100644
          }
          if (kFlushAfterEveryLayer) {
              ATRACE_NAME("flush surface");
-@@ -1208,26 +1228,26 @@ void SkiaRenderEngine::drawLayersInternal(
+@@ -1208,26 +1229,26 @@ void SkiaRenderEngine::drawLayersInternal(
      surfaceAutoSaveRestore.restore();
      mCapture->endCapture();
      // ---------------- GammaOS: global CRT/scanline post-process ------------------------------
@@ -14764,7 +14788,7 @@ index 389e4d91820..e1ec88887b7 100644
  
 diff --git a/frameworks/native/libs/renderengine/skia/filters/GammaSurfaceScaler.cpp b/frameworks/native/libs/renderengine/skia/filters/GammaSurfaceScaler.cpp
 new file mode 100644
-index 00000000000..f712b91c303
+index 00000000000..96eb4a0ea61
 --- /dev/null
 +++ b/frameworks/native/libs/renderengine/skia/filters/GammaSurfaceScaler.cpp
 @@ -0,0 +1,98 @@
@@ -14819,10 +14843,10 @@ index 00000000000..f712b91c303
 +
 +std::optional<GammaSurfaceScaler::Result> GammaSurfaceScaler::make(
 +        const sk_sp<SkImage>& image, const SkMatrix& layerToTexel, SkSize layerSize,
-+        const SkRect& displayClip) {
++        const SkRect& displayClip, GammaCrop crop) {
 +    const float bw = layerSize.width();
 +    const float bh = layerSize.height();
-+    const auto proj = gamma4x3Projection(bw, bh, displayClip.width(), displayClip.height());
++    const auto proj = gammaCropProjection(crop, bw, bh, displayClip.width(), displayClip.height());
 +    const sk_sp<SkRuntimeEffect> fx = effect();
 +    if (!proj || !fx || !image) return std::nullopt;
 +
@@ -14868,10 +14892,10 @@ index 00000000000..f712b91c303
 +} // namespace android
 diff --git a/frameworks/native/libs/renderengine/skia/filters/GammaSurfaceScaler.h b/frameworks/native/libs/renderengine/skia/filters/GammaSurfaceScaler.h
 new file mode 100644
-index 00000000000..df24f5dda0d
+index 00000000000..e070e26b703
 --- /dev/null
 +++ b/frameworks/native/libs/renderengine/skia/filters/GammaSurfaceScaler.h
-@@ -0,0 +1,33 @@
+@@ -0,0 +1,34 @@
 +#pragma once
 +
 +#include <SkImage.h>
@@ -14886,8 +14910,8 @@ index 00000000000..df24f5dda0d
 +namespace renderengine {
 +namespace skia {
 +
-+// GammaOS 4:3 Cropped: samples a layer's buffer through its 4:3 projection (gamma4x3Projection)
-+// with a sharp bilinear kernel, directly while the layer is drawn.
++// GammaOS 4:3 Cropped and 8:7 Cropped: samples a layer's buffer through its projection
++// (gammaCropProjection) with a sharp bilinear kernel, directly while the layer is drawn.
 +struct GammaSurfaceScaler {
 +    struct Result {
 +        // Expects logical display coordinates as its local coordinates.
@@ -14899,14 +14923,15 @@ index 00000000000..df24f5dda0d
 +    // layerToTexel maps coordinates relative to the layer bounds' top-left corner to image
 +    // texels, as the regular layer draw does. None when the picture is drawn unmodified.
 +    static std::optional<Result> make(const sk_sp<SkImage>& image, const SkMatrix& layerToTexel,
-+                                      SkSize layerSize, const SkRect& displayClip);
++                                      SkSize layerSize, const SkRect& displayClip,
++                                      GammaCrop crop);
 +};
 +
 +} // namespace skia
 +} // namespace renderengine
 +} // namespace android
 diff --git a/frameworks/native/libs/renderengine/skia/filters/README.md b/frameworks/native/libs/renderengine/skia/filters/README.md
-index 6707406864c..157faf5c81f 100644
+index 6707406864c..192948372d2 100644
 --- a/frameworks/native/libs/renderengine/skia/filters/README.md
 +++ b/frameworks/native/libs/renderengine/skia/filters/README.md
 @@ -128,7 +128,7 @@ build dynamic UI sliders.
@@ -14914,15 +14939,15 @@ index 6707406864c..157faf5c81f 100644
  |----------|------|-------------|
  | `persist.gammaos.shader.enable` | bool | Master on/off |
 -| `persist.gammaos.shader.type` | string | `crt-simple`, `lcd3x`, `lcd-shader`, `blur-fill`, `custom` |
-+| `persist.gammaos.shader.type` | string | `crt-simple`, `lcd3x`, `lcd-shader`, `blur-fill`, `4x3-cropped`, `custom` |
++| `persist.gammaos.shader.type` | string | `crt-simple`, `lcd3x`, `lcd-shader`, `blur-fill`, `4x3-cropped`, `8x7-cropped`, `custom` |
  | `persist.gammaos.shader.custom.preset` | string | Path to .slangp file |
  | `persist.gammaos.shader.custom.res_scale` | string | Downscale factor: `1/2`, `1/3`, `1/4`, or decimal |
  | `persist.gammaos.shader.debug` | bool | Dump SkSL to `.shader_debug_sksl` |
-@@ -136,6 +136,30 @@ build dynamic UI sliders.
+@@ -136,6 +136,38 @@ build dynamic UI sliders.
  | `persist.gammaos.shader.lcd3x.*` | float | LCD3x parameters |
  | `persist.gammaos.shader.lcd-shader.*` | float | LCD-shader parameters |
  | `persist.gammaos.shader.blur-fill.*` | float | Blur-fill parameters |
-+| `persist.gammaos.shader.4x3.exclude` | string | Comma-separated packages 4:3 Cropped skips (RetroArch is always skipped) |
++| `persist.gammaos.shader.4x3.exclude` | string | Comma-separated packages 4:3 and 8:7 Cropped skip (RetroArch is always skipped) |
 +| `persist.gammaos.shader.4x3.window.<package>` | bool | The emulator draws its game into its window, not a SurfaceView |
 +
 +## 4:3 Cropped (`4x3-cropped`)
@@ -14946,11 +14971,19 @@ index 6707406864c..157faf5c81f 100644
 +The game layer is the launched package's SurfaceView, then its opaque buffer layer, then the one
 +with the largest area, so a SurfaceView wins over the translucent window above it. A window that is
 +opaque outside its SurfaceView still covers the extended picture there.
++
++## 8:7 Cropped (`8x7-cropped`)
++
++The same surface filter as 4:3 Cropped with an 8:7 game area (`GammaCrop::k8x7`): a picture within 5%
++of 8:7, or the centred 8:7 rectangle of any other picture, fills an 800 × 720 projection on the
++panel (40 projected pixels cut from each side) or 1200 × 1080 on a 1080p display. The pass-through
++rules, the game layer choice and the exclusions are the same; RetroArch's copy is
++`rg_cube_8_7_cropped`.
  
  ## SELinux Policy
  
 diff --git a/frameworks/native/services/surfaceflinger/CompositionEngine/include/compositionengine/LayerFECompositionState.h b/frameworks/native/services/surfaceflinger/CompositionEngine/include/compositionengine/LayerFECompositionState.h
-index 11759b855f2..c48dd9c23f6 100644
+index 11759b855f2..da95fe8c03e 100644
 --- a/frameworks/native/services/surfaceflinger/CompositionEngine/include/compositionengine/LayerFECompositionState.h
 +++ b/frameworks/native/services/surfaceflinger/CompositionEngine/include/compositionengine/LayerFECompositionState.h
 @@ -21,6 +21,7 @@
@@ -14966,7 +14999,7 @@ index 11759b855f2..c48dd9c23f6 100644
  
      gui::CachingHint cachingHint = gui::CachingHint::Enabled;
 +
-+    // GammaOS: set on the launched emulator's game layer while the 4:3 Cropped surface
++    // GammaOS: set on the launched emulator's game layer while the 4:3 or 8:7 Cropped surface
 +    // shader is active. Forces client composition for this layer every frame.
 +    std::optional<renderengine::GammaSurfaceFilter> gammaSurfaceFilter;
 +
@@ -15048,7 +15081,7 @@ index cdc7ffd34cd..7fc47c550ce 100644
      bool useFiltering = targetSettings.needsFiltering ||
                          mSnapshot->geomLayerTransform.needsBilinearFiltering();
 diff --git a/frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp b/frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp
-index ec930abfc68..bfa409ca1dd 100644
+index ec930abfc68..afe41077a03 100644
 --- a/frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp
 +++ b/frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp
 @@ -76,6 +76,7 @@
@@ -15095,7 +15128,7 @@ index ec930abfc68..bfa409ca1dd 100644
          refreshArgs.devOptForceClientComposition = true;
      }
  
-@@ -10728,10 +10729,130 @@ void SurfaceFlinger::moveSnapshotsFromCompositionArgs(
+@@ -10728,10 +10729,132 @@ void SurfaceFlinger::moveSnapshotsFromCompositionArgs(
      }
  }
  
@@ -15104,10 +15137,11 @@ index ec930abfc68..bfa409ca1dd 100644
 +struct GammaSurfaceFilterTarget {
 +    gui::Uid appUid = gui::Uid::INVALID;
 +    bool windowGame = false;   // the app draws its game into its window, not a SurfaceView
++    renderengine::GammaCrop crop = renderengine::GammaCrop::k4x3;
 +};
 +
-+// GammaOS: apps 4:3 Cropped leaves alone: RetroArch, which has its own rg_cube_4_3_cropped shader,
-+// and persist.gammaos.shader.4x3.exclude (comma-separated).
++// GammaOS: apps 4:3 and 8:7 Cropped leave alone: RetroArch, which has its own rg_cube_4_3_cropped
++// and rg_cube_8_7_cropped shaders, and persist.gammaos.shader.4x3.exclude (comma-separated).
 +bool gammaSurfaceFilterExcluded(const std::string& pkg) {
 +    if (pkg == "com.retroarch" || pkg == "com.retroarch.aarch64" || pkg == "com.retroarch.ra32") {
 +        return true;
@@ -15119,12 +15153,12 @@ index ec930abfc68..bfa409ca1dd 100644
 +    return false;
 +}
 +
-+// The launched emulator, if 4:3 Cropped should filter it. Its uid comes from its input window;
-+// those container layers draw nothing, so this runs before the drawable snapshots are moved.
++// The launched emulator, if 4:3 or 8:7 Cropped should filter it. Its uid comes from its input
++// window; those container layers draw nothing, so this runs before the drawable snapshots are moved.
 +std::optional<GammaSurfaceFilterTarget> gammaSurfaceFilterTarget(
 +        const frontend::LayerSnapshotBuilder& builder) {
-+    if (renderengine::gammaShaderMode() != renderengine::GammaShaderMode::Surface ||
-+        !base::GetBoolProperty("sys.gammaos.nano.app_launched"s, false)) {
++    const auto crop = renderengine::gammaSurfaceCrop();
++    if (!crop || !base::GetBoolProperty("sys.gammaos.nano.app_launched"s, false)) {
 +        return std::nullopt;
 +    }
 +    const std::string pkg = base::GetProperty("sys.gammaos.nano.launch_app"s, "");
@@ -15139,6 +15173,7 @@ index ec930abfc68..bfa409ca1dd 100644
 +    });
 +    if (target.appUid == gui::Uid::INVALID) return std::nullopt;
 +    target.windowGame = base::GetBoolProperty("persist.gammaos.shader.4x3.window." + pkg, false);
++    target.crop = *crop;
 +    return target;
 +}
 +
@@ -15194,9 +15229,9 @@ index ec930abfc68..bfa409ca1dd 100644
 +        const auto display = displays.find(layerStack);
 +        if (display == displays.end()) continue;
 +        const auto& bounds = pick.layerFE->mSnapshot->geomLayerBounds;
-+        if (!renderengine::gamma4x3Projection(bounds.getWidth(), bounds.getHeight(),
-+                                              display->second.getWidth(),
-+                                              display->second.getHeight())) {
++        if (!renderengine::gammaCropProjection(target->crop, bounds.getWidth(), bounds.getHeight(),
++                                               display->second.getWidth(),
++                                               display->second.getHeight())) {
 +            continue;
 +        }
 +        marked.insert(pick.layerFE);
@@ -15210,7 +15245,7 @@ index ec930abfc68..bfa409ca1dd 100644
 +    }
 +    for (const auto& [_, layerFE] : layers) {
 +        layerFE->mSnapshot->gammaSurfaceFilter = marked.count(layerFE)
-+                ? std::make_optional(renderengine::GammaSurfaceFilter{})
++                ? std::make_optional(renderengine::GammaSurfaceFilter{target->crop})
 +                : std::nullopt;
 +    }
 +}
@@ -15226,7 +15261,7 @@ index ec930abfc68..bfa409ca1dd 100644
          nsecs_t currentTime = systemTime();
          mLayerSnapshotBuilder.forEachVisibleSnapshot(
                  [&](std::unique_ptr<frontend::LayerSnapshot>& snapshot) {
-@@ -10756,6 +10877,9 @@ std::vector<std::pair<Layer*, LayerFE*>> SurfaceFlinger::moveSnapshotsToComposit
+@@ -10756,6 +10879,9 @@ std::vector<std::pair<Layer*, LayerFE*>> SurfaceFlinger::moveSnapshotsToComposit
                      refreshArgs.layers.push_back(layerFE);
                      layers.emplace_back(legacyLayer.get(), layerFE.get());
                  });
@@ -15259,53 +15294,59 @@ index 1b4edd9cf66..1eeda5295d3 100755
      </application>
  </manifest>
 diff --git a/packages/apps/ShaderControl/java/com/gammaos/shadercontrol/MainActivity.java b/packages/apps/ShaderControl/java/com/gammaos/shadercontrol/MainActivity.java
-index 02751bf7950..8e3a941554c 100755
+index 02751bf7950..1c55f8eb998 100755
 --- a/packages/apps/ShaderControl/java/com/gammaos/shadercontrol/MainActivity.java
 +++ b/packages/apps/ShaderControl/java/com/gammaos/shadercontrol/MainActivity.java
-@@ -53,6 +53,7 @@ public class MainActivity extends AppCompatActivity {
+@@ -53,6 +53,8 @@ public class MainActivity extends AppCompatActivity {
      private RadioButton radioLcd3x;
      private RadioButton radioLcdShader;
      private RadioButton radioBlurFill;
 +    private RadioButton radio4x3Cropped;
++    private RadioButton radio8x7Cropped;
      private RadioButton radioCustomSksl;
      private RadioButton radioCustomVk;
      private RadioButton radioCustomGl;
-@@ -244,6 +245,7 @@ public class MainActivity extends AppCompatActivity {
+@@ -244,6 +246,8 @@ public class MainActivity extends AppCompatActivity {
          radioLcd3x = findViewById(R.id.radioLcd3x);
          radioLcdShader = findViewById(R.id.radioLcdShader);
          radioBlurFill = findViewById(R.id.radioBlurFill);
 +        radio4x3Cropped = findViewById(R.id.radio4x3Cropped);
++        radio8x7Cropped = findViewById(R.id.radio8x7Cropped);
          radioCustomSksl = findViewById(R.id.radioCustomSksl);
          radioCustomVk = findViewById(R.id.radioCustomVk);
          radioCustomGl = findViewById(R.id.radioCustomGl);
-@@ -411,6 +413,8 @@ public class MainActivity extends AppCompatActivity {
+@@ -411,6 +415,10 @@ public class MainActivity extends AppCompatActivity {
                  onModeSelectedLcdShader();
              } else if (checkedId == R.id.radioBlurFill) {
                  onModeSelectedBlurFill();
 +            } else if (checkedId == R.id.radio4x3Cropped) {
-+                onModeSelected4x3Cropped();
++                onModeSelectedCropped("4x3-cropped");
++            } else if (checkedId == R.id.radio8x7Cropped) {
++                onModeSelectedCropped("8x7-cropped");
              } else if (checkedId == R.id.radioCustomSksl) {
                  onModeSelectedCustom("custom");
              } else if (checkedId == R.id.radioCustomVk) {
-@@ -452,6 +456,12 @@ public class MainActivity extends AppCompatActivity {
+@@ -452,6 +460,12 @@ public class MainActivity extends AppCompatActivity {
          updateGroupsVisibility();
      }
  
-+    private void onModeSelected4x3Cropped() {
++    private void onModeSelectedCropped(String type) {
 +        setSystemProperty("persist.gammaos.shader.enable", "1");
-+        setSystemProperty("persist.gammaos.shader.type", "4x3-cropped");
++        setSystemProperty("persist.gammaos.shader.type", type);
 +        updateGroupsVisibility();
 +    }
 +
      private void onModeSelectedCustom(String type) {
          customShaderType = type;
          setSystemProperty("persist.gammaos.shader.enable", "1");
-@@ -504,6 +514,8 @@ public class MainActivity extends AppCompatActivity {
+@@ -504,6 +518,10 @@ public class MainActivity extends AppCompatActivity {
              radioLcdShader.setChecked(true);
          } else if (isBlurFillType(type)) {
              radioBlurFill.setChecked(true);
 +        } else if ("4x3-cropped".equals(type)) {
 +            radio4x3Cropped.setChecked(true);
++        } else if ("8x7-cropped".equals(type)) {
++            radio8x7Cropped.setChecked(true);
          } else if ("custom-vk".equals(type)) {
              customShaderType = "custom-vk";
              // Ensure this button is visible even if hidden by default
@@ -15553,10 +15594,10 @@ index 00000000000..60445151b6c
 +    }
 +}
 diff --git a/packages/apps/ShaderControl/res/layout/activity_main.xml b/packages/apps/ShaderControl/res/layout/activity_main.xml
-index 302b838df3c..5dfd3d16b00 100755
+index 302b838df3c..1514ecf724a 100755
 --- a/packages/apps/ShaderControl/res/layout/activity_main.xml
 +++ b/packages/apps/ShaderControl/res/layout/activity_main.xml
-@@ -93,6 +93,14 @@
+@@ -93,6 +93,22 @@
                  android:text="@string/shader_blur_fill"
                  android:background="@drawable/focusable_background" />
  
@@ -15568,11 +15609,19 @@ index 302b838df3c..5dfd3d16b00 100755
 +                android:text="@string/shader_4x3_cropped"
 +                android:background="@drawable/focusable_background" />
 +
++            <RadioButton
++                android:id="@+id/radio8x7Cropped"
++                android:layout_width="wrap_content"
++                android:layout_height="wrap_content"
++                android:layout_marginStart="16dp"
++                android:text="@string/shader_8x7_cropped"
++                android:background="@drawable/focusable_background" />
++
              <RadioButton
                  android:id="@+id/radioCustomSksl"
                  android:layout_width="wrap_content"
 diff --git a/packages/apps/ShaderControl/res/values/strings.xml b/packages/apps/ShaderControl/res/values/strings.xml
-index fb871f32287..f4c7b35b799 100755
+index fb871f32287..bf78b31d301 100755
 --- a/packages/apps/ShaderControl/res/values/strings.xml
 +++ b/packages/apps/ShaderControl/res/values/strings.xml
 @@ -1,6 +1,7 @@
@@ -15583,11 +15632,12 @@ index fb871f32287..f4c7b35b799 100755
  
      <string name="title_shader_control">GammaOS Shaders</string>
      <string name="label_shader_mode">Shader mode</string>
-@@ -9,6 +10,7 @@
+@@ -9,6 +10,8 @@
      <string name="shader_lcd3x">LCD3x</string>
      <string name="shader_lcd_shader">LCD (lcd-shader)</string>
      <string name="shader_blur_fill">Blur Fill (EXPERIMENTAL)</string>
 +    <string name="shader_4x3_cropped" translatable="false">4:3 Cropped</string>
++    <string name="shader_8x7_cropped" translatable="false">8:7 Cropped</string>
  
      <string name="section_crt_params">CRT parameters</string>
      <string name="section_lcd3x_params">LCD3x parameters</string>

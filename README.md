@@ -235,6 +235,14 @@ It also changes Nano:
   frame, so it changes only a frame within 5% of 4:3; any other frame, and a
   4:3 frame exactly 720 wide on the panel or 1080 tall at 1080p, is fitted at
   its own shape.
+- **8:7 Cropped** is the same shader for 8:7 games (the SNES's 256 × 224, for
+  example): the game area is the picture when that is within 5% of 8:7, or
+  else its centred 8:7 area, and it fills 800 × 720 on the panel (40 pixels
+  cut from each side, no black bars) or 1200 × 1080 at 1080p. The pass-through
+  rules, `persist.gammaos.shader.4x3.window.<package>` and
+  `persist.gammaos.shader.4x3.exclude` are shared with 4:3 Cropped.
+  RetroArch's copy is `rg_cube_8_7_cropped.slangp`, also used with Aspect
+  Ratio set to Full.
 - **Start + Select:** in Nano's menus Start and Select act when released, and
   both pressed together open or close the Quick Menu. In a game, Start +
   Select works like the Anbernic button for hotkeys (Start + Select + R1
