@@ -1836,10 +1836,10 @@ index 62e77314ccd..1fa9573cbcf 100644
      property_set("sys.gammaos.nano.menu_active", "1");
      property_set("sys.gammaos.nano.drop_input", "0");
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuDrm.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuDrm.cpp
-index cecc918f549..24591d3ef75 100644
+index cecc918f549..b282bf64c1d 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuDrm.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuDrm.cpp
-@@ -600,6 +600,101 @@ static int drmAtomicModesetFallback(int fd, uint32_t crtcId, uint32_t connId,
+@@ -600,6 +600,105 @@ static int drmAtomicModesetFallback(int fd, uint32_t crtcId, uint32_t connId,
      return ioctl(fd, DRM_IOCTL_MODE_ATOMIC, &atomic);
  }
  
@@ -1893,14 +1893,18 @@ index cecc918f549..24591d3ef75 100644
 +    return 0;
 +}
 +
-+// A built-in panel connector that can light this unlit CRTC: not DisplayPort or HDMI, not known to
-+// be disconnected, not driven by another CRTC, with an encoder that can drive this one. 0 if none.
-+static uint32_t drmPanelConnectorFor(int fd, uint32_t crtcId) {
++// A built-in panel connector that can light this unlit CRTC: not DisplayPort or HDMI, not driven
++// by another CRTC, with an encoder that can drive this one. The caller's connector when it
++// qualifies, so panels keep their order; 0 if none. Whether it is connected is left to the probe
++// that reads its mode.
++static uint32_t drmPanelConnectorFor(int fd, uint32_t crtcId, uint32_t preferred) {
 +    std::vector<uint32_t> conns, crtcs;
 +    if (!drmResources(fd, &conns, &crtcs)) return 0;
 +    const auto at = std::find(crtcs.begin(), crtcs.end(), crtcId);
 +    if (at == crtcs.end()) return 0;
 +    const uint32_t crtcBit = 1u << (at - crtcs.begin());
++    const auto pref = std::find(conns.begin(), conns.end(), preferred);
++    if (pref != conns.end()) std::rotate(conns.begin(), pref, pref + 1);   // tried first
 +    for (uint32_t connId : conns) {
 +        uint32_t current = 0;
 +        if (drmConnectorExternal(fd, connId, &current)) continue;
@@ -1909,9 +1913,7 @@ index cecc918f549..24591d3ef75 100644
 +        conn.connector_id = connId;
 +        conn.count_modes = 1;   // no probe, as in drmConnectorExternal
 +        conn.modes_ptr = (uint64_t)(uintptr_t)&mode;
-+        if (ioctl(fd, DRM_IOCTL_MODE_GETCONNECTOR, &conn) != 0 || conn.count_encoders == 0 ||
-+            conn.connection == 2 /* disconnected */)
-+            continue;
++        if (ioctl(fd, DRM_IOCTL_MODE_GETCONNECTOR, &conn) != 0 || conn.count_encoders == 0) continue;
 +        if (current != 0) {
 +            struct drm_mode_get_encoder enc = {};
 +            enc.encoder_id = current;
@@ -1931,7 +1933,9 @@ index cecc918f549..24591d3ef75 100644
 +        for (uint32_t encoderId : encoders) {
 +            struct drm_mode_get_encoder enc = {};
 +            enc.encoder_id = encoderId;
-+            if (ioctl(fd, DRM_IOCTL_MODE_GETENCODER, &enc) == 0 && (enc.possible_crtcs & crtcBit))
++            // possible_crtcs left unset by the driver: any CRTC.
++            if (ioctl(fd, DRM_IOCTL_MODE_GETENCODER, &enc) == 0 &&
++                (enc.possible_crtcs == 0 || (enc.possible_crtcs & crtcBit)))
 +                return connId;
 +        }
 +    }
@@ -1941,20 +1945,20 @@ index cecc918f549..24591d3ef75 100644
  // Try to bring up a single DRM CRTC with the given connector. Returns true
  // if the CRTC was added to sDrmDisplays. Non-blocking: if the mode is not
  // valid (display not ready), returns false immediately -- caller can retry
-@@ -609,6 +704,19 @@ bool drmTryAddDisplay(int fd, uint32_t crtcId, uint32_t connId, const char* stag
+@@ -609,6 +708,19 @@ bool drmTryAddDisplay(int fd, uint32_t crtcId, uint32_t connId, const char* stag
      crtc.crtc_id = crtcId;
      ioctl(fd, DRM_IOCTL_MODE_GETCRTC, &crtc);
  
 +    // External monitors (DisplayPort / HDMI) are Android's, not panels: a lit CRTC one of them
-+    // drives is left alone, and an unlit one is lit from a panel connector, never a monitor's.
-+    // Either keeps the connector that really goes with it, whichever one the caller paired with it.
++    // drives is left alone, and an unlit one is lit from a panel connector that can drive it, never
++    // a monitor's. Either uses the connector that really goes with it, not just the caller's pairing.
 +    if (crtc.mode_valid) {
 +        bool external = false;
 +        const uint32_t driving = drmCrtcConnector(fd, crtcId, &external);
 +        if (external) return false;
 +        if (driving) connId = driving;
-+    } else if (connId != 0 && drmConnectorExternal(fd, connId, nullptr)) {
-+        connId = drmPanelConnectorFor(fd, crtcId);
++    } else {
++        connId = drmPanelConnectorFor(fd, crtcId, connId);
 +        if (connId == 0) return false;
 +    }
 +
