@@ -4738,7 +4738,7 @@ index 3f568ae08a5..25d9ba2700b 100644
      mPs3DlgThemeKey = 0;
      mPs3DlgBinding = nullptr;
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuOverlay.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuOverlay.cpp
-index afbd4bb49c5..94d116ef206 100644
+index afbd4bb49c5..ec68f01287c 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuOverlay.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuOverlay.cpp
 @@ -44,6 +44,7 @@
@@ -5007,22 +5007,39 @@ index afbd4bb49c5..94d116ef206 100644
          // A commit clears mOskOverApp inside its callback below; reaching here with
          // it still set once the OSK has fully closed means the user backed out.
          if (!mOskActive && !mOsk.closing) {
-@@ -1476,14 +1600,37 @@ void NanoMenu::overlayOskPoll() {
+@@ -1466,6 +1590,7 @@ void NanoMenu::overlayOskPoll() {
+             mOskAppReqId.clear();
+             property_set("sys.gammaos.nano.osk_gen", "");
+             if (!dir.empty()) unlink((dir + "/nano_osk_live.txt").c_str());
++            ALOGI("osk bridge: %s answered cancel", id.c_str());
+             property_set("sys.gammaos.nano.osk_done", ("cancel:" + id).c_str());
+             property_set("sys.gammaos.nano.show_overlay", "0");
+             overlayHide();
+@@ -1475,16 +1600,44 @@ void NanoMenu::overlayOskPoll() {
+         }
          return;   // one OSK session at a time
      }
-     if (mOverlayLaunchPending) return;   // never pop the OSK mid app-launch
-+    // Not over a menu the user opened (it holds the app's input, and may have its own keyboard up):
-+    // the request waits until the overlay is down.
-+    if (mOverlayShown) return;
- 
+-    if (mOverlayLaunchPending) return;   // never pop the OSK mid app-launch
+-
      char req[PROPERTY_VALUE_MAX] = {};
      if (property_get("sys.gammaos.nano.osk_req", req, "") <= 0 || !req[0]) return;
++    // Never mid app-launch, nor over a menu the user opened (it holds the app's input, and may have
++    // its own keyboard up): the request waits until the overlay is down.
++    if (mOverlayLaunchPending || mOverlayShown) {
++        static std::string sLoggedWait;
++        if (sLoggedWait != req) {
++            sLoggedWait = req;
++            ALOGI("osk bridge: %s waits (%s)", req, mOverlayLaunchPending ? "app launching" : "overlay shown");
++        }
++        return;
++    }
      property_set("sys.gammaos.nano.osk_req", "");   // consume the edge
  
 -    char dir[PROPERTY_VALUE_MAX] = {}, type[PROPERTY_VALUE_MAX] = {};
 +    char dir[PROPERTY_VALUE_MAX] = {}, type[PROPERTY_VALUE_MAX] = {}, hint[PROPERTY_VALUE_MAX] = {};
      property_get("sys.gammaos.nano.osk_dir", dir, "");
      property_get("sys.gammaos.nano.osk_type", type, "text");
+-    if (!dir[0]) return;
 +    property_get("sys.gammaos.nano.osk_hint", hint, "");
 +    property_set("sys.gammaos.nano.osk_hint", "");   // a client that sets none gets no stale label
 +
@@ -5043,10 +5060,24 @@ index afbd4bb49c5..94d116ef206 100644
 +            return;
 +        }
 +    }
-     if (!dir[0]) return;
++    if (!dir[0]) { ALOGW("osk bridge: %s has no osk_dir", req); return; }
      mOskAppDir = dir;
      mOskAppReqId = req;
-@@ -1507,7 +1654,7 @@ void NanoMenu::overlayOskPoll() {
+ 
+@@ -1496,9 +1649,12 @@ void NanoMenu::overlayOskPoll() {
+             char buf[8192]; size_t n;
+             while ((n = fread(buf, 1, sizeof buf, f)) > 0) pre.append(buf, n);
+             fclose(f);
++        } else {
++            ALOGW("osk bridge: can't read %s: %s", p.c_str(), strerror(errno));
+         }
+     }
+     bool masked = (strcmp(type, "password") == 0);
++    ALOGI("osk bridge: opening %s (%s, %zu bytes)", req, type, pre.size());
+ 
+     mOskOverApp = true;
+     if (!mOverlayShown) {
+@@ -1507,10 +1663,12 @@ void NanoMenu::overlayOskPoll() {
      }
      std::string id = mOskAppReqId;
      std::string outDir = mOskAppDir;
@@ -5055,7 +5086,12 @@ index afbd4bb49c5..94d116ef206 100644
          std::string p = outDir + "/nano_osk_out.txt";
          FILE* f = fopen(p.c_str(), "wb");
          if (f) { fwrite(val.data(), 1, val.size(), f); fclose(f); chmod(p.c_str(), 0644); }
-@@ -1610,6 +1757,21 @@ void NanoMenu::overlayPoll() {
++        else ALOGW("osk bridge: can't write %s: %s", p.c_str(), strerror(errno));
++        ALOGI("osk bridge: %s answered ok", id.c_str());
+         mOskOverApp = false;
+         mOskAppReqId.clear();
+         property_set("sys.gammaos.nano.osk_gen", "");
+@@ -1610,6 +1768,21 @@ void NanoMenu::overlayPoll() {
      bool want = (v[0] == '1' && v[1] == '\0');
      if (want && !mOverlayShown) {
          overlayShow();   // snaps to the Quick Menu by default in scrim-over-app mode
@@ -5077,7 +5113,7 @@ index afbd4bb49c5..94d116ef206 100644
      } else if (!want && mOverlayShown) {
          // Do NOT lower the overlay while a standalone clock summon is still retracting:
          // let drawPspClock's teardown clear show_overlay once the clock reaches reveal 0,
-@@ -1653,6 +1815,13 @@ void NanoMenu::overlayLaunchGame() {
+@@ -1653,6 +1826,13 @@ void NanoMenu::overlayLaunchGame() {
              romName = sys.displayNames[mXmbGameIndex];
      }
      if (romPath.empty()) return;
@@ -5091,7 +5127,7 @@ index afbd4bb49c5..94d116ef206 100644
      // Same check as the home launcher: a game whose file is gone (deleted, or its card is not
      // mounted) must say so instead of replacing the running app with an emulator that then dies.
      if (!romLaunchExists(romPath)) {
-@@ -1752,6 +1921,7 @@ void NanoMenu::overlayLaunchGame() {
+@@ -1752,6 +1932,7 @@ void NanoMenu::overlayLaunchGame() {
          // DSi theme: the process exits below, so persist the carousel nav path for the fresh
          // home after the session (the same save the DRM home makes before its hand-off).
          if (mNdsTheme && mPs3Xmb) ndsSaveReturnPath();
@@ -5099,7 +5135,7 @@ index afbd4bb49c5..94d116ef206 100644
          // The app the overlay is sitting over (a RetroArch game, say) must be gone
          // before drastic-nano takes DRM master: left running it keeps rendering and
          // holding the GPU and CPU under the DS session, and SurfaceFlinger keeps
-@@ -1833,7 +2003,7 @@ void NanoMenu::overlayLaunchGame() {
+@@ -1833,7 +2014,7 @@ void NanoMenu::overlayLaunchGame() {
                " -a android.intent.action.MAIN -c android.intent.category.LAUNCHER"
                " --activity-clear-task --activity-clear-top"
                " --es ROM " + overlayShq(rom) +
@@ -15853,10 +15889,10 @@ index 02751bf7950..1c55f8eb998 100755
              // Ensure this button is visible even if hidden by default
 diff --git a/packages/apps/ShaderControl/java/com/gammaos/shadercontrol/NanoImeService.java b/packages/apps/ShaderControl/java/com/gammaos/shadercontrol/NanoImeService.java
 new file mode 100644
-index 00000000000..8fcbb60857e
+index 00000000000..beff99c32c5
 --- /dev/null
 +++ b/packages/apps/ShaderControl/java/com/gammaos/shadercontrol/NanoImeService.java
-@@ -0,0 +1,243 @@
+@@ -0,0 +1,267 @@
 +package com.gammaos.shadercontrol;
 +
 +import android.inputmethodservice.InputMethodService;
@@ -15865,6 +15901,7 @@ index 00000000000..8fcbb60857e
 +import android.os.SystemClock;
 +import android.os.SystemProperties;
 +import android.text.InputType;
++import android.util.Log;
 +import android.view.View;
 +import android.view.ViewGroup;
 +import android.view.inputmethod.EditorInfo;
@@ -15889,6 +15926,7 @@ index 00000000000..8fcbb60857e
 + */
 +public class NanoImeService extends InputMethodService {
 +
++    private static final String TAG = "NanoIme";
 +    private static final String PROP = "sys.gammaos.nano.";
 +    private static final int MAX_FIELD = 4096;
 +    private static final int POLL_MS = 100;
@@ -15923,6 +15961,21 @@ index 00000000000..8fcbb60857e
 +        return true;   // a gamepad is not a keyboard to type on
 +    }
 +
++    // The default turns down a field's implicit request while Android counts a keyboard as
++    // attached, and a controller can count as one.
++    @Override
++    public boolean onShowInputRequested(int flags, boolean configChange) {
++        Log.i(TAG, "show requested: flags=" + flags + " default=" + super.onShowInputRequested(flags, configChange));
++        return true;
++    }
++
++    @Override
++    public void onStartInput(EditorInfo info, boolean restarting) {
++        super.onStartInput(info, restarting);
++        Log.i(TAG, "start input: " + info.packageName + " type=0x" + Integer.toHexString(info.inputType)
++                + " restarting=" + restarting);
++    }
++
 +    @Override
 +    public View onCreateInputView() {
 +        View v = new View(this);
@@ -15933,6 +15986,7 @@ index 00000000000..8fcbb60857e
 +    @Override
 +    public void onStartInputView(EditorInfo info, boolean restarting) {
 +        super.onStartInputView(info, restarting);
++        Log.i(TAG, "start input view: " + info.packageName + " restarting=" + restarting + " open=" + mReq);
 +        if (!SystemProperties.getBoolean("sys.gammaos.minimal_boot", false)) {
 +            switchAway();
 +            return;
@@ -15940,12 +15994,12 @@ index 00000000000..8fcbb60857e
 +        mInfo = info;
 +        if (mReq != null) return;   // already with Nano
 +        InputConnection ic = getCurrentInputConnection();
-+        if (ic == null) return;
++        if (ic == null) { Log.w(TAG, "no input connection"); return; }
 +        // An editor that only takes key events (a terminal) has no text to start from.
 +        String text = info.inputType == InputType.TYPE_NULL ? "" : fieldText(ic);
 +        File dir = getFilesDir();
 +        new File(dir, "nano_osk_out.txt").delete();
-+        if (!write(new File(dir, "nano_osk_in.txt"), text)) return;
++        if (!write(new File(dir, "nano_osk_in.txt"), text)) { Log.w(TAG, "can't write nano_osk_in.txt"); return; }
 +        mReqAt = SystemClock.uptimeMillis();
 +        mReq = "ime-" + mReqAt;   // Nano age-checks ids of this form
 +        mMain.postDelayed(mPoll, POLL_MS);
@@ -15953,12 +16007,14 @@ index 00000000000..8fcbb60857e
 +        SystemProperties.set(PROP + "osk_type", isPassword(info) ? "password" : "text");
 +        SystemProperties.set(PROP + "osk_hint", hint(info));
 +        SystemProperties.set(PROP + "osk_req", mReq);
++        Log.i(TAG, "asked Nano: " + mReq + " (" + text.length() + " chars)");
 +    }
 +
 +    @Override
 +    public void onFinishInputView(boolean finishingInput) {
 +        super.onFinishInputView(finishingInput);
 +        if (mReq != null) {   // the field went away while Nano had it, or before Nano took it
++            Log.i(TAG, "field gone, withdrawing " + mReq);
 +            if (mReq.equals(SystemProperties.get(PROP + "osk_req", ""))) SystemProperties.set(PROP + "osk_req", "");
 +            SystemProperties.set(PROP + "osk_abort", mReq);
 +            mReq = null;
@@ -15970,6 +16026,7 @@ index 00000000000..8fcbb60857e
 +        if (mReq == null) return;
 +        String done = SystemProperties.get(PROP + "osk_done", "");
 +        if (done.equals("ok:" + mReq)) {
++            Log.i(TAG, "Nano answered ok: " + mReq);
 +            mReq = null;
 +            String text = read(new File(getFilesDir(), "nano_osk_out.txt"));
 +            // Next / Previous move to another field, which then asks Nano itself: stay shown.
@@ -15980,12 +16037,14 @@ index 00000000000..8fcbb60857e
 +            }
 +            if (!moved) requestHideSelf(0);
 +        } else if (done.equals("cancel:" + mReq)) {
++            Log.i(TAG, "Nano answered cancel: " + mReq);
 +            mReq = null;
 +            requestHideSelf(0);
 +        } else {
 +            long waited = SystemClock.uptimeMillis() - mReqAt;
 +            boolean untaken = mReq.equals(SystemProperties.get(PROP + "osk_req", ""));
 +            if ((untaken && waited > TAKE_MS) || waited > ANSWER_MS) {
++                Log.w(TAG, (untaken ? "Nano never took " : "Nano never answered ") + mReq);
 +                if (untaken) SystemProperties.set(PROP + "osk_req", "");
 +                mReq = null;
 +                requestHideSelf(0);
@@ -16077,6 +16136,7 @@ index 00000000000..8fcbb60857e
 +        InputMethodManager imm = getSystemService(InputMethodManager.class);
 +        for (InputMethodInfo ime : imm.getEnabledInputMethodList()) {
 +            if (!ime.getPackageName().equals(getPackageName())) {
++                Log.i(TAG, "not in Nano mode, switching to " + ime.getId());
 +                switchInputMethod(ime.getId());
 +                return;
 +            }
