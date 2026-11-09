@@ -14192,7 +14192,7 @@ index cdc7ffd34cd..7fc47c550ce 100644
      bool useFiltering = targetSettings.needsFiltering ||
                          mSnapshot->geomLayerTransform.needsBilinearFiltering();
 diff --git a/frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp b/frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp
-index ec930abfc68..568558c5637 100644
+index ec930abfc68..4f12f127abd 100644
 --- a/frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp
 +++ b/frameworks/native/services/surfaceflinger/SurfaceFlinger.cpp
 @@ -76,6 +76,7 @@
@@ -14231,7 +14231,7 @@ index ec930abfc68..568558c5637 100644
          refreshArgs.devOptForceClientComposition = true;
      }
  
-@@ -10728,10 +10728,137 @@ void SurfaceFlinger::moveSnapshotsFromCompositionArgs(
+@@ -10728,10 +10728,136 @@ void SurfaceFlinger::moveSnapshotsFromCompositionArgs(
      }
  }
  
@@ -14243,13 +14243,8 @@ index ec930abfc68..568558c5637 100644
 +    bool windowGame = false;   // the app draws its game into its window, not a SurfaceView
 +};
 +
-+// GammaOS: RetroArch has its own shader pipeline, so 4:3 Cropped never applies to it.
++// GammaOS: apps 4:3 Cropped leaves alone (persist.gammaos.shader.4x3.exclude, comma-separated).
 +bool gammaSurfaceFilterExcluded(const std::string& pkg) {
-+    static constexpr const char* kRetroArch[] = {"com.retroarch", "com.retroarch.aarch64",
-+                                                 "com.retroarch.ra32"};
-+    for (const char* excluded : kRetroArch) {
-+        if (pkg == excluded) return true;
-+    }
 +    for (const auto& excluded :
 +         base::Split(base::GetProperty("persist.gammaos.shader.4x3.exclude"s, ""), ",")) {
 +        if (base::Trim(excluded) == pkg) return true;
@@ -14300,15 +14295,19 @@ index ec930abfc68..568558c5637 100644
 +    });
 +    if (target.appUid == gui::Uid::INVALID) return std::nullopt;
 +    target.filter = gammaSurfaceFilterProfile(pkg);
++    // RetroArch is a NativeActivity: its game, and its own menu, are drawn into its window.
++    const bool drawsInWindow = pkg == "com.retroarch" || pkg == "com.retroarch.aarch64" ||
++                               pkg == "com.retroarch.ra32";
 +    target.windowGame =
-+            base::GetBoolProperty("persist.gammaos.shader.4x3.window." + pkg, false);
++            base::GetBoolProperty("persist.gammaos.shader.4x3.window." + pkg, drawsInWindow);
 +    return target;
 +}
 +
 +// Marks the emulator's game layer for the filter and clears every other layer. Emulators draw the
 +// game into a SurfaceView and their menus, launchers and settings into windows, so only a
-+// SurfaceView is filtered. An app set to draw its game into its window (persist.gammaos.shader.
-+// 4x3.window.<package>) has its windows filtered too, a SurfaceView still first. Then an opaque
++// SurfaceView is filtered. An app that draws its game into its window (RetroArch by default, or
++// any set by persist.gammaos.shader.4x3.window.<package>) has its windows filtered too, a
++// SurfaceView still first. Then an opaque
 +// layer wins (a window drawn over a SurfaceView has to be translucent), then the largest.
 +void gammaSelectSurfaceFilterLayer(compositionengine::CompositionRefreshArgs& refreshArgs,
 +                                   const std::vector<std::pair<Layer*, LayerFE*>>& layers,
@@ -14369,7 +14368,7 @@ index ec930abfc68..568558c5637 100644
          nsecs_t currentTime = systemTime();
          mLayerSnapshotBuilder.forEachVisibleSnapshot(
                  [&](std::unique_ptr<frontend::LayerSnapshot>& snapshot) {
-@@ -10756,6 +10883,9 @@ std::vector<std::pair<Layer*, LayerFE*>> SurfaceFlinger::moveSnapshotsToComposit
+@@ -10756,6 +10882,9 @@ std::vector<std::pair<Layer*, LayerFE*>> SurfaceFlinger::moveSnapshotsToComposit
                      refreshArgs.layers.push_back(layerFE);
                      layers.emplace_back(legacyLayer.get(), layerFE.get());
                  });

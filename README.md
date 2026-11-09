@@ -205,11 +205,13 @@ It also changes Nano:
   own launcher, settings and pause screens, stay as they are. The filter
   follows the emulator's game view (an Android SurfaceView); an emulator that
   draws its game straight into its window is left alone unless
-  `persist.gammaos.shader.4x3.window.<package>` is set to `1`.
+  `persist.gammaos.shader.4x3.window.<package>` is set to `1`. RetroArch draws
+  into its window, so that is its default: the filter covers its whole window,
+  its own menu included, and stacks with any RetroArch shader. To leave an app
+  alone, add it to `persist.gammaos.shader.4x3.exclude` (comma-separated).
   **Game Area** chooses which part of the emulator's picture is the game:
   Auto (the centred 4:3 area, for emulators that letterbox) or Full Picture
-  (for emulators set to stretch). RetroArch is left alone, as it has its own
-  shaders.
+  (for emulators set to stretch).
 - **Start + Select:** in Nano's menus Start and Select act when released, and
   both pressed together open or close the Quick Menu. In a game, Start +
   Select works like the Anbernic button for hotkeys (Start + Select + R1
