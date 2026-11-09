@@ -212,9 +212,12 @@ It also changes Nano:
     menu gets Emulator for This Game too.
 - **Game lists** put favourites first, each part in name order.
 - **Scan Folders:** adding a folder to a system asks **This Folder Only** or
-  **Include Subfolders**, and that choice wins over Scan ROM Subfolders either
-  way (folders added before keep following it). A folder with its subfolders
-  is marked Subfolders in the list.
+  **Include Subfolders** (selected first), and that choice wins over Scan ROM
+  Subfolders either way, which covers only the default `ROMs/<system>`
+  folders. Folders added before the choice existed, and the folders Auto-add
+  Systems from Folder adds, scan their subfolders, as ES-DE does. A folder
+  with its subfolders is marked Subfolders in the list. A folder added while
+  a scan is running is scanned as soon as that scan finishes.
 - **Game information** pages turn a full page at a time with the shoulder
   buttons, the last line of a page repeated at the top of the next.
 - **Background Colour** (Theme Settings) gets a Custom option with a colour
