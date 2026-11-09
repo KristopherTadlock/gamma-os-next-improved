@@ -11,6 +11,9 @@
 #                        can update itself and the boot image after setup
 #   Daijisho 1.8.1       on the 1.4.4 base, which already ships it
 #
+# Brave is made the default browser on a fresh setup, so a choice made later
+# survives setup re-running on a Nano/Android switch.
+#
 # Usage: 15-update-apps.sh SYSTEM_DIR CACHE_DIR
 set -euo pipefail
 
@@ -55,7 +58,20 @@ for entry in "${APKS[@]}"; do
   echo "updated $name (replaces $old)"
 done
 
+default_browser() {
+  cat >"$CACHE/browser-steps.sh" <<'STEPS'
+if [ "${FRESH_SETUP:-1}" = 1 ] && pm path com.brave.browser >/dev/null 2>&1; then
+    echo "Making Brave the default browser."
+    cmd role add-role-holder --user 0 android.app.role.BROWSER com.brave.browser
+fi
+
+STEPS
+  add_setup_steps "$SYSTEM" "$CACHE/browser-steps.sh"
+  echo "Brave is the default browser"
+}
+
 if is_nano_base "$SYSTEM"; then
+  default_browser
   exit 0
 fi
 
@@ -87,3 +103,4 @@ for old, new in replacements:
 open(path, "w").write(setup)
 EOF
 write_through "$CACHE/setup.sh" "$SETUP"
+default_browser

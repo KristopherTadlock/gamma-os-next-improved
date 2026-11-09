@@ -57,6 +57,9 @@ Other apps:
 | Aurora Store | 4.6.4 | 4.8.4 |
 | Firefox | 139.0 | replaced by [Brave](https://github.com/brave/brave-browser) 1.99.55 |
 
+Brave is the default browser, set by a fresh setup (`mods/15-update-apps.sh`),
+so a browser chosen later stays chosen.
+
 Aurora Store comes from IzzyOnDroid, which only keeps recent versions, so its
 link in `mods/15-update-apps.sh` will need updating for later builds.
 MiXplorer stays at 6.64.3 because newer builds are only posted on its XDA

@@ -4682,7 +4682,7 @@ index 3f568ae08a5..25d9ba2700b 100644
      mPs3DlgThemeKey = 0;
      mPs3DlgBinding = nullptr;
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuOverlay.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuOverlay.cpp
-index afbd4bb49c5..b93917cea11 100644
+index afbd4bb49c5..5e692eed43c 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuOverlay.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuOverlay.cpp
 @@ -44,6 +44,7 @@
@@ -4710,7 +4710,18 @@ index afbd4bb49c5..b93917cea11 100644
  
  static void overlayThawFromMarker();
  static void overlayTermHandler(int);
-@@ -360,19 +364,47 @@ void NanoMenu::pspClockFreezeApp(bool freeze) {
+@@ -139,6 +143,10 @@ void NanoMenu::overlayInitLayer() {
+     // overlay-home AFTER the overlay has genuinely come up once - it can never fire at
+     // the cold-boot home (where the overlay has never started) and hot-loop the DRM home.
+     property_set("sys.gammaos.nano.overlay_ran", "1");
++    // The home selects Nano Keyboard at boot, but it exits when it starts an app, which can cut
++    // that short, and a stay in Boot Android hands text entry back to Android's keyboard. The
++    // overlay lives as long as the app: select it again here.
++    selectNanoIme();
+ 
+     ALOGI("overlay: layer initialised (translucent live-app + scrim), waiting on "
+           "sys.gammaos.nano.show_overlay");
+@@ -360,19 +368,47 @@ void NanoMenu::pspClockFreezeApp(bool freeze) {
      // render thread never stalls on am. Only meaningful when a real foreground app is under the summon.
      if (mOverlayPausedPkg.empty()) return;
      ALOGI("pspclock: %s %s via NanoPauseActivity", freeze ? "pause" : "resume", mOverlayPausedPkg.c_str());
@@ -4766,7 +4777,7 @@ index afbd4bb49c5..b93917cea11 100644
      if (mFlingerSurfaceControl == nullptr) {
          ALOGW("overlay: show requested but no SF surface control; clearing request");
          property_set("sys.gammaos.nano.show_overlay", "0");
-@@ -389,8 +421,8 @@ void NanoMenu::overlayShow() {
+@@ -389,8 +425,8 @@ void NanoMenu::overlayShow() {
      // Clear any stale SELECT-held on the app->menu raise. Emulators (RetroArch/DraStic) EVIOCGRAB
      // the pad and the RetroArch back-override synthesizes a BTN_SELECT (via sendevent) while the
      // user holds BACK to exit; that write sets the kernel key bitmap, and when the app eats the
@@ -4777,7 +4788,7 @@ index afbd4bb49c5..b93917cea11 100644
      // real BTN_SELECT event, so forcing it false here means SELECT+volume=brightness can only fire
      // after a genuine fresh Select press again - the stuck synthesized SELECT no longer hijacks it.
      mSelectHeld = false;
-@@ -473,6 +505,7 @@ void NanoMenu::overlayShow() {
+@@ -473,6 +509,7 @@ void NanoMenu::overlayShow() {
          mPspClockStandalone = true;
          mPspClockRaisedOverlay = true;
          if (!mPspClockOn) mPspIconSeed += 17;  // fresh per-summon entrance avalanche
@@ -4785,7 +4796,7 @@ index afbd4bb49c5..b93917cea11 100644
          mPspClockOn = true;
          mPspGlyphBurst = 1.0f;
      }
-@@ -496,7 +529,23 @@ void NanoMenu::overlayShow() {
+@@ -496,7 +533,23 @@ void NanoMenu::overlayShow() {
      // Re-reading here makes the list always reflect the most recently launched game.
      loadXmbRecent();
      loadCollections();
@@ -4810,7 +4821,7 @@ index afbd4bb49c5..b93917cea11 100644
      // Games hidden or shown again from the home since the last raise: filter the lists now, and
      // rescan when one came back (the lists no longer hold it).
      {
-@@ -567,6 +616,7 @@ void NanoMenu::overlayShow() {
+@@ -567,6 +620,7 @@ void NanoMenu::overlayShow() {
          mPs3AnimItem = 0.0f; mPs3ItemAnimStart = -1.0f; mPs3SubAnimStart = -1.0f;
          mPs3CatAnimActive = false; mPs3CatT = 1.0f; mPs3CatFromOffset = 0.0f;
      }
@@ -4818,7 +4829,7 @@ index afbd4bb49c5..b93917cea11 100644
  
      // DSi theme, app-EXIT return only (wallpaper/launcher raise, app_launched=0): replay the
      // card-drop entrance cascade like a fresh home (user request), and reflect the Recently
-@@ -620,6 +670,8 @@ void NanoMenu::overlayShow() {
+@@ -620,6 +674,8 @@ void NanoMenu::overlayShow() {
  void NanoMenu::overlayGpuPark() {
      if (mOverlayGpuParked) return;
      mOverlayGpuParked = true;
@@ -4827,7 +4838,7 @@ index afbd4bb49c5..b93917cea11 100644
      // The open submenu levels (mPs3Stack) are NOT rebuilt on the raise: their items keep the
      // icon and normal-map handles they were built with, by value. Freeing those left every icon
      // of the open level black after returning from an app, and once GL handed the freed ids to
-@@ -674,6 +726,7 @@ void NanoMenu::overlayGpuPark() {
+@@ -674,6 +730,7 @@ void NanoMenu::overlayGpuPark() {
      }
      for (auto& kv : mEsdeTexCache) if (kv.second) glDeleteTextures(1, &kv.second);
      mEsdeTexCache.clear();
@@ -4835,7 +4846,7 @@ index afbd4bb49c5..b93917cea11 100644
      for (auto& kv : mEsdeSvgCache) if (kv.second.tex) glDeleteTextures(1, &kv.second.tex);
      mEsdeSvgCache.clear();
      for (auto& kv : mEsdeAnimCache) for (GLuint t : kv.second.frames) if (t) glDeleteTextures(1, &t);
-@@ -784,6 +837,33 @@ void NanoMenu::overlayPageOutSelf() {
+@@ -784,6 +841,33 @@ void NanoMenu::overlayPageOutSelf() {
  
  void NanoMenu::overlayHide() {
      if (!mOverlayShown) return;
@@ -4869,7 +4880,7 @@ index afbd4bb49c5..b93917cea11 100644
  
      // Drop any input up to NOW before restoring the app's input - notably the BACK
      // press that dismissed the overlay. The overlay reads BACK via evdev and clears
-@@ -1427,7 +1507,9 @@ bool NanoMenu::overlayLaunchUrl(const std::string& pkg, const std::string& comp,
+@@ -1427,7 +1511,9 @@ bool NanoMenu::overlayLaunchUrl(const std::string& pkg, const std::string& comp,
  //   app  writes the current field text to <filesDir>/nano_osk_in.txt
  //   app  setprop sys.gammaos.nano.osk_dir  <filesDir>
  //   app  setprop sys.gammaos.nano.osk_type text|password
@@ -4879,14 +4890,21 @@ index afbd4bb49c5..b93917cea11 100644
  //   we   raise the overlay (drop_input=1) in OSK-only mode, prefilled
  //   commit -> write <filesDir>/nano_osk_out.txt, setprop osk_done ok:<id>, dismiss
  //   cancel -> setprop osk_done cancel:<id>, dismiss
-@@ -1455,8 +1537,22 @@ void NanoMenu::oskPublishLive() {
+@@ -1455,8 +1541,29 @@ void NanoMenu::oskPublishLive() {
      property_set("sys.gammaos.nano.osk_gen", v);
  }
  
 +void NanoMenu::selectNanoIme() {
 +    if (!property_get_bool("persist.gammaos.nano.ime", true)) return;
 +    std::thread([] {
-+        system("ime enable " NANO_IME " >/dev/null 2>&1; ime set " NANO_IME " >/dev/null 2>&1");
++        std::string out;
++        if (FILE* f = popen("ime enable " NANO_IME " 2>&1; ime set " NANO_IME " 2>&1", "r")) {
++            char buf[256];
++            while (fgets(buf, sizeof(buf), f) && out.size() < 1024) out += buf;
++            pclose(f);
++        }
++        for (char& c : out) if (c == '\n') c = ' ';
++        ALOGI("nano keyboard: %s", out.c_str());
 +    }).detach();
 +}
 +
@@ -4902,7 +4920,7 @@ index afbd4bb49c5..b93917cea11 100644
          // A commit clears mOskOverApp inside its callback below; reaching here with
          // it still set once the OSK has fully closed means the user backed out.
          if (!mOskActive && !mOsk.closing) {
-@@ -1476,14 +1572,37 @@ void NanoMenu::overlayOskPoll() {
+@@ -1476,14 +1583,37 @@ void NanoMenu::overlayOskPoll() {
          return;   // one OSK session at a time
      }
      if (mOverlayLaunchPending) return;   // never pop the OSK mid app-launch
@@ -4941,7 +4959,7 @@ index afbd4bb49c5..b93917cea11 100644
      if (!dir[0]) return;
      mOskAppDir = dir;
      mOskAppReqId = req;
-@@ -1507,7 +1626,7 @@ void NanoMenu::overlayOskPoll() {
+@@ -1507,7 +1637,7 @@ void NanoMenu::overlayOskPoll() {
      }
      std::string id = mOskAppReqId;
      std::string outDir = mOskAppDir;
@@ -4950,7 +4968,7 @@ index afbd4bb49c5..b93917cea11 100644
          std::string p = outDir + "/nano_osk_out.txt";
          FILE* f = fopen(p.c_str(), "wb");
          if (f) { fwrite(val.data(), 1, val.size(), f); fclose(f); chmod(p.c_str(), 0644); }
-@@ -1610,6 +1729,21 @@ void NanoMenu::overlayPoll() {
+@@ -1610,6 +1740,21 @@ void NanoMenu::overlayPoll() {
      bool want = (v[0] == '1' && v[1] == '\0');
      if (want && !mOverlayShown) {
          overlayShow();   // snaps to the Quick Menu by default in scrim-over-app mode
@@ -4972,7 +4990,7 @@ index afbd4bb49c5..b93917cea11 100644
      } else if (!want && mOverlayShown) {
          // Do NOT lower the overlay while a standalone clock summon is still retracting:
          // let drawPspClock's teardown clear show_overlay once the clock reaches reveal 0,
-@@ -1653,6 +1787,13 @@ void NanoMenu::overlayLaunchGame() {
+@@ -1653,6 +1798,13 @@ void NanoMenu::overlayLaunchGame() {
              romName = sys.displayNames[mXmbGameIndex];
      }
      if (romPath.empty()) return;
@@ -4986,7 +5004,7 @@ index afbd4bb49c5..b93917cea11 100644
      // Same check as the home launcher: a game whose file is gone (deleted, or its card is not
      // mounted) must say so instead of replacing the running app with an emulator that then dies.
      if (!romLaunchExists(romPath)) {
-@@ -1752,6 +1893,7 @@ void NanoMenu::overlayLaunchGame() {
+@@ -1752,6 +1904,7 @@ void NanoMenu::overlayLaunchGame() {
          // DSi theme: the process exits below, so persist the carousel nav path for the fresh
          // home after the session (the same save the DRM home makes before its hand-off).
          if (mNdsTheme && mPs3Xmb) ndsSaveReturnPath();
@@ -4994,7 +5012,7 @@ index afbd4bb49c5..b93917cea11 100644
          // The app the overlay is sitting over (a RetroArch game, say) must be gone
          // before drastic-nano takes DRM master: left running it keeps rendering and
          // holding the GPU and CPU under the DS session, and SurfaceFlinger keeps
-@@ -1833,7 +1975,7 @@ void NanoMenu::overlayLaunchGame() {
+@@ -1833,7 +1986,7 @@ void NanoMenu::overlayLaunchGame() {
                " -a android.intent.action.MAIN -c android.intent.category.LAUNCHER"
                " --activity-clear-task --activity-clear-top"
                " --es ROM " + overlayShq(rom) +
