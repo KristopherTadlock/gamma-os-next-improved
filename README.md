@@ -193,6 +193,13 @@ It also changes Nano:
   Android Games**. The Boxart Scraper knows the system (ScreenScraper
   searches by the game's name). A game shows its icon until it has a cover,
   and a scraped or chosen cover replaces the icon in ES-DE themes too.
+- **Nano Keyboard** is the system keyboard in Nano mode. When an app such as
+  Brave wants text, it hands the field to Nano, which shows its own on-screen
+  keyboard over the app (the one its search uses, driven by the controller),
+  starting from the field's text. Start puts the text into the field and
+  presses the field's Go, Search or Next; B leaves the field as it was. It lives in the ShaderControl system app;
+  Nano selects it at every Nano boot (`persist.gammaos.nano.ime=0` keeps
+  Android's keyboard), and Boot Android switches back to another keyboard.
 - **Boxart Scraper** is faster. Covers and fan art for every game come first
   and show as each one lands; screenshots, manuals and videos follow, lighter
   media first. Requests reuse their connections. A ScreenScraper account that
