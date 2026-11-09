@@ -13594,6 +13594,29 @@ index 2d1141f2ad2..15fc4cbbe5f 100644
                      // Check if nano menu requested a specific game launch
                      String launchRom = getNanoLaunchRom();
                      String launchCore = android.os.SystemProperties.get(
+diff --git a/frameworks/base/services/java/com/android/server/SystemServer.java b/frameworks/base/services/java/com/android/server/SystemServer.java
+index a58ef30a45b..bbf9ad2a02a 100644
+--- a/frameworks/base/services/java/com/android/server/SystemServer.java
++++ b/frameworks/base/services/java/com/android/server/SystemServer.java
+@@ -2898,6 +2898,18 @@ public final class SystemServer implements Dumpable {
+                 } catch (Throwable e) {
+                     Slog.e(TAG, "GammaOS Nano: MediaRouterService failed", e);
+                 }
++                // RestrictionsManagerService: Chromium browsers (Brave, Chrome) read managed
++                // policies through getSystemService(RESTRICTIONS_SERVICE) at startup and crash with
++                // a NullPointerException on RestrictionsManager when it is not registered. Start it
++                // in nano boot too (full boot starts it below in the !minimalBoot block). Without
++                // DevicePolicyManager it reports no restrictions.
++                try {
++                    Slog.i(TAG, "GammaOS Nano: starting RestrictionsManagerService");
++                    mSystemServiceManager.startService(RestrictionsManagerService.class);
++                    Slog.i(TAG, "GammaOS Nano: RestrictionsManagerService ready");
++                } catch (Throwable e) {
++                    Slog.e(TAG, "GammaOS Nano: RestrictionsManagerService failed", e);
++                }
+                 try {
+                     if (context.getPackageManager().hasSystemFeature(
+                             PackageManager.FEATURE_BLUETOOTH)) {
 diff --git a/frameworks/native/libs/renderengine/Android.bp b/frameworks/native/libs/renderengine/Android.bp
 index d8cac0c21e4..6307bfe7f06 100644
 --- a/frameworks/native/libs/renderengine/Android.bp
