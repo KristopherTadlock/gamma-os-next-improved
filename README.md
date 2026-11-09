@@ -251,9 +251,9 @@ It also changes Nano:
   (comma-separated). RetroArch is always left alone: it has the same shader
   as a Vulkan slang preset, `rg_cube_4_3_cropped.slangp`, in its shader list
   (Shaders > Load, after the folders). Set RetroArch's Aspect Ratio to Full with it,
-  so the shader has the whole screen to draw on. It sees the core's own
-  frame, so it changes only a frame within 5% of 4:3; any other frame is
-  fitted at its own shape.
+  so the shader has the whole screen to draw on. It projects every frame the
+  core sends, whatever its size, since cores send frames meant for a 4:3
+  screen, often with pixels that aren't square.
 - **8:7 Cropped** is 4:3 Cropped stretched vertically, for games drawn with
   8:7 pixels such as the SNES's: the 4:3 game area (or a raw 8:7 frame, such
   as a core's 256 × 224) fills 800 × 720 on the panel, with the same 40 pixels
@@ -262,7 +262,7 @@ It also changes Nano:
   `persist.gammaos.shader.4x3.window.<package>` and
   `persist.gammaos.shader.4x3.exclude` are shared with 4:3 Cropped.
   RetroArch's copy is `rg_cube_8_7_cropped.slangp`, also used with Aspect
-  Ratio set to Full.
+  Ratio set to Full; it stretches every frame to 800 × 720.
 - **Start + Select:** in Nano's menus Start and Select act when released, and
   both pressed together open or close the Quick Menu. In a game, Start +
   Select works like the Anbernic button for hotkeys (Start + Select + R1

@@ -4,10 +4,9 @@
    RG Cube 8:7 Cropped, RetroArch's copy of GammaOS Next Improved's 8:7 Cropped shader.
    License: Public domain
 
-   A picture within 5% of 4:3 or 8:7 is stretched to an 800 x 720 projection on the 720 x 720
-   panel, or 1200 x 1080 when the output is 1080 tall, one output pixel per projected pixel,
-   centred and cropped to the output, with black around it. Every other picture is drawn
-   unmodified: fitted at its own aspect.
+   The core's frame is stretched to an 800 x 720 projection on the 720 x 720 panel, or
+   1200 x 1080 when the output is 1080 tall, one output pixel per projected pixel, centred and
+   cropped to the output, with black around it. Every frame is projected, whatever its size.
 
    Set Aspect Ratio to Full so the viewport is the whole screen.
 
@@ -48,14 +47,7 @@ void main()
    vec2 src = params.SourceSize.xy;
    vec2 outSize = params.OutputSize.xy;
    bool hd = outSize.y >= 1079.5;
-   float ratio = src.x / src.y;
-   bool is87 = abs(ratio / (4.0 / 3.0) - 1.0) <= 0.05 || abs(ratio / (8.0 / 7.0) - 1.0) <= 0.05;
-
-   vec2 proj;
-   if (is87)
-      proj = hd ? vec2(1200.0, 1080.0) : vec2(800.0, 720.0);
-   else
-      proj = src * min(outSize.x / src.x, outSize.y / src.y);
+   vec2 proj = hd ? vec2(1200.0, 1080.0) : vec2(800.0, 720.0);
 
    vec2 t = (vTexCoord * outSize - (outSize - proj) * 0.5) * src / proj;
    if (any(lessThan(t, vec2(0.0))) || any(greaterThan(t, src)))
