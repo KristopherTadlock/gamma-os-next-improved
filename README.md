@@ -194,6 +194,10 @@ It also changes Nano:
     Favorites, Collections, Information and Search Games. The XMB's game option
     menu gets Emulator for This Game too.
 - **Game lists** put favourites first, each part in name order.
+- **Scan Folders:** adding a folder to a system asks **This Folder Only** or
+  **Include Subfolders**; a folder added with its subfolders is scanned
+  through them even with Scan ROM Subfolders off, and is marked Subfolders
+  in the list.
 - **Game information** pages turn a full page at a time with the shoulder
   buttons, the last line of a page repeated at the top of the next.
 - **Background Colour** (Theme Settings) gets a Custom option with a colour
