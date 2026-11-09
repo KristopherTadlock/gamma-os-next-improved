@@ -443,7 +443,9 @@ The patched driver:
 Android mirrors the console's windows onto a connected monitor, but Nano's
 own screen is a SurfaceFlinger layer, not a window, so the mirror left it out.
 Nano puts a mirror of its layer on the monitor, scaled to fit and centred,
-so its menus show over the game.
+so its menus show over the game. The mirror does not follow its source's
+visibility, so Nano shows and hides it with its own layer; before, the menu
+last drawn stayed over the game on the monitor.
 
 A connected monitor is the main screen by default: External as Primary is
 on and Force Mirror off (`persist.gammaos.ext.primary=1`,
