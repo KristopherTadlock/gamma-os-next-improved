@@ -235,8 +235,8 @@ It also changes Nano:
   from each side and the remaining 720 × 600 is shown with 60 pixels of black
   above and below. On a 1080p display it fills 1600 × 1200: 60 pixels are cut
   from the top and bottom, with black at the sides. Scaling is sharp
-  bilinear. A 4:3 picture that is already exactly 720 wide on the panel or
-  1080 tall at 1080p is shown unmodified. Only the game is filtered, with no extra frame copy; menus,
+  bilinear, and every 4:3 picture is scaled, whatever its size. Only the game
+  is filtered, with no extra frame copy; menus,
   overlays and touch controls drawn as their own layers, and the emulator's
   own launcher, settings and pause screens, stay as they are. The filter
   follows the emulator's game view (an Android SurfaceView); an emulator that
@@ -247,14 +247,13 @@ It also changes Nano:
   as a Vulkan slang preset, `rg_cube_4_3_cropped.slangp`, in its shader list
   (Shaders > Load, after the folders). Set RetroArch's Aspect Ratio to Full with it,
   so the shader has the whole screen to draw on. It sees the core's own
-  frame, so it changes only a frame within 5% of 4:3; any other frame, and a
-  4:3 frame exactly 720 wide on the panel or 1080 tall at 1080p, is fitted at
-  its own shape.
+  frame, so it changes only a frame within 5% of 4:3; any other frame is
+  fitted at its own shape.
 - **8:7 Cropped** is the same shader for 8:7 games (the SNES's 256 × 224, for
   example): the game area is the picture when that is within 5% of 8:7, or
   else its centred 8:7 area, and it fills 800 × 720 on the panel (40 pixels
-  cut from each side, no black bars) or 1200 × 1080 at 1080p. The pass-through
-  rules, `persist.gammaos.shader.4x3.window.<package>` and
+  cut from each side, no black bars) or 1200 × 1080 at 1080p.
+  `persist.gammaos.shader.4x3.window.<package>` and
   `persist.gammaos.shader.4x3.exclude` are shared with 4:3 Cropped.
   RetroArch's copy is `rg_cube_8_7_cropped.slangp`, also used with Aspect
   Ratio set to Full.

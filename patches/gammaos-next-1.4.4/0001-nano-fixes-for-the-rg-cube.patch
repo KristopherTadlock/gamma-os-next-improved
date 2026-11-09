@@ -14669,10 +14669,10 @@ index d8cac0c21e4..6307bfe7f06 100644
  
 diff --git a/frameworks/native/libs/renderengine/include/renderengine/GammaSurfaceFilter.h b/frameworks/native/libs/renderengine/include/renderengine/GammaSurfaceFilter.h
 new file mode 100644
-index 00000000000..e754aca9fa2
+index 00000000000..1346e4e9907
 --- /dev/null
 +++ b/frameworks/native/libs/renderengine/include/renderengine/GammaSurfaceFilter.h
-@@ -0,0 +1,125 @@
+@@ -0,0 +1,123 @@
 +/*
 + * Copyright 2026 The GammaOS Next Improved Project
 + *
@@ -14764,10 +14764,9 @@ index 00000000000..e754aca9fa2
 +};
 +
 +// The projection for a picture of this size (in its own pixels) on a display of this size, or none
-+// when the picture is drawn unmodified. A picture within 5% of the crop's shape is the game area,
-+// and is drawn unmodified when it is exactly 720 wide on the panel or 1080 tall at 1080p. Any other
-+// picture is the emulator's letterboxed view, and its largest centred rectangle of that shape is
-+// the game area.
++// for an empty picture or display. A picture within 5% of the crop's shape is the game area. Any
++// other picture is the emulator's letterboxed view, and its largest centred rectangle of that shape
++// is the game area.
 +inline std::optional<GammaProjection> gammaCropProjection(GammaCrop crop, float pictureW,
 +                                                          float pictureH, float displayW,
 +                                                          float displayH) {
@@ -14785,9 +14784,8 @@ index 00000000000..e754aca9fa2
 +        p.width = hd ? 1600.f : 800.f;
 +        p.height = hd ? 1200.f : 600.f;
 +    }
-+    if (std::abs(pictureW / pictureH / aspect - 1.f) <= 0.05f) {
-+        if (hd ? std::lround(pictureH) == 1080 : std::lround(pictureW) == 720) return std::nullopt;
-+    } else if (pictureW > pictureH * aspect) {
++    if (std::abs(pictureW / pictureH / aspect - 1.f) <= 0.05f) return p;
++    if (pictureW > pictureH * aspect) {
 +        p.gameW = pictureH * aspect;
 +        p.gameX = (pictureW - p.gameW) / 2.f;
 +    } else {
@@ -15133,7 +15131,7 @@ index 00000000000..e070e26b703
 +} // namespace renderengine
 +} // namespace android
 diff --git a/frameworks/native/libs/renderengine/skia/filters/README.md b/frameworks/native/libs/renderengine/skia/filters/README.md
-index 6707406864c..192948372d2 100644
+index 6707406864c..98444624376 100644
 --- a/frameworks/native/libs/renderengine/skia/filters/README.md
 +++ b/frameworks/native/libs/renderengine/skia/filters/README.md
 @@ -128,7 +128,7 @@ build dynamic UI sliders.
@@ -15145,7 +15143,7 @@ index 6707406864c..192948372d2 100644
  | `persist.gammaos.shader.custom.preset` | string | Path to .slangp file |
  | `persist.gammaos.shader.custom.res_scale` | string | Downscale factor: `1/2`, `1/3`, `1/4`, or decimal |
  | `persist.gammaos.shader.debug` | bool | Dump SkSL to `.shader_debug_sksl` |
-@@ -136,6 +136,38 @@ build dynamic UI sliders.
+@@ -136,6 +136,36 @@ build dynamic UI sliders.
  | `persist.gammaos.shader.lcd3x.*` | float | LCD3x parameters |
  | `persist.gammaos.shader.lcd-shader.*` | float | LCD-shader parameters |
  | `persist.gammaos.shader.blur-fill.*` | float | Blur-fill parameters |
@@ -15156,10 +15154,9 @@ index 6707406864c..192948372d2 100644
 +
 +Unlike the other types, this is not a post-process. SurfaceFlinger picks the game layer of the
 +emulator Nano launched (`sys.gammaos.nano.launch_app`) on each display and finds its game area
-+(`gamma4x3Projection`). A picture (the layer's buffer, in its own pixels) within 5% of 4:3 is the
-+game area, and is left unmarked when it is exactly 720 wide on the 720 × 720 panel or 1080 tall on a
-+1080p display. Any other picture is an emulator view with the game letterboxed in it, and its
-+largest centred 4:3 rectangle is the game area. A marked layer is client composited. RetroArch is
++(`gammaCropProjection`). A picture (the layer's buffer, in its own pixels) within 5% of 4:3 is the
++game area, whatever its size. Any other picture is an emulator view with the game letterboxed in
++it, and its largest centred 4:3 rectangle is the game area. A marked layer is client composited. RetroArch is
 +skipped: it has its own `rg_cube_4_3_cropped` slang shader.
 +
 +RenderEngine draws a marked layer through `GammaSurfaceScaler`: the game area fills an 800 × 600
@@ -15178,9 +15175,8 @@ index 6707406864c..192948372d2 100644
 +
 +The same surface filter as 4:3 Cropped with an 8:7 game area (`GammaCrop::k8x7`): a picture within 5%
 +of 8:7, or the centred 8:7 rectangle of any other picture, fills an 800 × 720 projection on the
-+panel (40 projected pixels cut from each side) or 1200 × 1080 on a 1080p display. The pass-through
-+rules, the game layer choice and the exclusions are the same; RetroArch's copy is
-+`rg_cube_8_7_cropped`.
++panel (40 projected pixels cut from each side) or 1200 × 1080 on a 1080p display. The game layer
++choice and the exclusions are the same; RetroArch's copy is `rg_cube_8_7_cropped`.
  
  ## SELinux Policy
  
