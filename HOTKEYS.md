@@ -216,7 +216,7 @@ Bindings come from each emulator's source code at the shipped version.
 | ScummVM | — | — | Ctrl+F (SCUMM games) | — | Ctrl+Q, then `exit` | Built-in ScummVM keys |
 | drastic-nano | slot 0 | slot 0 | toggle | — | saves, then exits | Built in |
 | DraStic (app) | — | — | — | — | `exit` (Esc) | Its keymap is shared with drastic-nano, so it is left alone |
-| Dolphin 2609a | — | — | — | — | `exit` | This build has no Android hotkeys; they arrived in later dev builds |
+| Dolphin 2609-197 | — | — | — | — | `exit` | This build has Android hotkeys (`Hotkeys.kt`), but Nano doesn't bind them yet |
 | M64Plus FZ | — | — | — | — | `exit` | Hotkeys live in private controller profiles and need long holds |
 | hakuX | — | — | — | — | `exit` | Save states only from its in-game menu; no fast forward |
 | Vita3K | — | — | — | — | `exit` | No save states or fast forward |

@@ -89,7 +89,7 @@ linked below.
 
 | App | Systems | Version | License | Source |
 |---|---|---|---|---|
-| Dolphin | GameCube, Wii | 2609a | GPL-2.0+ | https://github.com/dolphin-emu/dolphin/tree/409881c34357d0f105fd473167d15ab0bd9c1628 |
+| Dolphin | GameCube, Wii | 2609-197 (development build) | GPL-2.0+ | https://github.com/dolphin-emu/dolphin/tree/41799046d68b2e5ea7cfde91f122320a472b7a61 |
 | ARMSX2 | PlayStation 2 | 2.9.2 | GPL-3.0 | https://github.com/ARMSX2/ARMSX2/tree/2.9.2 |
 | Azahar | Nintendo 3DS | 2126.2 | GPL-3.0 | https://github.com/azahar-emu/azahar/tree/2126.2 |
 | WatermelonDS | Nintendo DS | 0.8.0.rc3 | GPL-3.0 | https://github.com/SapphireRhodonite/WatermelonDS/tree/0.8.0.rc3 |

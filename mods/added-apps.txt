@@ -7,8 +7,8 @@
 #   file  <file>  dest=<folder on /sdcard>   url=<download>  sha256=<of the file>  source=<source code>
 #       Copied to that folder.
 
-# Dolphin 2609a (GameCube / Wii). GPL-2.0-or-later.
-apk  dolphin-2609a.apk  name=Dolphin GameCube and Wii emulator  package=org.dolphinemu.dolphinemu  url=https://dl.dolphin-emu.org/releases/2609a/dolphin-2609a.apk  sha256=7f753124d289585a4e6fa649d4852c78e674bd45d5d1f6f6b891fe65460c1793  source=https://github.com/dolphin-emu/dolphin/tree/409881c34357d0f105fd473167d15ab0bd9c1628
+# Dolphin 2609-197 (GameCube / Wii), a development build. GPL-2.0-or-later.
+apk  dolphin-master-2609-197.apk  name=Dolphin GameCube and Wii emulator  package=org.dolphinemu.dolphinemu  url=https://dl.dolphin-emu.org/builds/03/02/dolphin-master-2609-197.apk  sha256=b3e109bd864cda3bde39ef03a620b044ca2b3a49da25e238c3bf4267482b4937  source=https://github.com/dolphin-emu/dolphin/tree/41799046d68b2e5ea7cfde91f122320a472b7a61
 
 # ARMSX2 2.9.2 (PlayStation 2), Android 13+ ARMv8.2 build. GPL-3.0.
 apk  ARMSX2-2.9.2.apk  name=ARMSX2 PS2 emulator  package=com.armsx2  url=https://github.com/ARMSX2/ARMSX2/releases/download/2.9.2/ARMSX2-2.9.2-a13-armv8.2-sdk33.apk  sha256=f0234a6cf40adcaed231cd46f5d27110ece1a42c45a07bd3710df9207e1e9eab  source=https://github.com/ARMSX2/ARMSX2/tree/2.9.2
