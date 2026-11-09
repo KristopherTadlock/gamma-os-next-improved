@@ -1837,10 +1837,10 @@ index 62e77314ccd..1fa9573cbcf 100644
      property_set("sys.gammaos.nano.menu_active", "1");
      property_set("sys.gammaos.nano.drop_input", "0");
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuDrm.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuDrm.cpp
-index cecc918f549..d67f6f05048 100644
+index cecc918f549..4a2928a6e78 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuDrm.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuDrm.cpp
-@@ -600,6 +600,148 @@ static int drmAtomicModesetFallback(int fd, uint32_t crtcId, uint32_t connId,
+@@ -600,6 +600,171 @@ static int drmAtomicModesetFallback(int fd, uint32_t crtcId, uint32_t connId,
      return ioctl(fd, DRM_IOCTL_MODE_ATOMIC, &atomic);
  }
  
@@ -1895,11 +1895,12 @@ index cecc918f549..d67f6f05048 100644
 +}
 +
 +// Built-in panel connectors that could light this unlit CRTC, best first: not DisplayPort or HDMI,
-+// and not driven by another CRTC. Those whose encoder lists the CRTC come first, the caller's
-+// leading; then any whose encoders list no CRTC at all, as a last try. The caller's connector may
-+// also be taken from a CRTC Nano has not added (lit by the bootloader), as when it was used alone,
-+// so panels keep their order, but only while a free panel can still light that CRTC. Whether one is
-+// connected is left to the probe that reads its modes.
++// with an encoder that lists the CRTC, not driven by another CRTC, and not the panel the callers
++// pair (by index) with another CRTC that it can drive, which waits for that CRTC instead. The
++// caller's connector leads, and may also be taken from a CRTC Nano has not added (lit by the
++// bootloader), as when it was used alone, so panels keep their order, but only while a free panel
++// can still light that CRTC. Others already known to be disconnected are skipped; whether a
++// candidate is connected is left to the probe that reads its modes.
 +static std::vector<uint32_t> drmPanelConnectorsFor(int fd, uint32_t crtcId, uint32_t preferred) {
 +    std::vector<uint32_t> out;
 +    std::vector<uint32_t> conns, crtcs;
@@ -1911,12 +1912,12 @@ index cecc918f549..d67f6f05048 100644
 +    const uint32_t crtcBit = bitOf(crtcId);
 +    if (!crtcBit) return out;
 +
-+    struct Panel { uint32_t id, mask, drivenBy; };
++    struct Panel { uint32_t id, mask, drivenBy, connection; };
 +    std::vector<Panel> panels;
 +    for (uint32_t connId : conns) {
 +        uint32_t current = 0;
 +        if (drmConnectorExternal(fd, connId, &current)) continue;
-+        Panel p = {connId, 0, 0};
++        Panel p = {connId, 0, 0, 0};
 +        if (current != 0) {
 +            struct drm_mode_get_encoder enc = {};
 +            enc.encoder_id = current;
@@ -1929,6 +1930,7 @@ index cecc918f549..d67f6f05048 100644
 +        conn.count_modes = 1;   // no probe, as in drmConnectorExternal
 +        conn.modes_ptr = (uint64_t)(uintptr_t)&mode;
 +        if (ioctl(fd, DRM_IOCTL_MODE_GETCONNECTOR, &conn) != 0 || conn.count_encoders == 0) continue;
++        p.connection = conn.connection;
 +        std::vector<uint32_t> encoders(conn.count_encoders);
 +        struct drm_mode_get_connector conn2 = {};
 +        conn2.connector_id = connId;
@@ -1945,26 +1947,39 @@ index cecc918f549..d67f6f05048 100644
 +        }
 +        panels.push_back(p);
 +    }
-+    auto fits = [](const Panel& p, uint32_t bit) { return (p.mask & bit) || p.mask == 0; };
-+
-+    // The caller's connector, lit on a CRTC Nano has not added, when another free panel fits that CRTC.
-+    for (const Panel& p : panels) {
-+        if (p.id != preferred || !p.drivenBy || !fits(p, crtcBit)) continue;
-+        const bool ours = std::any_of(sDrmDisplays.begin(), sDrmDisplays.end(),
-+                                      [&](const DrmDisplay& d) { return d.crtcId == p.drivenBy; });
-+        const uint32_t theirBit = bitOf(p.drivenBy);
-+        const bool replaceable = std::any_of(panels.begin(), panels.end(), [&](const Panel& q) {
-+            return q.id != p.id && !q.drivenBy && theirBit && fits(q, theirBit);
-+        });
-+        if (!ours && replaceable) out.push_back(p.id);
-+    }
-+    for (int pass = 0; pass < 2; pass++) {   // listing this CRTC, then listing none
-+        const size_t first = out.size();
-+        for (const Panel& p : panels) {
-+            if (p.drivenBy || !(pass == 0 ? (p.mask & crtcBit) : p.mask == 0)) continue;
-+            out.push_back(p.id);
-+            if (p.id == preferred) std::rotate(out.begin() + first, out.end() - 1, out.end());
++    auto panelOf = [&](uint32_t id) {
++        return std::find_if(panels.begin(), panels.end(), [&](const Panel& p) { return p.id == id; });
++    };
++    // The callers pair connectors[c] with crtcs[c] for the first two CRTCs.
++    auto reserved = [&](uint32_t id) {
++        for (size_t c = 0; c < 2 && c < crtcs.size() && c < conns.size(); c++) {
++            if (crtcs[c] == crtcId || conns[c] != id) continue;
++            const auto p = panelOf(id);
++            if (p != panels.end() && (p->mask & (1u << c))) return true;
 +        }
++        return false;
++    };
++
++    const auto pref = panelOf(preferred);
++    if (pref != panels.end() && (pref->mask & crtcBit)) {
++        if (!pref->drivenBy) {
++            out.push_back(pref->id);
++        } else {
++            // Lit on a CRTC Nano has not added: taken only if another free panel fits that CRTC.
++            const bool ours = std::any_of(sDrmDisplays.begin(), sDrmDisplays.end(),
++                                          [&](const DrmDisplay& d) { return d.crtcId == pref->drivenBy; });
++            const uint32_t theirBit = bitOf(pref->drivenBy);
++            const bool replaceable = std::any_of(panels.begin(), panels.end(), [&](const Panel& q) {
++                return q.id != pref->id && !q.drivenBy && (q.mask & theirBit);
++            });
++            if (!ours && replaceable) out.push_back(pref->id);
++        }
++    }
++    for (const Panel& p : panels) {
++        if (p.id == preferred || p.drivenBy || !(p.mask & crtcBit) || reserved(p.id) ||
++            p.connection == 2 /* disconnected */)
++            continue;
++        out.push_back(p.id);
 +    }
 +    return out;
 +}
@@ -1986,10 +2001,18 @@ index cecc918f549..d67f6f05048 100644
 +    return true;
 +}
 +
++static void drmFreeDumbBuffer(int fd, DrmBuffer& b) {
++    ioctl(fd, DRM_IOCTL_MODE_RMFB, &b.fbId);
++    munmap(b.mapped, b.size);
++    struct drm_gem_close gc = {};
++    gc.handle = b.handle;
++    ioctl(fd, DRM_IOCTL_GEM_CLOSE, &gc);
++}
++
  // Try to bring up a single DRM CRTC with the given connector. Returns true
  // if the CRTC was added to sDrmDisplays. Non-blocking: if the mode is not
  // valid (display not ready), returns false immediately -- caller can retry
-@@ -609,26 +751,26 @@ bool drmTryAddDisplay(int fd, uint32_t crtcId, uint32_t connId, const char* stag
+@@ -609,26 +774,26 @@ bool drmTryAddDisplay(int fd, uint32_t crtcId, uint32_t connId, const char* stag
      crtc.crtc_id = crtcId;
      ioctl(fd, DRM_IOCTL_MODE_GETCRTC, &crtc);
  
@@ -2034,6 +2057,26 @@ index cecc918f549..d67f6f05048 100644
 +                  crtc.mode.hdisplay, crtc.mode.vdisplay);
 +            break;
          }
+     }
+ 
+@@ -638,7 +803,7 @@ bool drmTryAddDisplay(int fd, uint32_t crtcId, uint32_t connId, const char* stag
+     DrmBuffer buf0, buf1;
+     if (!drmCreateDumbBuffer(fd, w, h, &buf0)) return false;
+     if (!drmCreateDumbBuffer(fd, w, h, &buf1)) {
+-        munmap(buf0.mapped, buf0.size);
++        drmFreeDumbBuffer(fd, buf0);
+         return false;
+     }
+ 
+@@ -674,8 +839,8 @@ bool drmTryAddDisplay(int fd, uint32_t crtcId, uint32_t connId, const char* stag
+     }
+ 
+     if (ret != 0) {
+-        munmap(buf0.mapped, buf0.size);
+-        munmap(buf1.mapped, buf1.size);
++        drmFreeDumbBuffer(fd, buf0);
++        drmFreeDumbBuffer(fd, buf1);
+         return false;
      }
  
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuEsdeMenu.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuEsdeMenu.cpp
