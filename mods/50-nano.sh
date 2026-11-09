@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Makes the device boot into the GammaOS Nano home (1.4.4 base only), from the
 # first boot, where Nano's own setup wizard runs first-boot setup. Its home
-# theme is the ES-DE theme engine with the Colorful (Simplified) theme in its
-# square layout, its settings screens have the Minima theme's look on a
+# theme is the ES-DE theme engine with the Colorful (Simplified) theme, its
+# aspect ratio picked automatically, its settings screens have the Minima theme's look on a
 # Midnight background, its menu sounds are off, and its game systems are the
 # ones in nano-systems.txt, with this project's default emulators. The stick
 # LEDs follow the screen's colour, the performance mode is Max Performance,
@@ -102,7 +102,6 @@ cat >>"$work/build.prop" <<EOF
 persist.bootanim.skip_nano=0
 persist.gammaos.nano.ndstheme=3
 persist.gammaos.nano.esde.themeset=$THEME
-persist.gammaos.nano.esde.aspectratio=1:1
 persist.gammaos.nano.esde.colorscheme=colorful-dark
 persist.gammaos.nano.esde.settingstheme=minima
 persist.gammaos.nano.minima.bg=1a1a2e

@@ -275,7 +275,9 @@ its own launcher), and **Boot Nano** back. `mods/50-nano.sh` sets it up:
 
 - the home theme is Nano's ES-DE theme engine, with
   [Colorful (Simplified)](https://github.com/anthonycaccese/colorful-simplified-es-de)
-  in its 1:1 layout for the square screen and its Colorful (Dark) color scheme;
+  with its Colorful (Dark) color scheme and the Theme Aspect Ratio on
+  Automatic, which picks the theme's layout for the screen's shape (1:1 on
+  the Cube's square screen);
 - the settings screens (Nano Settings and the Quick Menu) have the Minima
   theme's look on a Midnight background (**Theme Settings → Settings Theme**
   sets it back to the XMB's, **Background Colour** changes the colour);
