@@ -62,8 +62,11 @@ app_dir="$SYSTEM/app/AndroidGames"
 sudo install -d -m 755 -o root -g root "$app_dir"
 sudo setfattr -n security.selinux -v u:object_r:system_file:s0 "$app_dir"
 install_system_file "$work/AndroidGames.apk" "$app_dir/AndroidGames.apk"
-# The apps setup installs are emulators and tools, not Android games.
-sudo grep -v '^#' "$ETC/gammaos/apps.list" | cut -d'|' -f2 | grep . >"$work/android-games-exclude.txt"
+# The apps setup installs are emulators and tools, not Android games, except
+# the added apps marked game=1.
+grep -E '^apk .*  game=1( |$)' "$MODS/added-apps.txt" | grep -oE 'package=[^ ]+' | cut -d= -f2 >"$work/added-games.txt"
+sudo grep -v '^#' "$ETC/gammaos/apps.list" | cut -d'|' -f2 | grep . | grep -vxFf "$work/added-games.txt" \
+  >"$work/android-games-exclude.txt"
 install_system_file "$work/android-games-exclude.txt" "$ETC/gammaos/android-games-exclude.txt"
 
 python3 -I "$MODS/../scripts/nano_systems.py" "$MODS/nano-systems.txt" "$ETC/nano_xmb/daijishou" \

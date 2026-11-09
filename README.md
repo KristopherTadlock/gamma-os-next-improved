@@ -236,10 +236,10 @@ It also changes Nano:
   TheGamesDB, the scraper makes one request at a time.
 - **4:3 Cropped** is a new global shader (Nano's Global Shaders, the video
   player's shader choice and the ShaderControl app). It works on the picture a
-  standalone emulator draws, not on the whole screen. The game area is the
-  emulator's picture when that is within 5% of 4:3, or else the centred 4:3
-  area of it (where an emulator such as Dolphin letterboxes a 4:3 game). On
-  the panel the game area fills an 800 × 600 projection: 40 pixels are cut
+  standalone emulator draws, not on the whole screen, and only when that
+  picture is within 5% of 4:3. A picture of any other shape, such as an
+  Android game drawn for the square screen, is left as it is. On
+  the panel the 4:3 picture fills an 800 × 600 projection: 40 pixels are cut
   from each side and the remaining 720 × 600 is shown with 60 pixels of black
   above and below. On a 1080p display it fills 1600 × 1200: 60 pixels are cut
   from the top and bottom, with black at the sides. Scaling is sharp
@@ -258,7 +258,7 @@ It also changes Nano:
   core sends, whatever its size, since cores send frames meant for a 4:3
   screen, often with pixels that aren't square.
 - **8:7 Cropped** is 4:3 Cropped stretched vertically, for games drawn with
-  8:7 pixels such as the SNES's: the 4:3 game area (or a raw 8:7 frame, such
+  8:7 pixels such as the SNES's: a 4:3 picture (or a raw 8:7 frame, such
   as a core's 256 × 224) fills 800 × 720 on the panel, with the same 40 pixels
   cut from each side as 4:3 Cropped and no black bars, or 1200 × 1080 at
   1080p.

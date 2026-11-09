@@ -14693,10 +14693,10 @@ index d8cac0c21e4..6307bfe7f06 100644
  
 diff --git a/frameworks/native/libs/renderengine/include/renderengine/GammaSurfaceFilter.h b/frameworks/native/libs/renderengine/include/renderengine/GammaSurfaceFilter.h
 new file mode 100644
-index 00000000000..d0b7c3e819e
+index 00000000000..d15edb397f3
 --- /dev/null
 +++ b/frameworks/native/libs/renderengine/include/renderengine/GammaSurfaceFilter.h
-@@ -0,0 +1,126 @@
+@@ -0,0 +1,119 @@
 +/*
 + * Copyright 2026 The GammaOS Next Improved Project
 + *
@@ -14756,8 +14756,8 @@ index 00000000000..d0b7c3e819e
 +    return gammaShaderMode() == GammaShaderMode::Composition;
 +}
 +
-+// 4:3 Cropped and 8:7 Cropped mark the emulator's game layer (they have no settings). The 4:3 game
-+// area is projected at one display pixel per projected pixel, centred, cropped to the display with
++// 4:3 Cropped and 8:7 Cropped mark the emulator's game layer (they have no settings). A 4:3 picture
++// is projected at one display pixel per projected pixel, centred, cropped to the display with
 +// black around it: 4:3 Cropped to 800x600 on the 720x720 panel or 1600x1200 on a 1080p display;
 +// 8:7 Cropped stretches it vertically, to 800x720 or 1200x1080. See gammaCropProjection and
 +// GammaSurfaceScaler.
@@ -14789,9 +14789,9 @@ index 00000000000..d0b7c3e819e
 +};
 +
 +// The projection for a picture of this size (in its own pixels) on a display of this size, or none
-+// for an empty picture or display. A picture within 5% of 4:3 is the game area, and for 8:7 Cropped
-+// so is one within 5% of 8:7 (a core's raw SNES frame). Any other picture is the emulator's
-+// letterboxed view, and its largest centred 4:3 rectangle is the game area.
++// when it is drawn unmodified. Only a picture within 5% of 4:3 is projected, whole, and for 8:7
++// Cropped also one within 5% of 8:7 (a core's raw SNES frame); the surface's own shape decides, so a
++// square game such as one drawn for the 720x720 panel is left alone.
 +inline std::optional<GammaProjection> gammaCropProjection(GammaCrop crop, float pictureW,
 +                                                          float pictureH, float displayW,
 +                                                          float displayH) {
@@ -14812,14 +14812,7 @@ index 00000000000..d0b7c3e819e
 +    }
 +    if (std::abs(ratio / aspect - 1.f) <= 0.05f) return p;
 +    if (k8x7 && std::abs(ratio / (8.f / 7.f) - 1.f) <= 0.05f) return p;
-+    if (pictureW > pictureH * aspect) {
-+        p.gameW = pictureH * aspect;
-+        p.gameX = (pictureW - p.gameW) / 2.f;
-+    } else {
-+        p.gameH = pictureW / aspect;
-+        p.gameY = (pictureH - p.gameH) / 2.f;
-+    }
-+    return p;
++    return std::nullopt;
 +}
 +
 +} // namespace android::renderengine
@@ -15158,7 +15151,7 @@ index 00000000000..e070e26b703
 +} // namespace renderengine
 +} // namespace android
 diff --git a/frameworks/native/libs/renderengine/skia/filters/README.md b/frameworks/native/libs/renderengine/skia/filters/README.md
-index 6707406864c..7b7a031bda8 100644
+index 6707406864c..2d0c14c745d 100644
 --- a/frameworks/native/libs/renderengine/skia/filters/README.md
 +++ b/frameworks/native/libs/renderengine/skia/filters/README.md
 @@ -128,7 +128,7 @@ build dynamic UI sliders.
@@ -15170,7 +15163,7 @@ index 6707406864c..7b7a031bda8 100644
  | `persist.gammaos.shader.custom.preset` | string | Path to .slangp file |
  | `persist.gammaos.shader.custom.res_scale` | string | Downscale factor: `1/2`, `1/3`, `1/4`, or decimal |
  | `persist.gammaos.shader.debug` | bool | Dump SkSL to `.shader_debug_sksl` |
-@@ -136,6 +136,37 @@ build dynamic UI sliders.
+@@ -136,6 +136,35 @@ build dynamic UI sliders.
  | `persist.gammaos.shader.lcd3x.*` | float | LCD3x parameters |
  | `persist.gammaos.shader.lcd-shader.*` | float | LCD-shader parameters |
  | `persist.gammaos.shader.blur-fill.*` | float | Blur-fill parameters |
@@ -15180,13 +15173,12 @@ index 6707406864c..7b7a031bda8 100644
 +## 4:3 Cropped (`4x3-cropped`)
 +
 +Unlike the other types, this is not a post-process. SurfaceFlinger picks the game layer of the
-+emulator Nano launched (`sys.gammaos.nano.launch_app`) on each display and finds its game area
-+(`gammaCropProjection`). A picture (the layer's buffer, in its own pixels) within 5% of 4:3 is the
-+game area, whatever its size. Any other picture is an emulator view with the game letterboxed in
-+it, and its largest centred 4:3 rectangle is the game area. A marked layer is client composited. RetroArch is
++emulator Nano launched (`sys.gammaos.nano.launch_app`) on each display when its picture (the
++layer's buffer, in its own pixels) is within 5% of 4:3, whatever its size (`gammaCropProjection`).
++A picture of any other shape is left unmarked. A marked layer is client composited. RetroArch is
 +skipped: it has its own `rg_cube_4_3_cropped` slang shader.
 +
-+RenderEngine draws a marked layer through `GammaSurfaceScaler`: the game area fills an 800 × 600
++RenderEngine draws a marked layer through `GammaSurfaceScaler`: the picture fills an 800 × 600
 +projection on the panel (1600 × 1200 on a 1080p display), one display pixel per projected pixel,
 +centred and cropped to the display, with black around it. On the panel that cuts 40 projected
 +pixels from each side and leaves 60 black rows above and below; at 1080p it cuts 60 rows from the
@@ -15200,9 +15192,8 @@ index 6707406864c..7b7a031bda8 100644
 +
 +## 8:7 Cropped (`8x7-cropped`)
 +
-+4:3 Cropped stretched vertically (`GammaCrop::k8x7`): the same 4:3 game area (a picture within 5% of
-+4:3, or the centred 4:3 rectangle of a letterboxed view), or a picture within 5% of 8:7 such as a
-+core's raw 256 × 224 frame, fills an 800 × 720 projection on the panel (40 projected pixels cut from
++4:3 Cropped stretched vertically (`GammaCrop::k8x7`): a picture within 5% of 4:3, or within 5% of
++8:7 such as a core's raw 256 × 224 frame, fills an 800 × 720 projection on the panel (40 projected pixels cut from
 +each side, as 4:3 Cropped) or 1200 × 1080 on a 1080p display. The game layer
 +choice and the exclusions are the same; RetroArch's copy is `rg_cube_8_7_cropped`.
  

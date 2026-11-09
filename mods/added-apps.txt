@@ -3,7 +3,7 @@
 # stays until it's also removed from daijisho-platforms.txt.
 #
 #   apk   <file>  name=<shown in setup log>  package=<its package>  url=<download>  sha256=<of the file>  source=<source code>
-#       Installed with "pm install".
+#       Installed with "pm install". Add game=1 to list it in Android Games.
 #   file  <file>  dest=<folder on /sdcard>   url=<download>  sha256=<of the file>  source=<source code>
 #       Copied to that folder.
 
@@ -33,7 +33,7 @@ apk  scummvm-2026.3.0.apk  name=ScummVM  package=org.scummvm.scummvm  url=https:
 
 # Shattered Pixel Dungeon 4.0.2, the full game (roguelike) with controller
 # support; preseeds Android Games. GPL-3.0.
-apk  ShatteredPD-v4.0.2-Android.apk  name=Shattered Pixel Dungeon  package=com.shatteredpixel.shatteredpixeldungeon  url=https://github.com/00-Evan/shattered-pixel-dungeon/releases/download/v4.0.2/ShatteredPD-v4.0.2-Android.apk  sha256=ceef4cdd4beddcb3d85379ac004cb4ab5d918b89dc7366b4ce9c4a3585a5e78e  source=https://github.com/00-Evan/shattered-pixel-dungeon/tree/v4.0.2
+apk  ShatteredPD-v4.0.2-Android.apk  name=Shattered Pixel Dungeon  package=com.shatteredpixel.shatteredpixeldungeon  game=1  url=https://github.com/00-Evan/shattered-pixel-dungeon/releases/download/v4.0.2/ShatteredPD-v4.0.2-Android.apk  sha256=ceef4cdd4beddcb3d85379ac004cb4ab5d918b89dc7366b4ce9c4a3585a5e78e  source=https://github.com/00-Evan/shattered-pixel-dungeon/tree/v4.0.2
 
 # MaliSX2 0.4.0, a Vulkan driver for Mali GPUs (tested on the Mali-G57 of the
 # T820). MIT. 45-armsx2-malisx2.sh pre-installs it in ARMSX2; Dolphin and hakuX
