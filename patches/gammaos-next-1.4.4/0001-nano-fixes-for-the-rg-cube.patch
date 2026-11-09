@@ -14675,10 +14675,10 @@ index d8cac0c21e4..6307bfe7f06 100644
  
 diff --git a/frameworks/native/libs/renderengine/include/renderengine/GammaSurfaceFilter.h b/frameworks/native/libs/renderengine/include/renderengine/GammaSurfaceFilter.h
 new file mode 100644
-index 00000000000..1346e4e9907
+index 00000000000..d0b7c3e819e
 --- /dev/null
 +++ b/frameworks/native/libs/renderengine/include/renderengine/GammaSurfaceFilter.h
-@@ -0,0 +1,123 @@
+@@ -0,0 +1,126 @@
 +/*
 + * Copyright 2026 The GammaOS Next Improved Project
 + *
@@ -14715,7 +14715,7 @@ index 00000000000..1346e4e9907
 +inline constexpr const char* kGammaShader4x3Cropped = "4x3-cropped";
 +inline constexpr const char* kGammaShader8x7Cropped = "8x7-cropped";
 +
-+// The cropped surface shaders, by the shape of the game area they look for.
++// The cropped surface shaders, by the shape they stretch the game area to.
 +enum class GammaCrop { k4x3, k8x7 };
 +
 +// The cropped surface shader that is on, if one is.
@@ -14738,10 +14738,11 @@ index 00000000000..1346e4e9907
 +    return gammaShaderMode() == GammaShaderMode::Composition;
 +}
 +
-+// 4:3 Cropped and 8:7 Cropped mark the emulator's game layer (they have no settings). The game area
-+// is projected at one display pixel per projected pixel, centred, cropped to the display with black
-+// around it: 4:3 to 800x600 on the 720x720 panel or 1600x1200 on a 1080p display, 8:7 to 800x720 or
-+// 1200x1080. See gammaCropProjection and GammaSurfaceScaler.
++// 4:3 Cropped and 8:7 Cropped mark the emulator's game layer (they have no settings). The 4:3 game
++// area is projected at one display pixel per projected pixel, centred, cropped to the display with
++// black around it: 4:3 Cropped to 800x600 on the 720x720 panel or 1600x1200 on a 1080p display;
++// 8:7 Cropped stretches it vertically, to 800x720 or 1200x1080. See gammaCropProjection and
++// GammaSurfaceScaler.
 +struct GammaSurfaceFilter {
 +    GammaCrop crop = GammaCrop::k4x3;
 +};
@@ -14770,9 +14771,9 @@ index 00000000000..1346e4e9907
 +};
 +
 +// The projection for a picture of this size (in its own pixels) on a display of this size, or none
-+// for an empty picture or display. A picture within 5% of the crop's shape is the game area. Any
-+// other picture is the emulator's letterboxed view, and its largest centred rectangle of that shape
-+// is the game area.
++// for an empty picture or display. A picture within 5% of 4:3 is the game area, and for 8:7 Cropped
++// so is one within 5% of 8:7 (a core's raw SNES frame). Any other picture is the emulator's
++// letterboxed view, and its largest centred 4:3 rectangle is the game area.
 +inline std::optional<GammaProjection> gammaCropProjection(GammaCrop crop, float pictureW,
 +                                                          float pictureH, float displayW,
 +                                                          float displayH) {
@@ -14780,7 +14781,8 @@ index 00000000000..1346e4e9907
 +        return std::nullopt;
 +    }
 +    const bool k8x7 = crop == GammaCrop::k8x7;
-+    const float aspect = k8x7 ? 8.f / 7.f : 4.f / 3.f;
++    constexpr float aspect = 4.f / 3.f;
++    const float ratio = pictureW / pictureH;
 +    const bool hd = displayH >= 1080.f;
 +    GammaProjection p{0.f, 0.f, pictureW, pictureH, 0.f, 0.f};
 +    if (k8x7) {
@@ -14790,7 +14792,8 @@ index 00000000000..1346e4e9907
 +        p.width = hd ? 1600.f : 800.f;
 +        p.height = hd ? 1200.f : 600.f;
 +    }
-+    if (std::abs(pictureW / pictureH / aspect - 1.f) <= 0.05f) return p;
++    if (std::abs(ratio / aspect - 1.f) <= 0.05f) return p;
++    if (k8x7 && std::abs(ratio / (8.f / 7.f) - 1.f) <= 0.05f) return p;
 +    if (pictureW > pictureH * aspect) {
 +        p.gameW = pictureH * aspect;
 +        p.gameX = (pictureW - p.gameW) / 2.f;
@@ -15137,7 +15140,7 @@ index 00000000000..e070e26b703
 +} // namespace renderengine
 +} // namespace android
 diff --git a/frameworks/native/libs/renderengine/skia/filters/README.md b/frameworks/native/libs/renderengine/skia/filters/README.md
-index 6707406864c..98444624376 100644
+index 6707406864c..7b7a031bda8 100644
 --- a/frameworks/native/libs/renderengine/skia/filters/README.md
 +++ b/frameworks/native/libs/renderengine/skia/filters/README.md
 @@ -128,7 +128,7 @@ build dynamic UI sliders.
@@ -15149,7 +15152,7 @@ index 6707406864c..98444624376 100644
  | `persist.gammaos.shader.custom.preset` | string | Path to .slangp file |
  | `persist.gammaos.shader.custom.res_scale` | string | Downscale factor: `1/2`, `1/3`, `1/4`, or decimal |
  | `persist.gammaos.shader.debug` | bool | Dump SkSL to `.shader_debug_sksl` |
-@@ -136,6 +136,36 @@ build dynamic UI sliders.
+@@ -136,6 +136,37 @@ build dynamic UI sliders.
  | `persist.gammaos.shader.lcd3x.*` | float | LCD3x parameters |
  | `persist.gammaos.shader.lcd-shader.*` | float | LCD-shader parameters |
  | `persist.gammaos.shader.blur-fill.*` | float | Blur-fill parameters |
@@ -15179,9 +15182,10 @@ index 6707406864c..98444624376 100644
 +
 +## 8:7 Cropped (`8x7-cropped`)
 +
-+The same surface filter as 4:3 Cropped with an 8:7 game area (`GammaCrop::k8x7`): a picture within 5%
-+of 8:7, or the centred 8:7 rectangle of any other picture, fills an 800 × 720 projection on the
-+panel (40 projected pixels cut from each side) or 1200 × 1080 on a 1080p display. The game layer
++4:3 Cropped stretched vertically (`GammaCrop::k8x7`): the same 4:3 game area (a picture within 5% of
++4:3, or the centred 4:3 rectangle of a letterboxed view), or a picture within 5% of 8:7 such as a
++core's raw 256 × 224 frame, fills an 800 × 720 projection on the panel (40 projected pixels cut from
++each side, as 4:3 Cropped) or 1200 × 1080 on a 1080p display. The game layer
 +choice and the exclusions are the same; RetroArch's copy is `rg_cube_8_7_cropped`.
  
  ## SELinux Policy

@@ -254,10 +254,11 @@ It also changes Nano:
   so the shader has the whole screen to draw on. It sees the core's own
   frame, so it changes only a frame within 5% of 4:3; any other frame is
   fitted at its own shape.
-- **8:7 Cropped** is the same shader for 8:7 games (the SNES's 256 × 224, for
-  example): the game area is the picture when that is within 5% of 8:7, or
-  else its centred 8:7 area, and it fills 800 × 720 on the panel (40 pixels
-  cut from each side, no black bars) or 1200 × 1080 at 1080p.
+- **8:7 Cropped** is 4:3 Cropped stretched vertically, for games drawn with
+  8:7 pixels such as the SNES's: the 4:3 game area (or a raw 8:7 frame, such
+  as a core's 256 × 224) fills 800 × 720 on the panel, with the same 40 pixels
+  cut from each side as 4:3 Cropped and no black bars, or 1200 × 1080 at
+  1080p.
   `persist.gammaos.shader.4x3.window.<package>` and
   `persist.gammaos.shader.4x3.exclude` are shared with 4:3 Cropped.
   RetroArch's copy is `rg_cube_8_7_cropped.slangp`, also used with Aspect
