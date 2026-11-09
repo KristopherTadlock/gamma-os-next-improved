@@ -208,21 +208,28 @@ It also changes Nano:
   TheGamesDB, the scraper makes one request at a time.
 - **4:3 Cropped** is a new global shader (Nano's Global Shaders, the video
   player's shader choice and the ShaderControl app). It works on the picture a
-  standalone emulator draws, not on the whole screen: the game is stretched to
-  800 × 600, 40 pixels are cut from each side, and the remaining 720 × 600 is
-  shown with 60 pixels of black above and below, scaled with sharp bilinear
-  filtering. Only the game is filtered, with no extra frame copy; menus,
+  standalone emulator draws, not on the whole screen. The game area is the
+  emulator's picture when that is within 5% of 4:3, or else the centred 4:3
+  area of it (where an emulator such as Dolphin letterboxes a 4:3 game). On
+  the panel the game area fills an 800 × 600 projection: 40 pixels are cut
+  from each side and the remaining 720 × 600 is shown with 60 pixels of black
+  above and below. On a 1080p display it fills 1600 × 1200: 60 pixels are cut
+  from the top and bottom, with black at the sides. Scaling is sharp
+  bilinear. A 4:3 picture that is already exactly 720 wide on the panel or
+  1080 tall at 1080p is shown unmodified. Only the game is filtered, with no extra frame copy; menus,
   overlays and touch controls drawn as their own layers, and the emulator's
   own launcher, settings and pause screens, stay as they are. The filter
   follows the emulator's game view (an Android SurfaceView); an emulator that
   draws its game straight into its window is left alone unless
-  `persist.gammaos.shader.4x3.window.<package>` is set to `1`. RetroArch draws
-  into its window, so that is its default: the filter covers its whole window,
-  its own menu included, and stacks with any RetroArch shader. To leave an app
-  alone, add it to `persist.gammaos.shader.4x3.exclude` (comma-separated).
-  **Game Area** chooses which part of the emulator's picture is the game:
-  Auto (the centred 4:3 area, for emulators that letterbox) or Full Picture
-  (for emulators set to stretch).
+  `persist.gammaos.shader.4x3.window.<package>` is set to `1`. To leave an
+  app alone, add it to `persist.gammaos.shader.4x3.exclude`
+  (comma-separated). RetroArch is always left alone: it has the same shader
+  as a Vulkan slang preset, `rg_cube_4_3_cropped.slangp`, at the top of its
+  shader list (Shaders > Load). Set RetroArch's Aspect Ratio to Full with it,
+  so the shader has the whole screen to draw on. It sees the core's own
+  frame, so it changes only a frame within 5% of 4:3; any other frame, and a
+  4:3 frame exactly 720 wide on the panel or 1080 tall at 1080p, is fitted at
+  its own shape.
 - **Start + Select:** in Nano's menus Start and Select act when released, and
   both pressed together open or close the Quick Menu. In a game, Start +
   Select works like the Anbernic button for hotkeys (Start + Select + R1

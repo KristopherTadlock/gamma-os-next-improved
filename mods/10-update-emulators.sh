@@ -110,6 +110,10 @@ else
   echo "updated RetroArch core info; removed the PPSSPP core's assets (core not shipped)"
 fi
 
+# RetroArch's copy of the 4:3 Cropped shader, which skips RetroArch.
+install -m 600 -t "$work/tree/$RA_DATA/shaders/shaders_slang" "$MODS"/retroarch-shaders/rg_cube_4_3_cropped.slang{,p}
+echo "added the rg_cube_4_3_cropped shader"
+
 # Repack the same top-level paths as the original, so no entries for data/ or
 # sdcard/ themselves are added; root would apply their owner and mode on extract.
 tar -tf "$work/in.tar" | python3 -I "$MODS/../scripts/tar_roots.py" >"$work/roots"
