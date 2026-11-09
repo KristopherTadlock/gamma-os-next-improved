@@ -31,7 +31,9 @@ import java.util.zip.CRC32;
  * "<game name>.app" file per game, holding its package name, and its icon as
  * the game's art in the ES-DE media folder, where Nano looks for it. A game's
  * file keeps its name once made, since Nano keys favourites, recents and
- * collections by it. The art this app writes carries a PNG text chunk naming
+ * collections by it. Nano also writes a file for an app added by hand, which
+ * is kept, with its icon, while the app is installed and has a launcher
+ * activity. The art this app writes carries a PNG text chunk naming
  * it, and only marked art is ever replaced or deleted, so art the user put
  * there (scraped covers) is left alone.
  */
@@ -104,18 +106,17 @@ final class Games {
                     continue;
                 }
                 listed.add(pkg);
-                if (label == null) continue;
                 String name = baseName(f);
                 // Nano skips dot files, so a name from an older version that starts
                 // with a dot never showed up: give it the current one.
-                if (name.startsWith(".")) {
+                if (label != null && name.startsWith(".")) {
                     String renamed = unique(label);
                     if (f.renameTo(new File(ROMS, renamed + EXT))) {
                         deleteArt(name);
                         name = renamed;
                     }
                 }
-                writeArt(pm, pkg, name);
+                writeArt(pm, pkg, name);   // also for an app added by hand in Nano
             }
         }
         if (!complete) {

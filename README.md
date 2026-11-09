@@ -188,7 +188,11 @@ It also changes Nano:
 - **Slide Behaviour** is hidden on devices that cannot slide (the build sets
   `ro.gammaos.nano.no_slide`).
 - **Android Games:** Nano starts an entry as the game's own app rather than
-  through the helper app, so it follows the game like any other.
+  through the helper app, so it follows the game like any other. Any app's
+  options in Applications can **Add to Android Games** or **Remove from
+  Android Games**. The Boxart Scraper knows the system (ScreenScraper
+  searches by the game's name). A game shows its icon until it has a cover,
+  and a scraped or chosen cover replaces the icon in ES-DE themes too.
 - **Boxart Scraper** is faster. Covers and fan art for every game come first
   and show as each one lands; screenshots, manuals and videos follow, lighter
   media first. Requests reuse their connections. A ScreenScraper account that
