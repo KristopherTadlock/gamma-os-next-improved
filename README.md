@@ -336,6 +336,15 @@ It also changes Nano:
   (comma-separated, a trailing `*` matches by prefix; default
   `com.brave.browser,net.slions.fulguris.*`). Fulguris's bookmark shortcut is
   Ctrl+B rather than Chromium's Ctrl+D, so Y sends that there.
+- **Background scraping:** a box-art scrape runs in its own small service
+  (`gammaos-nano-scrape`), so it carries on while you browse, start a game and
+  come back, from either Nano home. Circle closes the progress window and the
+  scrape keeps going; Square cancels it. "Scraping X/Y" shows left of the
+  Wi-Fi and battery icons while it runs, and a banner says when it is done.
+  One scrape runs at a time: starting another shows the running one, which has
+  to finish first. The service runs at low CPU and disk priority, gives way to
+  a game when memory runs short, and uses one connection on devices with about
+  1 GB of RAM.
 - **Controller Bindings** (Quick Menu) set to Off sends the controller to apps
   as a plain gamepad, for browser games: no browser controls, no Start + Select
   hotkeys or hold to quit (DS games included), and mouse mode turns off with
