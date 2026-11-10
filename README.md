@@ -305,6 +305,42 @@ It also changes Nano:
   for 3 seconds closes the game; any other button pressed during the hold
   cancels it. This replaces Anbernic + Start (the Quit Game Button is now off
   by default).
+- **Browser controls:** with Brave, or [Fulguris](https://github.com/Slion/Fulguris)
+  if it is installed, in front, gammapad turns the controller into a mouse and
+  the browser's keyboard shortcuts, and the browser's own controller support
+  never sees the pad:
+
+  | Control | Action |
+  |---|---|
+  | A | Enter |
+  | B | Back (closes menus) |
+  | X | Refresh |
+  | Y | Bookmark the page |
+  | L1 / R1 | Previous / next tab |
+  | L2 / R2 | Left / right click (hold to drag) |
+  | Left stick | Scroll |
+  | Right stick | Mouse cursor |
+  | D-pad | Arrow keys |
+  | L3 / R3 | Close tab / new tab |
+  | Start | Address bar |
+  | Select | Bookmarks |
+
+  Every action also works without thumbsticks: Select + L1 / R1 close and
+  open tabs, Select + D-pad scrolls, and Select + A turns cursor mode on or
+  off. In cursor mode the D-pad moves the cursor (faster the longer it is
+  held), A clicks (hold to drag) and X right-clicks. The Anbernic button and
+  Start + Select (held together) still work as everywhere else, and the
+  controls step aside while Nano's overlay or keyboard is up, and mouse mode
+  turns off while they run.
+  `persist.gammaos.gamepad.browser_pkgs` lists the browsers they apply to
+  (comma-separated, a trailing `*` matches by prefix; default
+  `com.brave.browser,net.slions.fulguris.*`). Fulguris's bookmark shortcut is
+  Ctrl+B rather than Chromium's Ctrl+D, so Y sends that there.
+- **Controller Bindings** (Quick Menu) set to Off sends the controller to apps
+  as a plain gamepad, for browser games: no browser controls, no Start + Select
+  hotkeys or hold to quit (DS games included), and mouse mode turns off with
+  its combo. The Anbernic button, its hotkeys and Back still work. It is On
+  again after a restart (`sys.gammaos.bindings.enabled`).
 - **Setup:** Wi-Fi comes before the time zone. With an internet connection,
   setup sets the clock from the internet, finds the time zone from the
   connection and picks the date and time formats that go with it, then shows

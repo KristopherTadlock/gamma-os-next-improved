@@ -184,6 +184,7 @@ The user's own bindings are never replaced in `add` mode: a hotkey whose setting
 
 - A button can be A, B, X, Y, L1, R1, L2, R2, L3, R3, Start, Select, a D-pad direction, or Off. A D-pad direction works only in drastic-nano: the D-pad reaches Android as a hat axis, which `PhoneWindowManager` never sees.
 - Two hotkeys can't share a button: choosing a button another hotkey has swaps the two.
+- **Controller Bindings** in the Quick Menu (`sys.gammaos.bindings.enabled`, On at every boot) set to Off turns off Start + Select's hotkeys and its hold to quit, in apps and in drastic-nano, along with the other controller bindings (the browser controls, mouse mode and its combo). The Anbernic button's hotkeys stay.
 
 ### drastic-nano (Nano's DS player)
 
