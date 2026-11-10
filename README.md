@@ -163,6 +163,11 @@ fixes GammaOS Nano bugs:
   take away a favourite imported from ES-DE's game lists;
 - Nano's File Transfer (MTP) only worked while a full-screen "MTP Active"
   screen stayed open;
+- in Nano mode, with no system bars, apps saw the square screen as portrait
+  and took their portrait layouts: Dolphin drew its game in the top half,
+  leaving the bottom half for touch controls. A square screen now counts as
+  landscape when the device's orientation is landscape, as GammaOS already did
+  for the RG Rotate;
 - the Wi-Fi and Bluetooth wizards' result screens (Save completed, the
   connection test result, Register completed), in setup and in Settings,
   showed B for OK, but B went back a screen; they now show A, which continues;
@@ -233,7 +238,7 @@ It also changes Nano:
 - **Nano Keyboard** is the system keyboard in Nano mode. When an app such as
   Brave wants text, it hands the field to Nano, which shows its own on-screen
   keyboard over the app (the one its search uses, driven by the controller),
-  starting from the field's text. Start puts the text into the field and
+  starting from the field's text. The app stays undimmed behind it. Start puts the text into the field and
   presses the field's Go, Search or Next; B leaves the field as it was. It lives in the ShaderControl system app;
   Nano selects it at every Nano boot (`persist.gammaos.nano.ime=0` keeps
   Android's keyboard), and Boot Android switches back to another keyboard.

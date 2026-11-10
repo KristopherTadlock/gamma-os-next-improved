@@ -9240,7 +9240,7 @@ index 00000000000..8a5a3eb1017
 +
 +}  // namespace android
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuRender.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuRender.cpp
-index b0e278f3bc0..347d96b82c0 100644
+index b0e278f3bc0..ae465576040 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuRender.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuRender.cpp
 @@ -58,6 +58,7 @@ extern "C" uint32_t __system_property_serial(const prop_info* __pi);
@@ -9391,7 +9391,32 @@ index b0e278f3bc0..347d96b82c0 100644
      // Render-thread watchdog heartbeat: bumped every frame so a background thread
      // can detect a hang (e.g. an infinite loop or a stuck GL call inside a render
      // path) and abort into a tombstone instead of leaving the device frozen.
-@@ -6392,6 +6424,7 @@ void NanoMenu::render() {
+@@ -6054,6 +6086,9 @@ void NanoMenu::render() {
+             // and the clock's own backdrop-blur darken (ramps with clockReveal) fades the game
+             // gently into the scrim as the disc drops in (user: no black on summon).
+             ovScrim = 0.0f;
++        } else if (mOskOverApp) {
++            // Only the keyboard is up, for the app's own text field: leave the app readable.
++            ovScrim = 0.0f;
+         } else if (mPs3Xmb && mPspClockEnabled && mPspClockReveal > 0.0f) {
+             float clkReveal = (mPspClockReveal - 0.3f) / 0.7f;
+             if (clkReveal < 0.0f) clkReveal = 0.0f;
+@@ -6191,11 +6226,10 @@ void NanoMenu::render() {
+         if (!oskOnSecondary) renderOsk();   // dual-screen: keyboard on the bottom (secondary pass)
+     } else if (mPs3Xmb && mOskOverApp) {
+         // OSK-only over a live app (an app requested text entry; see overlayOskPoll).
+-        // The app shows through the translucent overlay layer - dim it with a scrim
+-        // and draw just the keyboard, no Quick Menu behind it. The scrim stays on the
+-        // top (over the app); the keyboard itself moves to the bottom on dual-screen.
++        // The app shows through the translucent overlay layer undimmed, so the page
++        // stays readable; just the keyboard is drawn, no Quick Menu behind it. The
++        // keyboard moves to the bottom panel on dual-screen.
+         setUiBlend();
+-        drawQuad(0.0f, 0.0f, (float)mWidth, (float)mHeight, 0.0f, 0.0f, 0.0f, 0.55f);
+         if (!oskOnSecondary) renderOsk();   // dual-screen: keyboard on the bottom (secondary pass)
+     } else if (mPs3Xmb) {
+         // PS3 XMB layout (NanoMenuPS3Menu.cpp). renderPs3Xmb() draws the Wi-Fi /
+@@ -6392,6 +6426,7 @@ void NanoMenu::render() {
                      renderEsdeHome();   // renderEsde() plus any active system<->gamelist transition
                  }
              }
@@ -9399,7 +9424,7 @@ index b0e278f3bc0..347d96b82c0 100644
          } else {
              renderPs3Xmb();
          }
-@@ -6402,8 +6435,11 @@ void NanoMenu::render() {
+@@ -6402,8 +6437,11 @@ void NanoMenu::render() {
          else if (mGpCalibActive) renderGamepadCalib();
          else if (mGpCaptureActive) renderGamepadCapture();
          else if (mCpActive) renderColorPicker();
@@ -9412,7 +9437,7 @@ index b0e278f3bc0..347d96b82c0 100644
          // Dual-screen: the home OSK (search / Wi-Fi password / System Name) draws on the BOTTOM touch
          // panel via the secondary pass (oskOnSecondary hoisted above the setup-wizard branch); a
          // single-panel device draws it here on the only panel.
-@@ -6937,6 +6973,7 @@ if (sRingPrimedCount >= 2) {
+@@ -6937,6 +6975,7 @@ if (sRingPrimedCount >= 2) {
              SurfaceComposerClient::Transaction t;
              t.show(mFlingerSurfaceControl);
              t.apply();
@@ -15077,10 +15102,27 @@ index 0d7e69d0a6b..790532e33ec 100644
                  // button over evdev (short press = sleep, hold = shutdown), but only
                  // when it grabs input exclusively (persist.gammaos.nano.grab_input),
 diff --git a/frameworks/base/services/core/java/com/android/server/wm/DisplayContent.java b/frameworks/base/services/core/java/com/android/server/wm/DisplayContent.java
-index 8acaf22efc7..153183ce0be 100644
+index 8acaf22efc7..9801f3cfd04 100644
 --- a/frameworks/base/services/core/java/com/android/server/wm/DisplayContent.java
 +++ b/frameworks/base/services/core/java/com/android/server/wm/DisplayContent.java
-@@ -7016,8 +7016,13 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
+@@ -2502,11 +2502,12 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
+         // panel (handled independently in DisplayRotation, which forces the display rotation and
+         // ignores app orientation on a square panel), so the app orientation must stay LANDSCAPE
+         // regardless of that rotation, otherwise a slid ROTATION_90 would flip apps back to the
+-        // broken portrait layout. Force LANDSCAPE for the exact-square tie on a rotate-capable
+-        // default display; every non-square (i.e. normal-Android, with-bars) configuration keeps
+-        // the standard tie-break untouched.
++        // broken portrait layout. Force LANDSCAPE for the exact-square tie on the default display
++        // of a rotate-capable or landscape device (the RG Cube's square panel has no slider; see
++        // WindowManagerService.gammaSquareIsLandscape); every non-square (i.e. normal-Android,
++        // with-bars) configuration keeps the standard tie-break untouched.
+         if (outConfig.screenWidthDp == outConfig.screenHeightDp && isDefaultDisplay
+-                && SystemProperties.getBoolean("persist.gammaos.rotate.enabled", false)) {
++                && WindowManagerService.gammaSquareIsLandscape()) {
+             outConfig.orientation = ORIENTATION_LANDSCAPE;
+         } else {
+             outConfig.orientation = (outConfig.screenWidthDp <= outConfig.screenHeightDp)
+@@ -7016,8 +7017,13 @@ class DisplayContent extends RootDisplayArea implements WindowManagerPolicy.Disp
          // display may temporarily lack content (SecondaryDisplayLauncher not yet started),
          // and the Content Recording fallback creates a display-level mirror with incorrect
          // scaling that breaks DualStack rendering. Each display should maintain its own
@@ -15120,6 +15162,53 @@ index 2d1141f2ad2..15fc4cbbe5f 100644
                      // Check if nano menu requested a specific game launch
                      String launchRom = getNanoLaunchRom();
                      String launchCore = android.os.SystemProperties.get(
+diff --git a/frameworks/base/services/core/java/com/android/server/wm/TaskFragment.java b/frameworks/base/services/core/java/com/android/server/wm/TaskFragment.java
+index 2efa9b268e8..4d850add844 100644
+--- a/frameworks/base/services/core/java/com/android/server/wm/TaskFragment.java
++++ b/frameworks/base/services/core/java/com/android/server/wm/TaskFragment.java
+@@ -2411,12 +2411,13 @@ class TaskFragment extends WindowContainer<WindowContainer> {
+             // rotation independently and ignores app orientation on a square panel), so the app
+             // orientation must stay LANDSCAPE regardless of rotation, otherwise the slid ROTATION_90
+             // would flip apps back to the broken portrait layout. Force LANDSCAPE for the exact-
+-            // square tie on a rotate-capable default display; every other case keeps the standard
++            // square tie on the default display of a rotate-capable or landscape device
++            // (WindowManagerService.gammaSquareIsLandscape); every other case keeps the standard
+             // rule untouched.
+             final DisplayContent squareDc = getDisplayContent();
+             if (inOutConfig.screenWidthDp == inOutConfig.screenHeightDp
+                     && squareDc != null && squareDc.isDefaultDisplay
+-                    && SystemProperties.getBoolean("persist.gammaos.rotate.enabled", false)) {
++                    && WindowManagerService.gammaSquareIsLandscape()) {
+                 inOutConfig.orientation = ORIENTATION_LANDSCAPE;
+             } else {
+                 inOutConfig.orientation = (inOutConfig.screenWidthDp <= inOutConfig.screenHeightDp)
+diff --git a/frameworks/base/services/core/java/com/android/server/wm/WindowManagerService.java b/frameworks/base/services/core/java/com/android/server/wm/WindowManagerService.java
+index b05f9fb1fa4..9ab046ba54e 100644
+--- a/frameworks/base/services/core/java/com/android/server/wm/WindowManagerService.java
++++ b/frameworks/base/services/core/java/com/android/server/wm/WindowManagerService.java
+@@ -5728,6 +5728,22 @@ public class WindowManagerService extends IWindowManager.Stub
+     // SCREEN_ORIENTATION_UNSPECIFIED for "none"/"auto"/unset (follow the app).
+     // Package-private so DisplayContent.getOrientation can reuse the single
+     // token -> SCREEN_ORIENTATION_* map for the no-activity overlay-home case.
++    /**
++     * GammaOS: whether an exact-square app area counts as landscape. Android's tie-break calls a
++     * square portrait, so on a square panel with no system bars (Nano mode) apps took their
++     * portrait layouts (Dolphin draws its game in the top half, leaving the bottom for touch
++     * controls) though the device is held in landscape. True on a rotate-capable device, or when
++     * the device's orientation is landscape (persist.gammaos.nano.orientation, default landscape).
++     */
++    static boolean gammaSquareIsLandscape() {
++        if (android.os.SystemProperties.getBoolean("persist.gammaos.rotate.enabled", false)) {
++            return true;
++        }
++        final String o = android.os.SystemProperties.get(
++                "persist.gammaos.nano.orientation", "landscape");
++        return o.equals("landscape") || o.equals("rev_landscape");
++    }
++
+     static int nanoScreenOrientation(String token) {
+         switch (token) {
+             case "landscape":     return ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE;
 diff --git a/frameworks/base/services/java/com/android/server/SystemServer.java b/frameworks/base/services/java/com/android/server/SystemServer.java
 index a58ef30a45b..acb8a07e0a9 100644
 --- a/frameworks/base/services/java/com/android/server/SystemServer.java

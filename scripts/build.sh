@@ -91,14 +91,28 @@ mnt="$WORK/mnt/system"
 mkdir -p "$mnt"
 sudo mount -o loop "$system" "$mnt"
 trap 'sudo umount "$mnt" 2>/dev/null || true' EXIT
+stamp="$WORK/mnt/mods.stamp"
+touch "$stamp"
 for mod in "$ROOT"/mods/*.sh; do
   echo "== $(basename "$mod")"
   bash "$mod" "$mnt/system" "$WORK/cache"
 done
 df -h "$mnt" | tail -1
+written="$WORK/mnt/written.sha256"
+(cd "$mnt" && sudo find . -xdev -type f -cnewer "$stamp" -print0 | sudo xargs -0 -r sha256sum) >"$written"
+sudo sync -f "$mnt"
 sudo umount "$mnt"
 trap - EXIT
+# umount returns once this mount is gone, but a copy of it in another mount
+# namespace keeps the filesystem alive, and the image file can then be packed
+# before its last writes reach it.
+for _ in $(seq 120); do
+  [[ -z "$(sudo losetup -j "$system")" ]] && break
+  sleep 1
+done
+[[ -z "$(sudo losetup -j "$system")" ]] || { echo "the system image is still in use after unmounting" >&2; exit 1; }
 e2fsck -fn "$system"
+python3 -I "$ROOT/scripts/check_image_files.py" "$system" "$written"
 
 pac="$OUT/RG_Cube_GammaOS_Next_Improved_v$VERSION$VARIANT.pac"
 echo "writing $pac"
