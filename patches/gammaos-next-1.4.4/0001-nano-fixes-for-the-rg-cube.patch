@@ -1176,7 +1176,7 @@ index dcd7bbaf475..cda97172719 100644
          if (!mDrmBootPath) {
              setupSecondaryEglSurfaces();
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenu.h b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
-index 88e7cae6699..db616c1fcfb 100644
+index 88e7cae6699..5f70ceaaa5f 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 @@ -61,6 +61,7 @@ static inline void nanoThreadNormalPriority() {
@@ -1856,7 +1856,7 @@ index 88e7cae6699..db616c1fcfb 100644
      // Per-game title override (Rename / Edit Title). A user-typed name that overrides
      // the basename-minus-extension display name everywhere (columns / recents / search /
      // Info) AND becomes the scraper search query so a corrected title can match. Stored
-@@ -3392,38 +3731,35 @@ private:
+@@ -3392,38 +3731,41 @@ private:
      void openHelpPage();                    // Settings > User Guide: scrollable, themed help page
      void scrapeOneSystem(int sysIdx);      // Game Systems editor action
      // One ROM of work, fully snapshotted so the worker never touches mXmbSystems.
@@ -1882,6 +1882,12 @@ index 88e7cae6699..db616c1fcfb 100644
 +    void scraperReloadFromDisk();          // index + title overrides from disk, textures dropped
 +    void scraperJournalAtEnd();            // a manifest with no results record holds them all
 +    bool scraperRefuseWhileBusy();         // a scrape or copy runs: show it (or say so) and return true
++    bool scraperCopyBusy();                // a copy or move runs: say so and return true
++    void scraperOpenProgress(int total);   // the modal, counters at zero
++    bool scraperOfferQueue(std::vector<ScrapeJob>& jobs, bool wantBox, bool wantFan, const std::string& emptyMsg);
++    void scraperQueueAdd(std::vector<ScrapeJob> jobs, bool wantBox, bool wantFan);
++    enum class QueueAdd { Done, Ended, Newer };   // added (or refused, said in a banner); the run ended; a newer one runs
++    QueueAdd scraperQueueAddLocked(std::vector<ScrapeJob>& jobs, bool wantBox, bool wantFan);
 +    std::string scrapeStatusLabel();       // "Scraping 34/120" for the status bars while one runs, else ""
      void scraperDrainResults();            // render thread: merge finished art + progress
      void scraperCancel();
@@ -1919,7 +1925,7 @@ index 88e7cae6699..db616c1fcfb 100644
      // scrape worker state
      std::mutex mScrapeMutex;
      bool mScrapeRunning = false;           // worker alive
-@@ -3432,9 +3768,22 @@ private:
+@@ -3432,9 +3774,26 @@ private:
      bool mScrapeDoneFlag = false;          // worker finished -> show summary
      int  mScrapeDone = 0, mScrapeTotal = 0, mScrapeHits = 0, mScrapeFail = 0;
      std::string mScrapeStatus;             // "System / Game" current line (under mutex)
@@ -1936,14 +1942,18 @@ index 88e7cae6699..db616c1fcfb 100644
 +    bool mBgScrapeKick = false;            // its start waits for the last service to exit
 +    bool mScrapeWasCancelled = false;      // the last run was cancelled (summary wording)
 +    int64_t mBgScrapeStartMs = 0, mBgScrapePollMs = 0;
-+    bool mScrapeBusyNote = false;          // the modal was opened by a scrape refused for this one
++    std::string mBgScrapeLostRun;          // a waiting run whose start was lost, started again
++    int64_t mBgScrapeLostMs = 0;
++    bool mScrapeBusyNote = false;          // the modal was opened by clearing art refused for this one
++    std::vector<ScrapeJob> mScrapeQueuedJobs;   // a scrape the queue dialog (theme key 62) asks about
++    bool mScrapeQueuedBox = true, mScrapeQueuedFan = true;
 +    // How much of the service's results file the manifest holds (saved with it in index.json).
 +    std::string mScrapeJournalRun;
 +    long long mScrapeJournalOffset = 0;
      // Where scraped covers/fanart + index.json live. Default is internal storage; the Boxart
      // Folder setting (persist.gammaos.scraper.dir) moves it to any browsable folder, typically the
      // SD card. names.json (title overrides) always stays in the default internal dir.
-@@ -3445,10 +3794,14 @@ private:
+@@ -3445,10 +3804,14 @@ private:
      int64_t mScrapeDirPollMs = 0;          // availability probe throttle (once a second, uptime)
      std::string mScrapeMoveSrc, mScrapeMoveDst;   // relocation in flight: old/new folder ("" = none)
      bool mScrapeMoveMode = false;          // the progress modal fronts a relocation (wording), until the next scrape
@@ -1958,7 +1968,7 @@ index 88e7cae6699..db616c1fcfb 100644
      void scrapeMoveThreadFunc(std::vector<std::pair<std::string, ScrapeEntry>> entries,
                                std::string src, std::string dst);
      void gsOpenClearArtConfirm();          // Game Systems editor: Clear Boxart confirm (theme key 49)
-@@ -3457,8 +3810,11 @@ private:
+@@ -3457,8 +3820,11 @@ private:
      // cartridge icon, freed when leaving the Game category and on sleep/occlusion.
      // ar = width/height. pixel = a PICO-8 cart label: 128x128 pixel art uploaded NEAREST, drawn at an
      // integer multiple of its size (cartPixelSize) so every cart pixel stays square.
@@ -1971,7 +1981,7 @@ index 88e7cae6699..db616c1fcfb 100644
      bool mScrapeBoxartOn = false;        // per-frame cache of scraperBoxartEnabled()
      bool mNdsTileIcon = false;           // per-frame cache of persist.gammaos.nano.nds.tileicon (DS Icons On Tiles)
      // Data-loss guards: a loader sets its flag true when the on-disk file EXISTS but could not be
-@@ -4915,6 +5271,9 @@ private:
+@@ -4915,6 +5281,9 @@ private:
      // it red) and beveled into a normal map for the XMB glass relight. Lazily built + cached.
      GLuint mHeartIconTex = 0, mHeartNmapTex = 0;
      void   ensureHeartIcon();               // build mHeartIconTex + mHeartNmapTex once
@@ -1981,7 +1991,7 @@ index 88e7cae6699..db616c1fcfb 100644
      GLuint gpGlassNmap(bool round, float wpx, float hpx);    // cached bevel nmap for a gamepad-tester button shape
      // Resolve a system iconRef (builtin:/retroarch:/core:/file:) to a (colour
      // tex, glass bevel nmap) pair, cached by ref string. See NanoMenuPS3Icons.cpp.
-@@ -4935,11 +5294,14 @@ private:
+@@ -4935,11 +5304,14 @@ private:
          std::vector<std::string> activePaths;
          std::string activePath;
          bool valid;              // true if scan found at least one path
@@ -1996,7 +2006,7 @@ index 88e7cae6699..db616c1fcfb 100644
      void bgScanThreadFunc();                  // the thread entry point
  
      // Settings column. Pinned as the leftmost XMB column at sentinel index -2.
-@@ -5086,6 +5448,7 @@ private:
+@@ -5086,6 +5458,7 @@ private:
      std::string mBtWizInPasskey;              // inbound passkey to display for confirmation
      std::atomic<bool> mBtWizRadioOn{true};    // cached real radio state (dumpsys enabled:)
      std::atomic<bool> mBtWizToggling{false};  // a radio enable/disable is settling
@@ -2004,7 +2014,7 @@ index 88e7cae6699..db616c1fcfb 100644
      float mBtWizManageRefreshT = -999.0f;     // last live-refresh time while sitting on Manage
      void btWizToggleRadioAsync(bool on);      // enable/disable the radio + settle + refresh
  
-@@ -5176,6 +5539,7 @@ private:
+@@ -5176,6 +5549,7 @@ private:
      bool    mCursorVisible = false;             // shown while recently moved/clicked
      int64_t mLastPointerMs = 0;                 // last pointer activity (auto-hide timer)
      bool    mTouchFromPointer = false;          // current touch frame is a mouse click, not a finger
@@ -2012,7 +2022,7 @@ index 88e7cae6699..db616c1fcfb 100644
      bool    mKbdShiftHeld = false;              // physical-keyboard shift state (for OSK typing)
      void    drawPointerCursor();                // draw the mouse cursor overlay (NanoMenuRender.cpp)
      int     kbdCodeToCp(int code, bool shift);  // USB-keyboard keycode -> printable codepoint (0 = none)
-@@ -5400,6 +5764,33 @@ private:
+@@ -5400,6 +5774,33 @@ private:
                                    // globe on black until ready so the one-time texture
                                    // load spike isn't charged against the 360ms fade
      int mTzSelOnOpen = 0;         // mTzSelected when the globe opened (restore on cancel)
@@ -6513,7 +6523,7 @@ index a778ea7da0d..638c4463dd0 100644
  // aspect bucket so the Test Controller / Calibration buttons get the identical glass
  // relight as the console icons (bevelFromRGBA), refracting the live XMB wave. round =
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
-index c6a8e9c9dc1..4f5eb5b0a74 100644
+index c6a8e9c9dc1..a975261f9e9 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Menu.cpp
 @@ -25,6 +25,7 @@
@@ -8089,7 +8099,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
                  std::thread([target]{
                      system("settings put global auto_time_zone 0 2>/dev/null");
                      std::string c = "cmd alarm set-timezone " + target + " 2>/dev/null";
-@@ -11346,10 +11744,31 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
+@@ -11346,10 +11744,37 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
              if (sel == 1 && mGsEditIdx >= 0) gsRemoveSystem(mGsEditIdx);
              break;
          }
@@ -8113,6 +8123,12 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
              if (sel == 1 && mGsEditIdx >= 0) gsClearSystemArt(mGsEditIdx);
              break;
          }
++        case 62: {  // a scrape while one runs: add it to the queue (sel 1)
++            std::vector<ScrapeJob> jobs;
++            jobs.swap(mScrapeQueuedJobs);
++            if (sel == 1) scraperQueueAdd(std::move(jobs), mScrapeQueuedBox, mScrapeQueuedFan);
++            break;
++        }
 +        case 61: {  // Scan Folders: add the stashed folder (sel 1 = with its subfolders)
 +            gsFolderAdd(mGsAddFolderPath, sel == 1);
 +            mGsAddFolderPath.clear();
@@ -8121,7 +8137,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
          case 45: {  // Scan Folders: remove-scan-source confirm (sel 1 = remove the stashed source)
              if (sel == 1 && mGsRemoveSrcIdx >= 0) gsRemoveScanSource(mGsRemoveSrcIdx);
              mGsRemoveSrcIdx = -1;
-@@ -11387,7 +11806,7 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
+@@ -11387,7 +11812,7 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
                      // Progress modal: stays up until the list refresh shows the app gone
                      // (closed from the apps_generation handler), or a ~10s timeout.
                      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -8130,7 +8146,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
                      mPs3DlgIllust = 0; mPs3DlgNotice.clear();
                      mPs3DlgRomInfo = false; mPs3DlgAppInfo = false;
                      mPs3DlgTitle = "Uninstalling";
-@@ -11442,20 +11861,6 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
+@@ -11442,20 +11867,6 @@ void NanoMenu::applyThemeSetting(int themeKey, int sel) {
              stDialogResult(themeKey, sel);   // Syncthing choosers and confirms
              break;
          }
@@ -8151,7 +8167,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
          case 42:    // GammaShader: custom-shader disclaimer answered (Apply = option 1)
              if (sel == 1 && mShaderPendingTypeSel >= 0) shaderApplyType(mShaderPendingTypeSel);
              mShaderPendingTypeSel = -1;
-@@ -11606,6 +12011,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11606,6 +12017,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
          else otaEndFlow();
          return;
      }
@@ -8159,7 +8175,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
      // GammaShader parameter slider (no binding): the value was written live as the
      // user slid; confirm keeps it, cancel reverts to the value at open. Then refresh
      // the open Parameters row's inline value.
-@@ -11627,10 +12033,17 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11627,10 +12039,17 @@ void NanoMenu::closePs3Dialog(bool apply) {
          // so the row value updates immediately.
          const Ps3SettingBinding* b = mPs3DlgBinding;
          mPs3DlgBinding = nullptr;
@@ -8177,7 +8193,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
              if (!strcmp(b->options, "@rgbeffect")) {
                  // Off -> gammargb.control=off; any effect -> control=on + rgb.effect.
                  auto list = ps3RgbEffectList();
-@@ -11675,6 +12088,23 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11675,6 +12094,23 @@ void NanoMenu::closePs3Dialog(bool apply) {
                      applyRgbSolidColor(ps3SwatchHex(sw), b);
                  }
                  mDisplayDirty = true;
@@ -8201,7 +8217,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
              } else if (mPs3DlgSlider) {
                  std::string v = ps3FormatNum(mPs3DlgSldVal, mPs3DlgSldScale);
                  writeSettingValue(b->source, b->key, v);
-@@ -11685,6 +12115,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11685,6 +12121,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
                  std::vector<SettingListOption> opts = parseListOptions(b->options);
                  if (mPs3DlgSel >= 0 && mPs3DlgSel < (int)opts.size()) {
                      const std::string& v = opts[mPs3DlgSel].value;
@@ -8209,7 +8225,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
                      writeSettingValue(b->source, b->key, v);
                      mPs3BindCache[b->label] = v;
                      refreshBoundValuesInStack();   // update the DSi/Minima frozen row-value snapshot live
-@@ -11695,6 +12126,8 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11695,6 +12132,8 @@ void NanoMenu::closePs3Dialog(bool apply) {
                      // overlay process (restarting gammaos-nano would not touch it). The persist
                      // prop was already written above, so the choice survives a reboot.
                      if (!strcmp(b->label, "Home Theme")) {
@@ -8218,7 +8234,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
                          int  tv       = atoi(v.c_str());   // 0 XMB, 1 DSi, 2 Minima, 3 ES-DE
                          bool wantDsi  = (tv == 1);
                          bool wantMin  = (tv == 2);
-@@ -11703,6 +12136,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11703,6 +12142,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
                              mNdsTheme = wantDsi;
                              mMinimaTheme = wantMin;
                              mEsdeTheme = wantEsde;
@@ -8226,7 +8242,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
                              if (wantDsi) ensureNdsAssets();
                              if (wantEsde) {   // force a (re)load of the ES-DE theme set, reset its view
                                  mEsdeLoaded = false; mEsdeInGamelist = false;
-@@ -11723,7 +12157,9 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11723,7 +12163,9 @@ void NanoMenu::closePs3Dialog(bool apply) {
                              mMinimaScroll = 0.0f; mMinimaSelAnim = 0.0f; mMinimaPrevDepth = -1;
                              mMinimaSfxDepth = -1; mMinimaSfxSel = -1; mMinimaTransStart = 0;
                          }
@@ -8236,7 +8252,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
                      // DSi Dark Theme on/off: apply LIVE. mNdsDark is read every frame by ndsPal()
                      // in each DSi renderer, so flipping the member repaints the DSi home dark/light
                      // with no restart (the persist prop was already written above for reboot).
-@@ -11828,6 +12264,10 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11828,6 +12270,10 @@ void NanoMenu::closePs3Dialog(bool apply) {
                      // Screen Map: mirror the volatile active flag and show/hide the
                      // cosmetic button-hint overlay service (functional effect is the
                      // two props, consumed by the gammapad daemon).
@@ -8247,7 +8263,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
                      if (!strcmp(b->label, "Screen Map")) {
                          bool on = (v == "1" || v == "true");
                          writeSettingValue(SettingSource::kProp, "sys.gammaos.screenmap.active", on ? "1" : "0");
-@@ -11847,9 +12287,21 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11847,9 +12293,21 @@ void NanoMenu::closePs3Dialog(bool apply) {
                          else if (!strcmp(b->label, "Wi-Fi"))
                              cmd = on ? "cmd wifi set-wifi-enabled enabled 2>/dev/null"
                                       : "cmd wifi set-wifi-enabled disabled 2>/dev/null";
@@ -8270,7 +8286,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
                          else if (!strcmp(b->label, "Do Not Disturb"))
                              cmd = on ? "cmd notification set_dnd on 2>/dev/null"
                                       : "cmd notification set_dnd off 2>/dev/null";
-@@ -11867,7 +12319,19 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11867,7 +12325,19 @@ void NanoMenu::closePs3Dialog(bool apply) {
              // Confirmation toast: one brief self-fading pill on a successful settings-bound
              // commit. Inside `if (apply)`, so never on cancel; a slider commits only here on
              // close, so never per-frame/per-drag.
@@ -8291,17 +8307,25 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
          }
      } else if (mPs3DlgThemeKey == 21 && !apply) {
          // Icon-tint cancel: restore the exact original tint (not the nearest
-@@ -11896,7 +12360,8 @@ void NanoMenu::closePs3Dialog(bool apply) {
+@@ -11896,7 +12366,8 @@ void NanoMenu::closePs3Dialog(bool apply) {
              // wifi-radio, delete-playlist).
              switch (committedKey) {
                  case 6: case 22: case 23: case 30: case 31: case 32:
 -                case 36: case 43: case 44: case 45: case 46: case 47: case 48: case 49:
 +                case 36: case 43: case 44: case 45: case 46: case 47: case 48: case 49: case 60:
-+                case 61:
++                case 61: case 62:
                      break;                                   // confirm/action, not a setting
                  default:
                      photoShowBanner(trDyn("Setting changed"));
-@@ -12295,6 +12760,7 @@ void NanoMenu::openXmbOpt() {
+@@ -11904,6 +12375,7 @@ void NanoMenu::closePs3Dialog(bool apply) {
+             }
+         } else {
+             previewThemeSetting(mPs3DlgThemeKey, mPs3DlgOrigSel);   // revert the live preview
++            if (mPs3DlgThemeKey == 62) std::vector<ScrapeJob>().swap(mScrapeQueuedJobs);
+         }
+     }
+     if (mPs3NetTestLive) { stopNetTest(); mPs3NetTestLive = false; }
+@@ -12295,6 +12767,7 @@ void NanoMenu::openXmbOpt() {
              // (columns / recents / search / Info) and the scraper search query; Scrape
              // This Game re-fetches just this ROM (forcing overwrite) using that query.
              add("Rename / Edit Title", "romrename", false);
@@ -8309,7 +8333,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
              add("Scrape This Game", "romscrape", false);
              // One-off scrape with a typed-in search name (does NOT rename the game): useful when the
              // filename does not match the database (a region tag, a fan-translation title, etc.).
-@@ -12332,6 +12798,11 @@ void NanoMenu::openXmbOpt() {
+@@ -12332,6 +12805,11 @@ void NanoMenu::openXmbOpt() {
              // Pin to / Remove from the Game-home "Pinned Apps" shortcut list (label reflects state).
              if (!p.empty())
                  add(isAppPinned(p) ? "Remove from Home" : "Pin to Home", "togpin", false);
@@ -8321,7 +8345,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
              // Per-app Screen Orientation override. While this app is foreground nano
              // enforces the chosen orientation (via sys.gammaos.nano.force_orientation);
              // Default hands back to the app's own requested orientation. Offered for any
-@@ -12565,7 +13036,10 @@ bool NanoMenu::xmbTouchLive() const {
+@@ -12565,7 +13043,10 @@ bool NanoMenu::xmbTouchLive() const {
          && !mPs3WizActive && !mPs3TzActive && !mPs3LangActive
          && !mGSearchActive && !mPhotoMultiActive && !mPs3BrightSlider
          && !(mOverlayMode && mOverlayLaunchPending)
@@ -8333,7 +8357,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
  }
  
  // Shared raw-digitizer -> logical-pixel mapping (the exact chain oskTouchFrame uses,
-@@ -13260,7 +13734,7 @@ void NanoMenu::xmbOptApplySub(const Ps3OptSub& sr) {
+@@ -13260,7 +13741,7 @@ void NanoMenu::xmbOptApplySub(const Ps3OptSub& sr) {
  // been closed by the caller, so the dialog draws over the home column.
  void NanoMenu::mediaDeleteConfirm(const std::string& title, const std::string& body) {
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -8342,7 +8366,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
      mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false;
      mPs3DlgTitle = title; mPs3DlgBody = body;
      mPs3DlgOptions.push_back("Cancel"); mPs3DlgSwatch.push_back(-1);
-@@ -13277,7 +13751,7 @@ void NanoMenu::mediaDeleteConfirm(const std::string& title, const std::string& b
+@@ -13277,7 +13758,7 @@ void NanoMenu::mediaDeleteConfirm(const std::string& title, const std::string& b
  void NanoMenu::mediaCopyToClipboard(const std::string& name) {
      feOpen();   // enter the File Explorer at the storage roots (mFeClipPath already set by the caller)
      mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -8351,7 +8375,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
      mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false;
      mPs3DlgTitle = "Copy";
      mPs3DlgBody = std::string("Copied \"") + name +
-@@ -13313,6 +13787,11 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13313,6 +13794,11 @@ void NanoMenu::xmbOptAction(const std::string& act) {
          mDisplayDirty = true;
          return;
      }
@@ -8363,7 +8387,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
      if (act == "hidegame") {
          std::string romPath, name = mPs3OptCtxLabel;
          if (mPs3OptCtxKind == PS3_ROM && mPs3OptCtxA >= 0 && mPs3OptCtxA < (int)mXmbSystems.size()
-@@ -13333,11 +13812,18 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13333,11 +13819,18 @@ void NanoMenu::xmbOptAction(const std::string& act) {
          if (mPs3OptCtxKind == PS3_ROM && mPs3OptCtxA >= 0 && mPs3OptCtxA < (int)mXmbSystems.size()
              && mPs3OptCtxB >= 0 && mPs3OptCtxB < (int)mXmbSystems[mPs3OptCtxA].roms.size())
              romPath = mXmbSystems[mPs3OptCtxA].roms[mPs3OptCtxB];
@@ -8383,7 +8407,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
          // If we just un-starred a game while viewing the Favorites list itself, rebuild it in place
          // so the row disappears immediately (title is set only by buildFavoritesSubmenu).
          if (wasFav && !mPs3Stack.empty() && mPs3Stack.back().title == "Favorites") {
-@@ -13357,8 +13843,11 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13357,8 +13850,11 @@ void NanoMenu::xmbOptAction(const std::string& act) {
          if (mPs3OptCtxKind == PS3_ROM && mPs3OptCtxA >= 0 && mPs3OptCtxA < (int)mXmbSystems.size()
              && mPs3OptCtxB >= 0 && mPs3OptCtxB < (int)mXmbSystems[mPs3OptCtxA].roms.size())
              romPath = mXmbSystems[mPs3OptCtxA].roms[mPs3OptCtxB];
@@ -8396,7 +8420,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
          if (romPath.empty()) return;
          if (act == "addcol") { openAddToCollectionDialog(romPath); return; }
          // rmcol: remove from the collection whose game list we are viewing, then rebuild it in place.
-@@ -13511,7 +14000,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13511,7 +14007,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              body = mPs3OptCtxDesc.empty() ? std::string("No information is available.") : mPs3OptCtxDesc;
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -8405,7 +8429,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false; mPs3DlgAppInfo = false;
          mPs3DlgTitle = title;
          mPs3DlgBody  = body;
-@@ -13584,6 +14073,21 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13584,6 +14080,21 @@ void NanoMenu::xmbOptAction(const std::string& act) {
          }
          return;
      }
@@ -8427,7 +8451,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
      if (act == "romrename") {
          // Per-game title override. Resolve the focused ROM path + current display name
          // exactly the way "rominfo" does, then open the OSK prefilled with the current
-@@ -13640,6 +14144,16 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13640,6 +14151,16 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              // tops, not open stack levels), with the highlight kept on the renamed game:
              // the new title re-sorts the list, so its old index points at another game.
              if (owner >= 0) rebuildOpenRomLevels(owner, romPath);
@@ -8444,7 +8468,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
              // Also rebuild an open Recently Played list in place (it is not sysIdx-tagged;
              // identify it by its first item being a PS3_RECENT row).
              for (auto& lvl : mPs3Stack) {
-@@ -13765,7 +14279,10 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13765,7 +14286,10 @@ void NanoMenu::xmbOptAction(const std::string& act) {
          if (mPs3DlgBoxTex) { glDeleteTextures(1, &mPs3DlgBoxTex); mPs3DlgBoxTex = 0; }
          mPs3DlgFanW = mPs3DlgFanH = 0; mPs3DlgBoxW = mPs3DlgBoxH = 0;
  
@@ -8456,7 +8480,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
          bool rich = se && (!se->box.empty() || !se->fan.empty() ||
                             !se->synopsis.empty() || !se->genre.empty() ||
                             !se->developer.empty() || !se->publisher.empty() ||
-@@ -13773,7 +14290,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -13773,7 +14297,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
                             !se->releaseDate.empty());
  
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -8465,7 +8489,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear();
          mPs3DlgTitle = name.empty() ? std::string("Information") : name;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14042,7 +14559,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -14042,7 +14566,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              row("Path", dir);
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -8474,7 +8498,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false;
          mPs3DlgTitle = title; mPs3DlgBody = body;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14117,7 +14634,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -14117,7 +14641,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              body = b;
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -8483,7 +8507,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear();
          mPs3DlgTitle = title; mPs3DlgBody = body;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14138,7 +14655,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
+@@ -14138,7 +14662,7 @@ void NanoMenu::xmbOptAction(const std::string& act) {
              body = b;
          }
          mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
@@ -8492,7 +8516,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
          mPs3DlgIllust = 0; mPs3DlgNotice.clear();
          mPs3DlgTitle = title; mPs3DlgBody = body;
          mPs3DlgSel = 0; mPs3DlgOrigSel = 0;
-@@ -14530,9 +15047,15 @@ void NanoMenu::renderPs3Dialog() {
+@@ -14530,9 +15054,15 @@ void NanoMenu::renderPs3Dialog() {
              float fs = ps3::fontScale((sel ? 26.0f : 22.0f) * fb);
              float ty = cyDev - 0.45f * ps3::emPx(fs);   // web textBaseline='middle'
              const char* optTxt = trDyn(mPs3DlgOptions[i].c_str());
@@ -8510,7 +8534,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
          }
  
          // (4) Up/down scroll arrows at the text x when items scroll off-window.
-@@ -14894,7 +15417,7 @@ enum WizScr {
+@@ -14894,7 +15424,7 @@ enum WizScr {
      // the real gammaos-net bt scan/pair/connect/disconnect/unpair), BD Remote
      // Control Registration, and Audio Device Settings.
      WS_BT_MANAGE, WS_BT_REGISTER_INFO, WS_BT_SCANNING, WS_BT_DEVICE_LIST,
@@ -8519,7 +8543,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
      WS_BT_DEVICE_OPTS, WS_BT_CONNECTING, WS_BT_DISCONNECTING,
      WS_BT_DELETE_CONFIRM, WS_BT_DELETING, WS_BT_INFO,
      WS_BT_BD_REMOTE,
-@@ -14939,9 +15462,6 @@ static const char* btTypeLabel(int cod) {
+@@ -14939,9 +15469,6 @@ static const char* btTypeLabel(int cod) {
          default:     return "Bluetooth Device";
      }
  }
@@ -8529,7 +8553,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
  // Build the pass-key instruction shown while pairing. gammaos-net publishes the
  // system-generated code in sys.gammaos.bt.passkey and the SSP variant in
  // sys.gammaos.bt.pk_variant (2=numeric compare, 4=display passkey, 5=display PIN).
-@@ -14972,7 +15492,7 @@ enum WizField { WF_SSID = 0, WF_WEP_KEY, WF_WPA_KEY, WF_IP_ADDR, WF_IP_SUBNET,
+@@ -14972,7 +15499,7 @@ enum WizField { WF_SSID = 0, WF_WEP_KEY, WF_WPA_KEY, WF_IP_ADDR, WF_IP_SUBNET,
                  WF_IP_ROUTER, WF_IP_PDNS, WF_IP_SDNS, WF_DNS_PDNS, WF_DNS_SDNS,
                  WF_MTU, WF_PROXY_ADDR, WF_PROXY_PORT, WF_PPPOE_USER, WF_PPPOE_PASS,
                  WF_DHCP_HOST, WF_EAP_USER, WF_EAP_PASS,
@@ -8538,7 +8562,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
  struct WizDesc {
      int kind = WK_INFO;
      const char* title = "Internet Connection Settings";
-@@ -15119,7 +15639,12 @@ static void wizDesc(int id, WizDesc& d) {
+@@ -15119,7 +15646,12 @@ static void wizDesc(int id, WizDesc& d) {
      case WS_BT_DEVICE_LIST: d.kind = WK_SCANLIST; d.title = "Register Bluetooth® Device";
          d.body = "Select the Bluetooth® device to register."; break;
      case WS_BT_PASSKEY: d.kind = WK_TEXT; d.title = "Register Bluetooth® Device";
@@ -8552,7 +8576,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
      case WS_BT_REGISTERING: d.kind = WK_PROGRESS; d.title = "Register Bluetooth® Device";
          d.body = "Registering...\nPlease wait."; d.autoNext = WS_BT_REGISTER_DONE; break;
      case WS_BT_REGISTER_DONE: d.kind = WK_RESULT; d.title = "Register Bluetooth® Device";
-@@ -15178,6 +15703,89 @@ void NanoMenu::startNetWizard() {
+@@ -15178,6 +15710,89 @@ void NanoMenu::startNetWizard() {
      wizEnter(WS_INTRO, 1);
  }
  
@@ -8642,7 +8666,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
  // First-run setup only: bring up the XMB "waiting for services" progress screen (a WK_PROGRESS
  // net-wizard page) while the setup wizard holds before the Wi-Fi step until sys.boot_completed.
  // Lives here because the WizScr enum is file-local to this translation unit; the setup wizard
-@@ -15257,6 +15865,13 @@ void NanoMenu::btWizStopReceive() {
+@@ -15257,6 +15872,13 @@ void NanoMenu::btWizStopReceive() {
  }
  
  void NanoMenu::wizEnter(int id, int dir) {
@@ -8656,7 +8680,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
      mPs3WizId = id;
      mPs3WizSel = 0;
      mPs3WizScroll = 0;
-@@ -15269,8 +15884,12 @@ void NanoMenu::wizEnter(int id, int dir) {
+@@ -15269,8 +15891,12 @@ void NanoMenu::wizEnter(int id, int dir) {
      mPs3WizSlideStart = mEffectTime;
      mPs3WizScreenStart = mEffectTime;
      WizDesc d; wizDesc(id, d);
@@ -8671,7 +8695,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
      // Side effects on entering certain screens.
      if (id == WS_SCANNING) startWifiScanAsync();               // real scan
      // Accessory: Bluetooth wizard side effects (the real gammaos-net bt backend on
-@@ -15280,7 +15899,10 @@ void NanoMenu::wizEnter(int id, int dir) {
+@@ -15280,7 +15906,10 @@ void NanoMenu::wizEnter(int id, int dir) {
          std::lock_guard<std::mutex> lk(mBtWizMutex); mBtWizScan.clear(); mBtWizPin.clear();
      }
      if (id == WS_BT_SCANNING)      btWizScanAsync();                    // real inquiry -> device list (accumulates)
@@ -8683,7 +8707,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
      if (id == WS_BT_CONNECTING)    btWizConnectAsync(mBtWizSelAddr);    // real profile connect
      if (id == WS_BT_DISCONNECTING) btWizDisconnectAsync(mBtWizSelAddr); // real profile disconnect
      if (id == WS_BT_DELETING)      btWizUnpairAsync(mBtWizSelAddr);     // real removeBond
-@@ -15304,35 +15926,17 @@ void NanoMenu::wizEnter(int id, int dir) {
+@@ -15304,35 +15933,17 @@ void NanoMenu::wizEnter(int id, int dir) {
      // Date and Time: Set via Internet -> enable Android automatic time + time zone
      // (NTP) and nudge a refresh on a background thread (the 2.6s dwell is real work).
      if (id == WS_DT_SVI_PROGRESS) {
@@ -8729,7 +8753,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
          }).detach();
          // auto_time_zone is now on; the Olson tz captures DST automatically and the
          // "Daylight Saving" row reflects it live (drawPs3Clock -> mPs3DstNow).
-@@ -15384,7 +15988,7 @@ void NanoMenu::wizOpenTextField(int field) {
+@@ -15384,7 +15995,7 @@ void NanoMenu::wizOpenTextField(int field) {
      case WF_DHCP_HOST: cur = &mPs3WizDhcpHost; break;
      case WF_EAP_USER: cur = &mPs3WizEapUser; break;   case WF_EAP_PASS: cur = &mPs3WizEapPass; break;
      case WF_DT_DATE: cur = &mPs3DtDate; break;        case WF_DT_TIME: cur = &mPs3DtTime; break;
@@ -8738,7 +8762,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
      }
      mOskQuery = cur ? *cur : "";
      openOskForPassword(prompt, [this, field](const std::string& val) {
-@@ -15402,6 +16006,14 @@ void NanoMenu::wizOpenTextField(int field) {
+@@ -15402,6 +16013,14 @@ void NanoMenu::wizOpenTextField(int field) {
          case WF_EAP_USER: mPs3WizEapUser = val; break;   case WF_EAP_PASS: mPs3WizEapPass = val; break;
          case WF_DT_DATE: mPs3DtDate = val; break;        case WF_DT_TIME: mPs3DtTime = val; break;
          case WF_BT_PIN: mBtWizPin = val.empty() ? "0000" : val; break;   // default PIN 0000
@@ -8753,7 +8777,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
          }
          // Optional fields (secondary DNS, the BT PIN which defaults to 0000) may be
          // left blank; everything else treats an empty submit as a cancel.
-@@ -15411,6 +16023,13 @@ void NanoMenu::wizOpenTextField(int field) {
+@@ -15411,6 +16030,13 @@ void NanoMenu::wizOpenTextField(int field) {
          std::string err = validateWizField(field, val);
          if (!err.empty()) { mPs3WizFieldError = err; mPs3WizPendingTextField = field; return; }
          mPs3WizFieldError.clear();
@@ -8767,7 +8791,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
          int nxt = wizNextScreen(mPs3WizId, 0);
          if (nxt == WS_NONE) { mPs3WizExit = 1; mPs3WizActive = false; }
          else { mPs3WizStack.push_back(mPs3WizId); wizEnter(nxt, 1); }
-@@ -15476,6 +16095,16 @@ std::string NanoMenu::validateWizField(int field, const std::string& val) {
+@@ -15476,6 +16102,16 @@ std::string NanoMenu::validateWizField(int field, const std::string& val) {
              return "MTU must be 576-9000";
          return "";
      }
@@ -8784,7 +8808,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
      case WF_BT_PIN: {   // empty -> 0000; otherwise 1-16 numeric digits (BT PIN spec)
          if (val.size() > 16) return "PIN must be 1-16 digits";
          for (char c : val) if (c < '0' || c > '9') return "PIN must be digits only";
-@@ -15508,6 +16137,12 @@ void NanoMenu::wizConfirm() {
+@@ -15508,6 +16144,12 @@ void NanoMenu::wizConfirm() {
          }
          return;
      }
@@ -8797,7 +8821,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
      if (mPs3WizId == WS_BT_INBOUND_CONFIRM) {
          if (mPs3WizSel == 0) {   // Yes -> accept + wait for the bond
              mPs3WizStack.push_back(mPs3WizId); wizEnter(WS_BT_INBOUND_PAIRING, 1);
-@@ -15534,7 +16169,8 @@ void NanoMenu::wizConfirm() {
+@@ -15534,7 +16176,8 @@ void NanoMenu::wizConfirm() {
          // connect it, or delete it and register fresh - matching Android's behaviour
          // when you pick an already-paired device from "pair new device".
          if (scan[mPs3WizSel].bonded) { wizEnter(WS_BT_DEVICE_OPTS, 1); return; }
@@ -8807,7 +8831,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
          return;
      }
      if (mPs3WizId == WS_BT_REGISTER_DONE) {   // loop back to the Manage root (BD remote closes)
-@@ -15634,6 +16270,15 @@ void NanoMenu::wizBack() {
+@@ -15634,6 +16277,15 @@ void NanoMenu::wizBack() {
      if (mPs3WizId == WS_DT_SVI_DONE || mPs3WizId == WS_DT_SM_DONE) {
          mPs3WizExit = 1; mPs3WizActive = false; return;
      }
@@ -8823,7 +8847,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
      if (mPs3WizStack.empty()) { mPs3WizExit = -1; mPs3WizActive = false; return; }
      int prev = mPs3WizStack.back(); mPs3WizStack.pop_back();
      // Don't land back on a transient progress/test screen (mirrors web wizBack). If
-@@ -15788,6 +16433,8 @@ int NanoMenu::wizNextScreen(int id, int sel) {
+@@ -15788,6 +16440,8 @@ int NanoMenu::wizNextScreen(int id, int sel) {
      // ---- Accessory: Bluetooth ----
      case WS_BT_REGISTER_INFO: return WS_BT_SCANNING;
      case WS_BT_PASSKEY:       return WS_BT_REGISTERING;
@@ -8832,7 +8856,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
      case WS_BT_BD_REMOTE:     return WS_BT_SCANNING;
      case WS_BT_DEVICE_OPTS:
          return (sel == 0) ? WS_BT_CONNECTING
-@@ -15844,6 +16491,45 @@ void NanoMenu::renderNetWizard() {
+@@ -15844,6 +16498,45 @@ void NanoMenu::renderNetWizard() {
              wizDesc(mPs3WizId, d);
          }
      }
@@ -8878,7 +8902,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
      // The receive screen advances when the BondStateMachine patch publishes a
      // remote-initiated pairing request to sys.gammaos.bt.inbound.
      if (mPs3WizId == WS_BT_INBOUND_WAIT) {
-@@ -16111,6 +16797,9 @@ void NanoMenu::renderNetWizard() {
+@@ -16111,6 +16804,9 @@ void NanoMenu::renderNetWizard() {
              if (!mBtWizInPasskey.empty()) cbody += "\n\nPass Key:  " + mBtWizInPasskey;
              cbody += "\n\nAccept this device?";
          }
@@ -8888,7 +8912,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
          std::vector<std::string> bl = wrap(cbody, fs);
          float ty = Y((innerTop + innerBot) * 0.5f) - (float)((int)bl.size() - 1) * lh * 0.5f - DS(50.0f);
          for (auto& ln : bl) { if (!ln.empty()) ps3DlgText(ln.c_str(), bodyCx, ty, fs, 0.95f, 0.95f, 0.95f, ap, 1); ty += lh; }
-@@ -16292,7 +16981,8 @@ void NanoMenu::renderNetWizard() {
+@@ -16292,7 +16988,8 @@ void NanoMenu::renderNetWizard() {
      } else if (d.kind == WK_PROGRESS) {
          // no input
      } else if (d.kind == WK_RESULT || mPs3WizId == WS_BT_INFO || (d.kind == WK_TEST && !mPs3NetTestActive)) {
@@ -8898,7 +8922,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
      } else if (d.kind == WK_TEST) {
          // running: no hints
      } else if (mPs3WizId == WS_APLIST || mPs3WizId == WS_BT_DEVICE_LIST) {
-@@ -16555,6 +17245,9 @@ void NanoMenu::renderNdsNetWizardBody(float rx, float ry, float rw, float rh) {
+@@ -16555,6 +17252,9 @@ void NanoMenu::renderNdsNetWizardBody(float rx, float ry, float rw, float rh) {
              if (!mBtWizInPasskey.empty()) cbody += "\n\nPass Key:  " + mBtWizInPasskey;
              cbody += "\n\nAccept this device?";
          }
@@ -8908,7 +8932,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
          auto lines = wrapDs(trDyn(cbody.c_str()), 12.0f, 224.0f);
          centeredBlock(lines, 80.0f, 15.0f, 12.0f, 0.93f, 0.93f, 0.93f);
          // Yes / No glossy buttons (dialog capsule geometry: h32 r4).
-@@ -16583,7 +17276,7 @@ void NanoMenu::renderNdsNetWizardBody(float rx, float ry, float rw, float rh) {
+@@ -16583,7 +17283,7 @@ void NanoMenu::renderNdsNetWizardBody(float rx, float ry, float rw, float rh) {
      } else if (d.kind == WK_SCANLIST && id == WS_BT_DEVICE_LIST) {
          std::vector<BtDevEntry> devs; { std::lock_guard<std::mutex> lk(mBtWizMutex); devs = mBtWizScan; }
          if (d.body[0]) textCenter(trDyn(d.body), 30.0f, 12.0f, 0.93f, 0.93f, 0.93f);
@@ -8917,7 +8941,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
          else {
              std::vector<std::string> labels; for (auto& b : devs) labels.push_back(b.name.empty() ? b.address : b.name);
              drawGlossyList(labels, [&](int i, float rowDevY){
-@@ -16599,9 +17292,9 @@ void NanoMenu::renderNdsNetWizardBody(float rx, float ry, float rw, float rh) {
+@@ -16599,9 +17299,9 @@ void NanoMenu::renderNdsNetWizardBody(float rx, float ry, float rw, float rh) {
          if (d.body[0]) textCenter(trDyn(d.body), 30.0f, 12.0f, 0.93f, 0.93f, 0.93f);
          if (aps.empty()) {
              bool radioOn; { std::lock_guard<std::mutex> lk(mNetStateMutex); radioOn = mWifiRadioOn; }
@@ -8929,7 +8953,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
                         100.0f, 12.0f, 0.85f, 0.85f, 0.85f);
          }
          else {
-@@ -16978,6 +17671,9 @@ void NanoMenu::renderMinimaNetWizardBody(float rx, float ry, float rw, float rh)
+@@ -16978,6 +17678,9 @@ void NanoMenu::renderMinimaNetWizardBody(float rx, float ry, float rw, float rh)
              if (!mBtWizInPasskey.empty()) cbody += "\n\nPass Key:  " + mBtWizInPasskey;
              cbody += "\n\nAccept this device?";
          }
@@ -8939,7 +8963,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
          auto lines = wrap(trDyn(cbody.c_str()), fsRow, rw - pad * 3.0f);
          centeredBlock(lines, g.bodyTop + (g.bodyBot - g.bodyTop) * 0.32f, rowH * 0.9f, fsRow, 0.90f, 0.90f, 0.92f);
          float pillH = rowH, by = g.footerTop - rowH - g.btnMg;
-@@ -17178,6 +17874,30 @@ float NanoMenu::ps3TzFadeAlpha() {
+@@ -17178,6 +17881,30 @@ float NanoMenu::ps3TzFadeAlpha() {
  // it opens already showing that location (web initGlobe sets tzGlobe lon/lat =
  // target = the selected zone, then renderGlobe; the fade only cross-fades the
  // composite, not the rotation).
@@ -8970,7 +8994,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
  void NanoMenu::beginTzGlobeFade() {
      // Warm up first: the globe textures load on the render thread on the first
      // render (GL has no context here on the input thread), which spikes one frame.
-@@ -17201,6 +17921,13 @@ void NanoMenu::openTimezoneGlobe() {
+@@ -17201,6 +17928,13 @@ void NanoMenu::openTimezoneGlobe() {
  }
  
  void NanoMenu::closeTimezoneGlobe(bool apply) {
@@ -8984,7 +9008,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
      if (apply && mTzSelected >= 0 && mTzSelected < (int)mTzEntries.size()) {
          char cmd[256];
          snprintf(cmd, sizeof(cmd), "setprop persist.sys.timezone %s",
-@@ -17237,6 +17964,7 @@ void NanoMenu::tzGlobeNav(int dir) {
+@@ -17237,6 +17971,7 @@ void NanoMenu::tzGlobeNav(int dir) {
      int n = (int)mTzEntries.size();
      if (n <= 0) return;
      mTzSelected = (mTzSelected + dir + n) % n;
@@ -8992,7 +9016,7 @@ index c6a8e9c9dc1..4f5eb5b0a74 100644
      const TimezoneEntry& z = mTzEntries[mTzSelected];
      ps3globe::setTarget(z.lon * (float)M_PI / 180.0f, z.lat * (float)M_PI / 180.0f);
  }
-@@ -17453,6 +18181,26 @@ void NanoMenu::renderTimezoneGlobe() {
+@@ -17453,6 +18188,26 @@ void NanoMenu::renderTimezoneGlobe() {
      // Caption "Select a time zone." (web XCF(V.W*0.04), yT+56, 24px, left).
      ps3DlgText("Select a time zone.", XC(VW * 0.04f), Y(innerTop + 56.0f), FS(24.0f),
                 1, 1, 1, 0.95f * ap, 0);
@@ -9636,7 +9660,7 @@ index b0e278f3bc0..f082f8b0bb0 100644
          }
          // Restart path (returning from game): readyToRun() saw boot
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp
-index bc837715d76..1c458c79660 100644
+index bc837715d76..a43e88b0028 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp
 @@ -21,12 +21,14 @@
@@ -9951,7 +9975,7 @@ index bc837715d76..1c458c79660 100644
  // ---------------------------------------------------------------------------
  void NanoMenu::scrapeSystemsAsync(const std::vector<int>& sysIdxs) {
 -    if (mScrapeRunning) return;
-+    if (scraperRefuseWhileBusy()) return;
++    if (scraperCopyBusy()) return;
      scraperEnsureLoaded();
      mkdir(mScrapeCacheDir.c_str(), 0700);
  
@@ -9967,7 +9991,7 @@ index bc837715d76..1c458c79660 100644
      for (int sysIdx : sysIdxs) {
          if (sysIdx < 0 || sysIdx >= (int)mXmbSystems.size()) continue;
          const XmbSystem& s = mXmbSystems[sysIdx];
-@@ -1105,39 +1178,43 @@ void NanoMenu::scrapeSystemsAsync(const std::vector<int>& sysIdxs) {
+@@ -1105,41 +1178,41 @@ void NanoMenu::scrapeSystemsAsync(const std::vector<int>& sysIdxs) {
          bool haveCreds = (eng == nanoscraper::ENGINE_SCREENSCRAPER)
                               ? (!cred.ssDevId.empty() && !cred.ssDevPw.empty())
                               : !cred.tgdbKey.empty();
@@ -10006,20 +10030,25 @@ index bc837715d76..1c458c79660 100644
          }
      }
  
++    if (scraperOfferQueue(jobs, wantBox, wantFan,
++                          anyConfigured ? trDyn("All games already have art (enable Overwrite to refresh).")
++                                        : scraperMissingCredsMsg(needSsDev, needTgdb)))
++        return;
      // Show the modal regardless so the user gets feedback (incl. "set credentials").
 -    mScrapeMoveMode = false;
-+    mScrapeMoveMode = false; mScrapeCopyMode = false;
-     mScrapeProgActive = true;
-     mScrapeDoneFlag = false;
-     mScrapeCancel = false;
-     mScrapeError.clear();
-     mScrapeStatus.clear();
+-    mScrapeProgActive = true;
+-    mScrapeDoneFlag = false;
+-    mScrapeCancel = false;
+-    mScrapeError.clear();
+-    mScrapeStatus.clear();
 -    mScrapeDone = 0; mScrapeHits = 0; mScrapeFail = 0;
-+    mScrapeDone = 0; mScrapeHits = 0; mScrapeFail = 0; mScrapeSkip = 0;
-     mScrapeTotal = (int)jobs.size();
-     mDisplayDirty = true;
+-    mScrapeTotal = (int)jobs.size();
+-    mDisplayDirty = true;
++    scraperOpenProgress((int)jobs.size());
  
-@@ -1148,21 +1225,48 @@ void NanoMenu::scrapeSystemsAsync(const std::vector<int>& sysIdxs) {
+     if (!scraperDirAvailable() || mScrapeIndexLoadErr) {
+         // The boxart folder (SD card) is not mounted, or its index could not be read: downloading
+@@ -1148,21 +1221,48 @@ void NanoMenu::scrapeSystemsAsync(const std::vector<int>& sysIdxs) {
                                               : trDyn("Boxart folder is not available. Insert the SD card or pick another folder.");
          mScrapeTotal = 0;
          mScrapeDoneFlag = true;
@@ -10074,16 +10103,16 @@ index bc837715d76..1c458c79660 100644
  }
  
  void NanoMenu::scrapeAllSystems() {
-@@ -1184,7 +1288,7 @@ void NanoMenu::scrapeOneSystem(int sysIdx) {
+@@ -1184,7 +1284,7 @@ void NanoMenu::scrapeOneSystem(int sysIdx) {
  // existing worker + progress modal.
  // ---------------------------------------------------------------------------
  void NanoMenu::scrapeOneRom(int sysIdx, int romIdx, const std::string& queryOverride) {
 -    if (mScrapeRunning) return;
-+    if (scraperRefuseWhileBusy()) return;
++    if (scraperCopyBusy()) return;
      if (sysIdx < 0 || sysIdx >= (int)mXmbSystems.size()) return;
      scraperEnsureLoaded();
      mkdir(mScrapeCacheDir.c_str(), 0700);
-@@ -1197,6 +1301,7 @@ void NanoMenu::scrapeOneRom(int sysIdx, int romIdx, const std::string& queryOver
+@@ -1197,6 +1297,7 @@ void NanoMenu::scrapeOneRom(int sysIdx, int romIdx, const std::string& queryOver
  
      std::vector<ScrapeJob> jobs;
      bool anyConfigured = false;
@@ -10091,7 +10120,7 @@ index bc837715d76..1c458c79660 100644
      if (s.enabled) {
          nanoscraper::Credentials cred = scraperCredsFor(sysIdx);
          nanoscraper::Engine eng = scraperEngineFor(sysIdx, cred);
-@@ -1204,6 +1309,8 @@ void NanoMenu::scrapeOneRom(int sysIdx, int romIdx, const std::string& queryOver
+@@ -1204,6 +1305,8 @@ void NanoMenu::scrapeOneRom(int sysIdx, int romIdx, const std::string& queryOver
              bool haveCreds = (eng == nanoscraper::ENGINE_SCREENSCRAPER)
                                   ? (!cred.ssDevId.empty() && !cred.ssDevPw.empty())
                                   : !cred.tgdbKey.empty();
@@ -10100,7 +10129,7 @@ index bc837715d76..1c458c79660 100644
              if (haveCreds) {
                  anyConfigured = true;
                  nanoscraper::PlatformIds plat =
-@@ -1211,6 +1318,9 @@ void NanoMenu::scrapeOneRom(int sysIdx, int romIdx, const std::string& queryOver
+@@ -1211,6 +1314,9 @@ void NanoMenu::scrapeOneRom(int sysIdx, int romIdx, const std::string& queryOver
                  const std::string& rom = s.roms[romIdx];
                  ScrapeJob j;
                  j.romPath = rom;
@@ -10110,7 +10139,7 @@ index bc837715d76..1c458c79660 100644
                  j.displayName = (romIdx < (int)s.displayNames.size()) ? s.displayNames[romIdx] : rom;
                  j.sysName = s.name;
                  // A one-off custom search name (user typed it for this scrape only) wins over the
-@@ -1218,7 +1328,7 @@ void NanoMenu::scrapeOneRom(int sysIdx, int romIdx, const std::string& queryOver
+@@ -1218,86 +1324,34 @@ void NanoMenu::scrapeOneRom(int sysIdx, int romIdx, const std::string& queryOver
                  if (!queryOverride.empty()) j.queryName = queryOverride;
                  else if (const std::string* ov = romNameOverrideFor(rom)) j.queryName = *ov;
                  j.engine = (int)eng;
@@ -10119,23 +10148,27 @@ index bc837715d76..1c458c79660 100644
                  j.plat = plat;
                  jobs.push_back(std::move(j));
              }
-@@ -1226,13 +1336,13 @@ void NanoMenu::scrapeOneRom(int sysIdx, int romIdx, const std::string& queryOver
+         }
      }
  
++    if (scraperOfferQueue(jobs, wantBox, wantFan,
++                          anyConfigured ? trDyn("Scraping is disabled for this system.")
++                                        : scraperMissingCredsMsg(needSsDev, needTgdb)))
++        return;
      // Show the modal regardless so the user gets feedback (incl. "set credentials").
 -    mScrapeMoveMode = false;
-+    mScrapeMoveMode = false; mScrapeCopyMode = false;
-     mScrapeProgActive = true;
-     mScrapeDoneFlag = false;
-     mScrapeCancel = false;
-     mScrapeError.clear();
-     mScrapeStatus.clear();
+-    mScrapeProgActive = true;
+-    mScrapeDoneFlag = false;
+-    mScrapeCancel = false;
+-    mScrapeError.clear();
+-    mScrapeStatus.clear();
 -    mScrapeDone = 0; mScrapeHits = 0; mScrapeFail = 0;
-+    mScrapeDone = 0; mScrapeHits = 0; mScrapeFail = 0; mScrapeSkip = 0;
-     mScrapeTotal = (int)jobs.size();
-     mDisplayDirty = true;
+-    mScrapeTotal = (int)jobs.size();
+-    mDisplayDirty = true;
++    scraperOpenProgress((int)jobs.size());
  
-@@ -1241,63 +1351,15 @@ void NanoMenu::scrapeOneRom(int sysIdx, int romIdx, const std::string& queryOver
+     if (!scraperDirAvailable() || mScrapeIndexLoadErr) {
+         mScrapeError = scraperDirAvailable() ? trDyn("The boxart index could not be read.")
                                               : trDyn("Boxart folder is not available. Insert the SD card or pick another folder.");
          mScrapeTotal = 0;
          mScrapeDoneFlag = true;
@@ -10201,7 +10234,7 @@ index bc837715d76..1c458c79660 100644
  }
  
  // ---------------------------------------------------------------------------
-@@ -1305,6 +1367,8 @@ void NanoMenu::scrapeThreadFunc(std::vector<ScrapeJob> jobs) {
+@@ -1305,6 +1359,8 @@ void NanoMenu::scrapeThreadFunc(std::vector<ScrapeJob> jobs) {
  // frame from the main loop; cheap when idle.
  // ---------------------------------------------------------------------------
  void NanoMenu::scraperDrainResults() {
@@ -10210,7 +10243,7 @@ index bc837715d76..1c458c79660 100644
      std::vector<std::pair<std::string, ScrapeEntry>> pending;
      bool done = false;
      {
-@@ -1337,16 +1401,59 @@ void NanoMenu::scraperDrainResults() {
+@@ -1337,16 +1393,59 @@ void NanoMenu::scraperDrainResults() {
          mDisplayDirty = true;
      }
      if (!pending.empty()) {
@@ -10273,7 +10306,7 @@ index bc837715d76..1c458c79660 100644
      if (done) {
          // Worker finished: keep the summary on screen, the modal closes on B/enter.
          mDisplayDirty = true;
-@@ -1354,10 +1461,239 @@ void NanoMenu::scraperDrainResults() {
+@@ -1354,10 +1453,420 @@ void NanoMenu::scraperDrainResults() {
  }
  
  void NanoMenu::scraperCancel() {
@@ -10300,8 +10333,13 @@ index bc837715d76..1c458c79660 100644
 +    return buf;
 +}
 +
-+// One operation at a time: while a scrape runs its progress comes up again, with a note that this
-+// one has to wait; while a folder copy or move runs, a banner says so.
++// Runs are numbered in order, so a home never applies an older run's results over newer ones.
++static long long scrapeRunSeq(const std::string& run) {
++    return strtoll(run.c_str(), nullptr, 10);
++}
++
++// For what cannot run beside a scrape (clearing art): while one runs its progress comes up again,
++// with a note that this has to wait; while a folder copy or move runs, a banner says so.
 +bool NanoMenu::scraperRefuseWhileBusy() {
 +    scraperEnsureLoaded();   // the poll follows a run only once the manifest is loaded
 +    scraperBgPoll(true);
@@ -10316,32 +10354,156 @@ index bc837715d76..1c458c79660 100644
 +    return true;
 +}
 +
-+// Runs are numbered in order, so a home never applies an older run's results over newer ones.
-+static long long scrapeRunSeq(const std::string& run) {
-+    return strtoll(run.c_str(), nullptr, 10);
++// A folder copy or move runs: a banner says so. (A new scrape can wait for a running one; see
++// scraperOfferQueue.)
++bool NanoMenu::scraperCopyBusy() {
++    scraperEnsureLoaded();   // the poll follows a run only once the manifest is loaded
++    scraperBgPoll(true);
++    if (!mScrapeRunning || !mBgScrapeRun.empty()) return false;
++    photoShowBanner(trDyn("Another copy or scrape is running"));
++    return true;
 +}
 +
-+void NanoMenu::scraperStartBackground(std::vector<ScrapeJob> jobs, bool wantBox, bool wantFan) {
-+    // Past the manifest's own record too: an index on the SD card outlives a factory reset.
-+    const long long seq = std::max((long long)property_get_int32("persist.gammaos.nano.scrape_seq", 0),
-+                                   scrapeRunSeq(mScrapeJournalRun)) + 1;
-+    char run[32];
-+    snprintf(run, sizeof(run), "%lld", seq);
-+    property_set("persist.gammaos.nano.scrape_seq", run);
++void NanoMenu::scraperOpenProgress(int total) {
++    mScrapeMoveMode = false; mScrapeCopyMode = false;
++    mScrapeProgActive = true;
++    mScrapeDoneFlag = false;
++    mScrapeCancel = false;
++    mScrapeError.clear();
++    mScrapeStatus.clear();
++    mScrapeDone = 0; mScrapeHits = 0; mScrapeFail = 0; mScrapeSkip = 0;
++    mScrapeTotal = total;
++    mDisplayDirty = true;
++}
++
++// While a scrape runs, a new one can join its queue: asks first (theme key 62), or says in a banner
++// why there is nothing to add. False when no scrape runs.
++bool NanoMenu::scraperOfferQueue(std::vector<ScrapeJob>& jobs, bool wantBox, bool wantFan,
++                                 const std::string& emptyMsg) {
++    if (!mScrapeRunning || mBgScrapeRun.empty()) return false;
++    char cancel[PROPERTY_VALUE_MAX] = {};
++    property_get(nanoscraper::kCancelProp, cancel, "");
++    if (mBgScrapeRun == cancel) {   // it would drop a queued one with the rest
++        photoShowBanner(trDyn("The scrape is being cancelled. Try again when it stops."));
++        return true;
++    }
++    if (!scraperDirAvailable() || mScrapeIndexLoadErr) {
++        photoShowBanner(scraperDirAvailable() ? trDyn("The boxart index could not be read.")
++                                              : trDyn("Boxart folder is not available. Insert the SD card or pick another folder."));
++        return true;
++    }
++    if (jobs.empty()) {
++        photoShowBanner(emptyMsg);
++        return true;
++    }
++    mScrapeQueuedJobs = std::move(jobs);
++    mScrapeQueuedBox = wantBox;
++    mScrapeQueuedFan = wantFan;
++    char body[200];
++    snprintf(body, sizeof(body), trDyn("A scrape is in progress (%s). Add this scrape to the queue?"),
++             scrapeStatusLabel().c_str());
++    mPs3DlgOptions.clear(); mPs3DlgSwatch.clear();
++    // The centred confirm: the side chooser shows no body.
++    mPs3DlgSlider = false; mPs3DlgKind = 0; mPs3DlgType = 1; mPs3DlgThemeKey = 62; mPs3DlgBinding = nullptr;
++    mPs3DlgIllust = 0; mPs3DlgNotice.clear(); mPs3DlgRomInfo = false; mPs3DlgAppInfo = false;
++    mPs3DlgTitle = "Scrape in Progress"; mPs3DlgBody = body;
++    mPs3DlgOptions.push_back("Cancel");       mPs3DlgSwatch.push_back(-1);
++    mPs3DlgOptions.push_back("Add to Queue"); mPs3DlgSwatch.push_back(-1);
++    mPs3DlgSel = 1; mPs3DlgOrigSel = 1;
++    mPs3DlgIconTex = 0; mPs3DlgIconNmap = nmapForIcon(22);
++    mPs3DlgIconR = mPs3DlgIconG = mPs3DlgIconB = 1.0f;
++    mPs3DlgActive = true; mPs3DlgAnim = 0.0f; mPs3DlgBlurValid = false;
++    return true;
++}
++
++// Adds the games to the running scrape's queue, or starts them when it ended in the meantime.
++void NanoMenu::scraperQueueAdd(std::vector<ScrapeJob> jobs, bool wantBox, bool wantFan) {
++    if (jobs.empty()) return;
++    // Twice: when the other home started a newer run, the poll follows that one.
++    for (int attempt = 0; attempt < 2; attempt++) {
++        scraperBgPoll(true);
++        if (!mScrapeRunning || mBgScrapeRun.empty()) break;
++        const QueueAdd r = scraperQueueAddLocked(jobs, wantBox, wantFan);
++        if (r == QueueAdd::Done) return;
++        if (r == QueueAdd::Ended) break;
++    }
++    scraperBgPoll(true);   // notices the end
++    if (mScrapeRunning) {
++        photoShowBanner(trDyn("Another copy or scrape is running"));
++        return;
++    }
++    scraperOpenProgress((int)jobs.size());
++    scraperStartBackground(std::move(jobs), wantBox, wantFan);
++}
++
++NanoMenu::QueueAdd NanoMenu::scraperQueueAddLocked(std::vector<ScrapeJob>& jobs, bool wantBox, bool wantFan) {
++    nanoscraper::QueueLock lock;
++    char cancel[PROPERTY_VALUE_MAX] = {}, svc[PROPERTY_VALUE_MAX] = {};
++    property_get(nanoscraper::kCancelProp, cancel, "");
++    property_get(nanoscraper::kServiceProp, svc, "");
++    nanoscraper::Progress p;
++    const bool read = nanoscraper::readProgress(&p);
++    const bool have = read && p.run == mBgScrapeRun;
++    if (read && scrapeRunSeq(p.run) > scrapeRunSeq(mBgScrapeRun)) return QueueAdd::Newer;
++    if (mBgScrapeRun == cancel) {   // it would drop this request with the rest
++        photoShowBanner(trDyn("The scrape is being cancelled. Try again when it stops."));
++        return QueueAdd::Done;
++    }
++    if (!lock.held() || (have && p.running && strcmp(svc, "running") != 0)) {   // or the service died
++        photoShowBanner(trDyn("The scrape could not be added to the queue."));
++        return QueueAdd::Done;
++    }
++    // The service writes its end with the lock held: until then it takes this request too.
++    if (have && !p.running) return QueueAdd::Ended;
++    const int n = (int)jobs.size();
 +    nanoscraper::Queue q;
-+    q.run = run;
++    q.run = mBgScrapeRun;
 +    q.cacheDir = mScrapeCacheDir;
 +    q.wantBox = wantBox;
 +    q.wantFan = wantFan;
 +    q.jobs = std::move(jobs);
-+    // The other home reads the manifest again when it sees the run start: save what it lacks.
-+    if (mScrapeIndexDirty) {
-+        saveScrapeIndex();
-+        mScrapeIndexDirty = false;
-+        mScrapeIndexSavedMs = (int64_t)uptimeMillis();
++    char msg[160];
++    if (nanoscraper::addRequest(q))
++        snprintf(msg, sizeof(msg), n == 1 ? trDyn("Added %d game to the scrape queue")
++                                          : trDyn("Added %d games to the scrape queue"), n);
++    else
++        snprintf(msg, sizeof(msg), "%s", trDyn("The scrape could not be added to the queue."));
++    photoShowBanner(msg);
++    ALOGI("scraper: queued %d games on run %s", n, mBgScrapeRun.c_str());
++    return QueueAdd::Done;
++}
++
++void NanoMenu::scraperStartBackground(std::vector<ScrapeJob> jobs, bool wantBox, bool wantFan) {
++    nanoscraper::Queue q;
++    q.cacheDir = mScrapeCacheDir;
++    q.wantBox = wantBox;
++    q.wantFan = wantFan;
++    q.jobs = std::move(jobs);
++    // The last run's results not read yet: the new run starts its results file afresh.
++    for (long long at = -1; at != mScrapeJournalOffset;) {
++        at = mScrapeJournalOffset;
++        scraperApplyResults();
 +    }
 +    mkdir(kScrapeDefaultDir, 0700);
-+    if (!nanoscraper::writeQueue(q)) {
++    char run[32];
++    bool queued;
++    {
++        nanoscraper::QueueLock lock;   // the other home numbers its runs under it too
++        // Past the manifest's own record too: an index on the SD card outlives a factory reset.
++        const long long seq = std::max((long long)property_get_int32("persist.gammaos.nano.scrape_seq", 0),
++                                       scrapeRunSeq(mScrapeJournalRun)) + 1;
++        snprintf(run, sizeof(run), "%lld", seq);
++        property_set("persist.gammaos.nano.scrape_seq", run);
++        q.run = run;
++        // What an earlier run left waiting (it was cancelled, or Nano restarted) is dropped; the run
++        // the service is on keeps its own.
++        char svc[PROPERTY_VALUE_MAX] = {}, live[PROPERTY_VALUE_MAX] = {};
++        property_get(nanoscraper::kServiceProp, svc, "");
++        if (!strcmp(svc, "running")) property_get(nanoscraper::kRunProp, live, "");
++        nanoscraper::clearOtherRequests(live);
++        queued = lock.held() && nanoscraper::addRequest(q);
++    }
++    if (!queued) {
 +        mScrapeError = trDyn("The scrape could not be started.");
 +        mScrapeDoneFlag = true;
 +        mDisplayDirty = true;
@@ -10355,6 +10517,13 @@ index bc837715d76..1c458c79660 100644
 +    mScrapeJournalRun = run;     // its results start from nothing
 +    mScrapeJournalOffset = 0;
 +    mScrapeWasCancelled = false;
++    // Saved before the service starts: a home that starts again mid-run reads its results from
++    // the start, and the other home, reading the manifest when it sees the run, gets what it lacks.
++    if (mScrapeIndexLoaded && !mScrapeIndexLoadErr) {
++        saveScrapeIndex();
++        mScrapeIndexDirty = false;
++        mScrapeIndexSavedMs = (int64_t)uptimeMillis();
++    }
 +    {
 +        std::lock_guard<std::mutex> lk(mScrapeMutex);
 +        mScrapeWhat.clear();
@@ -10395,6 +10564,31 @@ index bc837715d76..1c458c79660 100644
 +        // A run another home started (or this one before a restart): follow it while it lasts.
 +        if (!have || !p.running || !alive || p.run == mBgScrapeEnded) {
 +            scraperApplyResults();   // what it left that this manifest lacks
++            if (alive) return;
++            if (have && p.running && p.run != mBgScrapeEnded) {
++                // It died with no home following it (killed for memory while a game ran).
++                mBgScrapeEnded = p.run;
++                {
++                    nanoscraper::QueueLock lock;   // what it left waiting can hold an account
++                    nanoscraper::clearRequests(p.run);
++                    nanoscraper::endDeadRun(p.run);
++                }
++                char msg[200];
++                snprintf(msg, sizeof(msg), trDyn("Scrape stopped: %d with art, %d not found"), p.hits, p.fail);
++                photoShowBanner(msg);
++            } else if (const std::string waiting = nanoscraper::newestWaitingRun();
++                       !waiting.empty() && (!have || scrapeRunSeq(waiting) > scrapeRunSeq(p.run))) {
++                // Its start was lost (the home that queued it exited before the last service did):
++                // start it, once; when it still has not started 10 s on, drop it.
++                if (waiting != mBgScrapeLostRun) {
++                    mBgScrapeLostRun = waiting;
++                    mBgScrapeLostMs = ms;
++                    property_set(nanoscraper::kRunProp, waiting.c_str());
++                } else if (ms - mBgScrapeLostMs > 10000) {
++                    nanoscraper::QueueLock lock;
++                    nanoscraper::clearRequests(waiting);
++                }
++            }
 +            return;
 +        }
 +        mBgScrapeRun = p.run;
@@ -10407,9 +10601,24 @@ index bc837715d76..1c458c79660 100644
 +        std::lock_guard<std::mutex> lk(mScrapeMutex);
 +        mScrapeStatus.clear();
 +    } else if (!have || p.run != mBgScrapeRun) {
++        if (have && scrapeRunSeq(p.run) > scrapeRunSeq(mBgScrapeRun)) {
++            // A newer run started, so ours ended unseen: follow that one now (a scrape started
++            // here meanwhile would clear its queue).
++            mBgScrapeEnded = mBgScrapeRun;
++            mBgScrapeRun.clear();
++            mScrapeRunning = false;
++            mScrapeDoneFlag = true;
++            mScrapeBusyNote = false;
++            mDisplayDirty = true;
++            scraperBgPoll(true);
++            return;
++        }
 +        // Ours has not written its progress yet: give init and the service a few seconds.
 +        if (alive || ms - mBgScrapeStartMs < 10000) return;
-+        unlink(nanoscraper::kQueuePath);   // never picked up; it can hold the user's own account
++        if (mBgScrapeOwn) {
++            nanoscraper::QueueLock lock;   // never picked up; it can hold the user's own account
++            nanoscraper::clearRequests(mBgScrapeRun);
++        }
 +        p = nanoscraper::Progress();
 +        p.run = mBgScrapeRun;
 +        p.error = "The scrape could not be started.";
@@ -10432,6 +10641,11 @@ index bc837715d76..1c458c79660 100644
 +    mScrapeWasCancelled = p.cancelled;
 +    mDisplayDirty = true;
 +    if (!ended) return;
++    if (died) {   // what it left waiting; it can hold the user's own account
++        nanoscraper::QueueLock lock;
++        nanoscraper::clearRequests(mBgScrapeRun);
++        nanoscraper::endDeadRun(mBgScrapeRun);
++    }
 +
 +    ALOGI("scraper: run %s ended (%d/%d, %d with art%s)", mBgScrapeRun.c_str(), p.done, p.total, p.hits,
 +          died ? ", service died" : p.cancelled ? ", cancelled" : "");
@@ -10513,7 +10727,7 @@ index bc837715d76..1c458c79660 100644
  // ---------------------------------------------------------------------------
  // Progress / result modal. Centered panel over a dim backdrop. While running it
  // shows the live count + current game; when done a summary. Dismissed by the
-@@ -1368,11 +1704,12 @@ void NanoMenu::renderScrapeProgress() {
+@@ -1368,11 +1877,12 @@ void NanoMenu::renderScrapeProgress() {
      const float W = (float)mWidth, H = (float)mHeight;
      float sf = fminf(W / 1080.0f, H / 720.0f); if (sf < 0.5f) sf = 0.5f;
  
@@ -10528,7 +10742,7 @@ index bc837715d76..1c458c79660 100644
      }
  
      // Theme the modal chrome to match the active home instead of always showing the XMB-style
-@@ -1422,17 +1759,28 @@ void NanoMenu::renderScrapeProgress() {
+@@ -1422,17 +1932,28 @@ void NanoMenu::renderScrapeProgress() {
      };
  
      // The same modal fronts a Boxart Folder relocation (files moved instead of games scraped).
@@ -10559,7 +10773,7 @@ index bc837715d76..1c458c79660 100644
          } else {
              snprintf(line, sizeof(line),
                       hits == 1 ? trDyn("Done. %d game with art, %d not found.")
-@@ -1440,9 +1788,12 @@ void NanoMenu::renderScrapeProgress() {
+@@ -1440,9 +1961,12 @@ void NanoMenu::renderScrapeProgress() {
                       hits, fail);
              centered(line, py + ph * 0.50f, 1.15f * sf, t1R, t1G, t1B, 1.0f);
          }
@@ -10573,7 +10787,7 @@ index bc837715d76..1c458c79660 100644
          centered(line, py + ph * 0.42f, 1.3f * sf, t1R, t1G, t1B, 1.0f);
          // progress bar (accent fill on a dim track), in the theme accent
          const float barW = pw * 0.72f, barH = 6.0f * sf;
-@@ -1450,14 +1801,27 @@ void NanoMenu::renderScrapeProgress() {
+@@ -1450,14 +1974,27 @@ void NanoMenu::renderScrapeProgress() {
          drawRoundedRect(barX, barY, barW, barH, barH * 0.5f, t2R, t2G, t2B, 0.28f);
          float frac = (total > 0) ? (float)done / (float)total : 0.0f;
          if (frac > 0.0f) drawRoundedRect(barX, barY, barW * frac, barH, barH * 0.5f, accR, accG, accB, 1.0f);
@@ -10596,7 +10810,7 @@ index bc837715d76..1c458c79660 100644
 +            centered(dl.c_str(), py + ph * 0.79f, 0.85f * sf, t2R, t2G, t2B, 0.85f);
 +        }
 +        if (mScrapeBusyNote)
-+            centered(trDyn("One scrape at a time: start the next one when this one finishes."),
++            centered(trDyn("Clearing boxart has to wait until this scrape finishes."),
 +                     py + ph * 0.29f, 0.85f * sf, t2R, t2G, t2B, 1.0f);
 +        const char* hint = mBgScrapeRun.empty() ? "Press Circle to cancel"
 +                                                : "Circle: keep scraping in the background   Square: cancel";
@@ -12593,10 +12807,10 @@ index d33246ab732..0463ffdafc4 100644
  };
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoScrapeQueue.cpp b/frameworks/base/cmds/gammaos-nano/NanoScrapeQueue.cpp
 new file mode 100644
-index 00000000000..88baf88100e
+index 00000000000..06a8ab1dd50
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/NanoScrapeQueue.cpp
-@@ -0,0 +1,332 @@
+@@ -0,0 +1,471 @@
 +/*
 + * Copyright (C) 2026 GammaOS
 + *
@@ -12617,11 +12831,16 @@ index 00000000000..88baf88100e
 +#include "NanoJson.h"
 +#include "NanoScraperDevCreds.h"   // compiled-in (obfuscated) ScreenScraper dev creds
 +
++#include <algorithm>
++#include <cerrno>
 +#include <cstdio>
 +#include <cstdlib>
 +#include <cstring>
++#include <ctime>
++#include <dirent.h>
 +#include <fcntl.h>
 +#include <strings.h>
++#include <sys/file.h>
 +#include <sys/stat.h>
 +#include <unistd.h>
 +
@@ -12672,7 +12891,143 @@ index 00000000000..88baf88100e
 +    return v;
 +}
 +
-+bool writeQueue(const Queue& q) {
++QueueLock::QueueLock() {
++    mkdir(kQueueDir, 0700);
++    mFd = open(kQueueLock, O_RDWR | O_CREAT | O_CLOEXEC, 0600);
++    if (mFd >= 0) {
++        int r;
++        while ((r = flock(mFd, LOCK_EX)) != 0 && errno == EINTR) {}
++        mHeld = r == 0;
++    }
++    if (!mHeld) ALOGW("queue lock: %s", strerror(errno));
++}
++
++QueueLock::~QueueLock() {
++    if (mFd >= 0) close(mFd);   // releases the lock
++}
++
++// A request file is "<boot time ns, 20 digits>-<run>-<games>.json"; claimed, ".taken" for ".json".
++struct RequestName {
++    std::string name, run;
++    int games = 0;
++    bool claimed = false;
++};
++
++static bool parseRequestName(const char* name, RequestName* r) {
++    const size_t len = strlen(name);
++    if (len > 5 && strcmp(name + len - 5, ".json") == 0) r->claimed = false;
++    else if (len > 6 && strcmp(name + len - 6, ".taken") == 0) r->claimed = true;
++    else return false;
++    const char* runStart = strchr(name, '-');
++    const char* gamesStart = runStart ? strchr(runStart + 1, '-') : nullptr;
++    if (!gamesStart) return false;
++    r->name = name;
++    r->run.assign(runStart + 1, gamesStart);
++    r->games = atoi(gamesStart + 1);
++    return true;
++}
++
++// The run's requests, waiting and claimed, oldest first.
++static std::vector<RequestName> requestFiles(const std::string& run) {
++    std::vector<RequestName> out;
++    if (DIR* d = opendir(kQueueDir)) {
++        while (struct dirent* e = readdir(d)) {
++            RequestName r;
++            if (parseRequestName(e->d_name, &r) && r.run == run) out.push_back(std::move(r));
++        }
++        closedir(d);
++    }
++    std::sort(out.begin(), out.end(), [](const RequestName& a, const RequestName& b) { return a.name < b.name; });
++    return out;
++}
++
++static std::string serializeQueue(const Queue& q);
++static bool parseQueue(const std::string& text, Queue* q);
++
++bool addRequest(const Queue& q) {
++    struct timespec ts;
++    clock_gettime(CLOCK_BOOTTIME, &ts);
++    char name[96];
++    snprintf(name, sizeof(name), "%020lld-%s-%zu.json",
++             (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec, q.run.c_str(), q.jobs.size());
++    const std::string path = std::string(kQueueDir) + "/" + name;
++    return writeFileAtomic(path.c_str(), serializeQueue(q));
++}
++
++std::string claimRequest(const std::string& run) {
++    for (const auto& r : requestFiles(run)) {
++        if (r.claimed) continue;
++        const std::string path = std::string(kQueueDir) + "/" + r.name;
++        const std::string claimed = path.substr(0, path.size() - 5) + ".taken";
++        if (rename(path.c_str(), claimed.c_str()) == 0) return claimed;
++        unlink(path.c_str());
++    }
++    return std::string();
++}
++
++bool readClaimed(const std::string& path, Queue* q) {
++    std::string text;
++    if (readFile(path.c_str(), &text, 64 * 1024 * 1024) && parseQueue(text, q)) return true;
++    ALOGW("queue: dropped unreadable request %s", path.c_str());
++    return false;
++}
++
++// Removes the requests of run (keep false) or of every other run (keep true). The latter takes a
++// temporary file a crash left too: it can hold an account.
++static void removeRequests(const std::string& run, bool keep) {
++    if (DIR* d = opendir(kQueueDir)) {
++        while (struct dirent* e = readdir(d)) {
++            if (e->d_name[0] == '.') continue;
++            RequestName r;
++            const bool ofRun = parseRequestName(e->d_name, &r) && r.run == run;
++            if (ofRun != keep) unlinkat(dirfd(d), e->d_name, 0);
++        }
++        closedir(d);
++    }
++}
++
++void clearRequests(const std::string& run) {
++    removeRequests(run, false);
++}
++
++void clearOtherRequests(const std::string& keep) {
++    unlink("/data/system/nano_scrape/queue.json");   // the single request of earlier versions
++    removeRequests(keep, true);
++}
++
++std::string newestWaitingRun() {
++    std::string newest;
++    if (DIR* d = opendir(kQueueDir)) {
++        while (struct dirent* e = readdir(d)) {
++            RequestName r;
++            if (parseRequestName(e->d_name, &r) && !r.claimed &&
++                strtoll(r.run.c_str(), nullptr, 10) > strtoll(newest.c_str(), nullptr, 10))
++                newest = r.run;
++        }
++        closedir(d);
++    }
++    return newest;
++}
++
++void endDeadRun(const std::string& run) {
++    char svc[PROPERTY_VALUE_MAX] = {};
++    property_get(kServiceProp, svc, "");
++    Progress p;
++    if (!strcmp(svc, "running") || !readProgress(&p) || p.run != run || !p.running) return;
++    p.running = false;
++    p.what.clear();
++    p.bps = 0.0;
++    p.error = "The scrape stopped before it finished.";
++    writeProgress(p);
++}
++
++int queuedJobCount(const std::string& run) {
++    int n = 0;
++    for (const auto& r : requestFiles(run)) n += r.games;
++    return n;
++}
++
++static std::string serializeQueue(const Queue& q) {
 +    njson::Value root = njson::Value::makeObject();
 +    root.set("run") = njson::Value::makeString(q.run);
 +    root.set("dir") = njson::Value::makeString(q.cacheDir);
@@ -12706,14 +13061,12 @@ index 00000000000..88baf88100e
 +        jobs.arr.push_back(std::move(o));
 +    }
 +    root.set("jobs") = std::move(jobs);
-+    return writeFileAtomic(kQueuePath, njson::serialize(root, false));
++    return njson::serialize(root, false);
 +}
 +
-+bool readQueue(Queue* q) {
-+    std::string text;
++static bool parseQueue(const std::string& text, Queue* q) {
 +    njson::Value root;
-+    if (!readFile(kQueuePath, &text, 64 * 1024 * 1024) || !njson::parse(text, &root) || !root.isObject())
-+        return false;
++    if (!njson::parse(text, &root) || !root.isObject()) return false;
 +    q->run = root.getString("run");
 +    q->cacheDir = root.getString("dir");
 +    q->wantBox = root.getBool("box", true);
@@ -12931,10 +13284,10 @@ index 00000000000..88baf88100e
 +} // namespace android
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoScrapeQueue.h b/frameworks/base/cmds/gammaos-nano/NanoScrapeQueue.h
 new file mode 100644
-index 00000000000..de1d3994ea8
+index 00000000000..a414c0ce6dc
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/NanoScrapeQueue.h
-@@ -0,0 +1,111 @@
+@@ -0,0 +1,143 @@
 +/*
 + * Copyright (C) 2026 GammaOS
 + *
@@ -12951,11 +13304,15 @@ index 00000000000..de1d3994ea8
 +
 +// How a Nano home and the background scrape service (gammaos-nano-scrape) talk. A scrape runs in
 +// the service so it outlives the home (which exits when it starts a game) and is the same scrape
-+// whichever home (the DRM home or the overlay) is on screen. The home writes the games to
-+// kQueuePath and sets kRunProp to a new run token, which starts the service. The service writes its
-+// progress to kProgressPath a few times a second and appends each finished game to kResultsPath as
-+// a line of JSON; every home applies the lines it has not seen to its manifest. Setting
-+// kCancelProp to the run token stops the run.
++// whichever home (the DRM home or the overlay) is on screen. A home puts the games in a request file
++// in kQueueDir, named with a new run token, and sets kRunProp to the token, which starts the
++// service; the service takes only that run's requests. While it runs, more
++// requests can be added; it takes them one at a time, oldest first, and exits when none is left. It
++// writes its progress to kProgressPath a few times a second and appends each finished game to
++// kResultsPath as a line of JSON; every home applies the lines it has not seen to its manifest.
++// Setting kCancelProp to the run token stops the run and drops the waiting requests. Taking the
++// last request and the final progress happen under QueueLock, as does a home adding a request, so
++// a request added as the run ends is never lost: the home sees it ended and starts a new one.
 +
 +#ifndef GAMMAOS_NANO_SCRAPE_QUEUE_H
 +#define GAMMAOS_NANO_SCRAPE_QUEUE_H
@@ -12968,7 +13325,8 @@ index 00000000000..de1d3994ea8
 +namespace android {
 +namespace nanoscraper {
 +
-+constexpr const char* kQueuePath    = "/data/system/nano_scrape/queue.json";
++constexpr const char* kQueueDir     = "/data/system/nano_scrape/queue.d";
++constexpr const char* kQueueLock    = "/data/system/nano_scrape/queue.lock";
 +constexpr const char* kProgressPath = "/data/system/nano_scrape/progress";
 +constexpr const char* kResultsPath  = "/data/system/nano_scrape/results.jsonl";
 +constexpr const char* kRunProp      = "sys.gammaos.nano.scrape_run";
@@ -12998,14 +13356,41 @@ index 00000000000..de1d3994ea8
 +    std::vector<QueueJob> jobs;
 +};
 +
-+bool writeQueue(const Queue& q);
-+bool readQueue(Queue* q);
++// Holds the queue lock (flock) while it lives.
++class QueueLock {
++public:
++    QueueLock();
++    ~QueueLock();
++    QueueLock(const QueueLock&) = delete;
++    QueueLock& operator=(const QueueLock&) = delete;
++    bool held() const { return mHeld; }
++private:
++    int mFd;
++    bool mHeld = false;
++};
++
++// With the lock held: add a request (to run q.run), claim the run's oldest (set aside so nothing
++// else takes it; "" when none is left), drop the run's, drop every other run's.
++bool addRequest(const Queue& q);
++std::string claimRequest(const std::string& run);
++void clearRequests(const std::string& run);
++void clearOtherRequests(const std::string& keep);
++// Without the lock (a large one takes a while to parse): read a claimed request. The caller
++// removes it (it can hold an account).
++bool readClaimed(const std::string& path, Queue* q);
++// The games in the run's requests still waiting or claimed (from the file names; no lock needed).
++int queuedJobCount(const std::string& run);
++// The newest run with a request waiting ("" = none).
++std::string newestWaitingRun();
++// With the lock held: when the progress still says run runs but the service is gone, says it
++// stopped, so no home reports it again.
++void endDeadRun(const std::string& run);
 +
 +struct Progress {
 +    std::string run;
 +    bool running = false;
 +    bool cancelled = false;
-+    int done = 0, total = 0, hits = 0, fail = 0, skip = 0;
++    int done = 0, total = 0, hits = 0, fail = 0, skip = 0;   // total counts the waiting requests too
 +    double bps = 0.0;
 +    std::string what;                  // the art downloading now ("Manual"), "" between files
 +    std::string status;                // "System / Game"
@@ -13048,10 +13433,10 @@ index 00000000000..de1d3994ea8
 +#endif // GAMMAOS_NANO_SCRAPE_QUEUE_H
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoScrapeWorker.cpp b/frameworks/base/cmds/gammaos-nano/NanoScrapeWorker.cpp
 new file mode 100644
-index 00000000000..11dd9c06687
+index 00000000000..fb0780f04c8
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/NanoScrapeWorker.cpp
-@@ -0,0 +1,346 @@
+@@ -0,0 +1,445 @@
 +/*
 + * Copyright (C) 2026 GammaOS
 + *
@@ -13067,7 +13452,7 @@ index 00000000000..11dd9c06687
 + */
 +
 +// gammaos-nano-scrape: the background scrape service (see NanoScrapeQueue.h). init starts it when a
-+// home sets sys.gammaos.nano.scrape_run; it scrapes the queued games and exits. It links only the
++// home sets sys.gammaos.nano.scrape_run; it scrapes the queued requests and exits. It links only the
 +// scraper, not the rest of Nano, so it costs little memory next to a running game.
 +
 +#define LOG_TAG "GammaOSNanoScrape"
@@ -13085,6 +13470,7 @@ index 00000000000..11dd9c06687
 +#include <functional>
 +#include <mutex>
 +#include <string>
++#include <unordered_set>
 +#include <sys/stat.h>
 +#include <thread>
 +#include <unistd.h>
@@ -13098,8 +13484,12 @@ index 00000000000..11dd9c06687
 +namespace {
 +
 +struct Run {
-+    Queue q;
++    std::string token;                // the run: the first request's
++    Queue q;                          // the request scraping now
 +    std::vector<Credentials> creds;   // per job
++    std::unordered_set<size_t> seen; // the jobs the run had and did not fail (scrapeKey)
++    std::vector<size_t> keys;         // per job
++    int before = 0;                   // the games of the earlier requests
 +
 +    std::mutex m;
 +    Progress p;                       // under m
@@ -13125,14 +13515,59 @@ index 00000000000..11dd9c06687
 +        changed = true;
 +    }
 +
-+    // Writes the progress when it changed, and notices a cancel, a few times a second.
++    // A game asked for the same way again (the same system queued twice) is scraped once; one
++    // that failed, or is asked for another way (another service or account), is scraped again.
++    size_t scrapeKey(const QueueJob& j, const Credentials& c) const {
++        const size_t account = std::hash<std::string>{}(c.ssUser + '\x1f' + c.ssPass + '\x1f' + c.tgdbKey);
++        std::string k = j.romPath + '\x1f' + j.queryName + '\x1f' + std::to_string(j.engine) + '\x1f' +
++                        std::to_string(account) + '\x1f' +
++                        char('0' + (q.wantBox && j.wantBox)) + char('0' + (q.wantFan && j.wantFan));
++        for (const auto& x : j.extras) k += ',' + std::to_string(x.type);
++        return std::hash<std::string>{}(k);   // a large library keeps 8 bytes a game
++    }
++
++    // Takes the request's games (under m), without the ones the run already had, and works out
++    // each game's account.
++    void prepare() {
++        const Credentials base = globalCredentials();
++        std::vector<QueueJob> jobs;
++        creds.clear();
++        keys.clear();
++        for (auto& j : q.jobs) {
++            Credentials c = base;
++            if (!j.ssUser.empty()) c.ssUser = j.ssUser;   // the system's own account
++            if (!j.ssPass.empty()) c.ssPass = j.ssPass;
++            if (!j.tgdbKey.empty()) c.tgdbKey = j.tgdbKey;
++            const size_t key = scrapeKey(j, c);
++            if (q.jobs.size() > 1 && seen.count(key)) continue;   // one game is asked for on purpose
++            jobs.push_back(std::move(j));
++            creds.push_back(std::move(c));
++            keys.push_back(key);
++        }
++        // Only against earlier requests: one game in two systems (one folder) is looked up for both.
++        for (const auto& k : keys) seen.insert(k);
++        if (jobs.size() != q.jobs.size()) ALOGI("%zu games already in this run", q.jobs.size() - jobs.size());
++        q.jobs = std::move(jobs);
++        mkdir(q.cacheDir.c_str(), 0700);
++        updateTotal();
++    }
++
++    void updateTotal() {   // under m
++        const int total = before + (int)q.jobs.size() + queuedJobCount(token);
++        if (total != p.total) { p.total = total; changed = true; }
++    }
++
++    // Writes the progress when it changed, and notices a cancel and requests added, a few times a
++    // second.
 +    void reporter() {
 +        std::unique_lock<std::mutex> lk(m);
 +        while (!finished) {
 +            wake.wait_for(lk, std::chrono::milliseconds(250));
++            if (finished) break;
 +            char c[PROPERTY_VALUE_MAX] = {};
 +            property_get(kCancelProp, c, "");
-+            if (q.run == c) cancel = true;
++            if (token == c) cancel = true;
++            updateTotal();
 +            if (changed) {
 +                Progress copy = p;
 +                changed = false;
@@ -13222,6 +13657,7 @@ index 00000000000..11dd9c06687
 +        const bool stopped = cancelled();   // a lookup or download the cancel cut short is no failure
 +        if (stopped) extraFailed = false;
 +        std::lock_guard<std::mutex> lk(m);
++        const int failedBefore = p.fail;
 +        p.done++;
 +        changed = true;
 +        if (w.published) {
@@ -13254,6 +13690,7 @@ index 00000000000..11dd9c06687
 +            p.fail++;
 +        }
 +        if (!ok && r.networkFail && !stopped && p.error.empty()) p.error = r.error;
++        if (p.fail != failedBefore) seen.erase(keys[i]);   // queued again, it is tried again
 +        // Only the counts are needed from here on: a large library keeps nothing per game.
 +        w.r = ScrapeOutcome();
 +        std::vector<ExtraMediaJob>().swap(w.extras);
@@ -13345,57 +13782,104 @@ index 00000000000..11dd9c06687
 +
 +} // namespace
 +
++// Under the queue lock: the cancel as it stands now, not as the reporter last saw it.
++static bool cancelRequested(Run& run) {
++    char c[PROPERTY_VALUE_MAX] = {};
++    property_get(kCancelProp, c, "");
++    if (run.token == c) run.cancel = true;
++    return run.cancel;
++}
++
 +int main() {
 +    Run run;
-+    if (!readQueue(&run.q)) {
-+        ALOGE("no queue to scrape");
-+        unlink(kQueuePath);
-+        // Under this run's name the last run's results must not be read again.
-+        int fd = open(kResultsPath, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0600);
-+        if (fd >= 0) close(fd);
-+        char token[PROPERTY_VALUE_MAX] = {};
-+        property_get(kRunProp, token, "");
-+        Progress p;
-+        p.run = token[0] ? token : "none";
-+        p.error = "The scrape could not be started.";
-+        writeProgress(p);
-+        return 1;
++    char token[PROPERTY_VALUE_MAX] = {};
++    property_get(kRunProp, token, "");
++    run.token = token[0] ? token : "none";
++    {
++        // Said to run from the start, under the lock: a home starting a scrape while the first
++        // request is read adds to this run rather than clearing its queue. The results go first:
++        // a home reads them only once the progress names this run.
++        QueueLock lock;
++        run.resultsFd = open(kResultsPath, O_WRONLY | O_CREAT | O_TRUNC | O_APPEND | O_CLOEXEC, 0600);
++        if (run.resultsFd < 0) ALOGE("cannot write %s: %s", kResultsPath, strerror(errno));
++        run.p.run = run.token;
++        run.p.running = true;
++        run.p.total = queuedJobCount(run.token);   // from the names: the parse takes a while
++        writeProgress(run.p);
 +    }
-+    unlink(kQueuePath);   // it can hold the user's own account
-+    const Credentials base = globalCredentials();
-+    for (const auto& j : run.q.jobs) {
-+        Credentials c = base;
-+        if (!j.ssUser.empty()) c.ssUser = j.ssUser;   // the system's own account
-+        if (!j.ssPass.empty()) c.ssPass = j.ssPass;
-+        if (!j.tgdbKey.empty()) c.tgdbKey = j.tgdbKey;
-+        run.creds.push_back(std::move(c));
++    for (;;) {
++        std::string claimed;
++        {
++            QueueLock lock;
++            claimed = claimRequest(run.token);
++            if (claimed.empty()) {
++                ALOGE("no queue to scrape");
++                if (run.resultsFd >= 0) close(run.resultsFd);
++                run.p.running = false;
++                run.p.error = "The scrape could not be started.";
++                writeProgress(run.p);
++                return 1;
++            }
++        }
++        const bool read = readClaimed(claimed, &run.q);
++        unlink(claimed.c_str());   // before the total counts the waiting requests
++        if (read) break;
++        run.p.error = "A scrape request could not be read.";
 +    }
-+    mkdir(run.q.cacheDir.c_str(), 0700);
-+
-+    // The results go first: a home reads them only once the progress names this run.
-+    run.resultsFd = open(kResultsPath, O_WRONLY | O_CREAT | O_TRUNC | O_APPEND | O_CLOEXEC, 0600);
-+    if (run.resultsFd < 0) ALOGE("cannot write %s: %s", kResultsPath, strerror(errno));
-+    run.p.run = run.q.run;
-+    run.p.running = true;
-+    run.p.total = (int)run.q.jobs.size();
++    run.prepare();
++    cancelRequested(run);   // a cancel while it started
 +    writeProgress(run.p);
-+    ALOGI("run %s: %zu games", run.q.run.c_str(), run.q.jobs.size());
 +
 +    std::thread reporter(&Run::reporter, &run);
-+    run.go();
-+    {
-+        std::lock_guard<std::mutex> lk(run.m);
-+        run.finished = true;
-+        run.p.running = false;
-+        run.p.cancelled = run.cancel.load();
-+        run.p.what.clear();
-+        run.p.bps = 0.0;
++    for (bool more = true; more;) {
++        ALOGI("run %s: %zu games", run.token.c_str(), run.q.jobs.size());
++        run.go();
++        // The next request, or the end. The end is written before the lock is let go: a home
++        // adding a request after that sees the run ended and starts a new one.
++        for (;;) {
++            std::string claimed;
++            {
++                QueueLock lock;
++                // Under m too: the reporter's count never sees a request between its two names.
++                std::unique_lock<std::mutex> lk(run.m);
++                claimed = cancelRequested(run) ? std::string() : claimRequest(run.token);
++                if (claimed.empty()) {
++                    run.updateTotal();
++                    run.p.cancelled = run.cancel && run.p.done < run.p.total;   // not when it was all done
++                    if (run.cancel) clearRequests(run.token);
++                    run.updateTotal();
++                    run.finished = true;
++                    run.p.running = false;
++                    run.p.what.clear();
++                    run.p.bps = 0.0;
++                    lk.unlock();
++                    run.wake.notify_all();
++                    reporter.join();
++                    if (run.resultsFd >= 0) close(run.resultsFd);
++                    writeProgress(run.p);
++                    more = false;
++                    break;
++                }
++            }
++            Queue next;
++            if (!readClaimed(claimed, &next)) {
++                std::lock_guard<std::mutex> lk(run.m);
++                unlink(claimed.c_str());
++                run.p.error = "A scrape request could not be read.";
++                run.changed = true;
++                continue;
++            }
++            {
++                std::lock_guard<std::mutex> lk(run.m);   // the total never counts it twice, or not at all
++                unlink(claimed.c_str());
++                run.before += (int)run.q.jobs.size();
++                run.q = std::move(next);
++                run.prepare();
++                break;
++            }
++        }
 +    }
-+    run.wake.notify_all();
-+    reporter.join();
-+    if (run.resultsFd >= 0) close(run.resultsFd);
-+    writeProgress(run.p);
-+    ALOGI("run %s done (%d/%d hits, %d fail)", run.q.run.c_str(), run.p.hits, run.p.total, run.p.fail);
++    ALOGI("run %s done (%d/%d hits, %d fail)", run.token.c_str(), run.p.hits, run.p.total, run.p.fail);
 +    return 0;
 +}
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoScraper.cpp b/frameworks/base/cmds/gammaos-nano/NanoScraper.cpp

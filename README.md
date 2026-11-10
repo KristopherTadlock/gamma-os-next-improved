@@ -341,8 +341,10 @@ It also changes Nano:
   come back, from either Nano home. Circle closes the progress window and the
   scrape keeps going; Square cancels it. "Scraping X/Y" shows left of the
   Wi-Fi and battery icons while it runs, and a banner says when it is done.
-  One scrape runs at a time: starting another shows the running one, which has
-  to finish first. The service runs at low CPU and disk priority, gives way to
+  Starting another scrape while one runs asks whether to add it to the queue;
+  queued scrapes run in turn and add their games to the count ("Scraping
+  10/100" becomes "Scraping 10/200"). Square cancels the running scrape and
+  everything queued. The service runs at low CPU and disk priority, gives way to
   a game when memory runs short, and uses one connection on devices with about
   1 GB of RAM.
 - **Controller Bindings** (Quick Menu) set to Off sends the controller to apps
