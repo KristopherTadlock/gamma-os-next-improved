@@ -163,6 +163,10 @@ fixes GammaOS Nano bugs:
   take away a favourite imported from ES-DE's game lists;
 - Nano's File Transfer (MTP) only worked while a full-screen "MTP Active"
   screen stayed open;
+- on the first boot, games could not be started from ES-DE's game lists until
+  another app had been opened or the console restarted: ES-DE's launch did not
+  clear a leftover search, as the XMB's launches do, so it looked for the game
+  in empty search results;
 - in Nano mode, with no system bars, apps saw the square screen as portrait
   and took their portrait layouts: Dolphin drew its game in the top half,
   leaving the bottom half for touch controls. A square screen now counts as
@@ -240,8 +244,10 @@ It also changes Nano:
   keyboard over the app (the one its search uses, driven by the controller),
   starting from the field's text. The app stays undimmed behind it. Start puts the text into the field and
   presses the field's Go, Search or Next; B leaves the field as it was. It lives in the ShaderControl system app;
-  Nano selects it at every Nano boot (`persist.gammaos.nano.ime=0` keeps
-  Android's keyboard), and Boot Android switches back to another keyboard.
+  Nano selects it at every Nano boot and when setup finishes, trying again for
+  half a minute while Android doesn't list it yet (`persist.gammaos.nano.ime=0`
+  keeps Android's keyboard), and Boot Android switches back to another
+  keyboard.
 - **Boxart Scraper** is faster. Covers and fan art for every game come first
   and show as each one lands; screenshots, manuals and videos follow, lighter
   media first. Requests reuse their connections. A ScreenScraper account that
@@ -303,8 +309,9 @@ It also changes Nano:
   setup sets the clock from the internet, finds the time zone from the
   connection and picks the date and time formats that go with it, then shows
   them on a **Date and Time** screen to confirm; the zone can be changed on the
-  globe (returning to that screen) and either format changed there. Offline,
-  setup goes to the globe as before.
+  globe (returning to that screen) and either format changed there. A Wi-Fi
+  connection still coming up gets up to 5 seconds before setup gives up on it.
+  With Wi-Fi off, setup goes to the globe as before.
 - **Quick Menu Bluetooth:** choosing On keeps the chooser open on Pair Device,
   and the connected devices appear as the radio comes up; Off closes it.
 - **Kiosk Mode:** Start opens and closes Applications instead of the ES-DE
