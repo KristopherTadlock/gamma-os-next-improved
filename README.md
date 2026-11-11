@@ -328,8 +328,9 @@ It also changes Nano:
   Every action also works without thumbsticks: Select + L1 / R1 close and
   open tabs, Select + D-pad scrolls, and Select + A turns cursor mode on or
   off. In cursor mode the D-pad moves the cursor (faster the longer it is
-  held), A clicks (hold to drag) and X right-clicks. The Anbernic button and
-  Start + Select (held together) still work as everywhere else, and the
+  held), A clicks (hold to drag) and X right-clicks. The Anbernic button (with
+  its hotkeys), the Back key and Start + Select (held together) still work as
+  everywhere else, and the
   controls step aside while Nano's overlay or keyboard is up, and mouse mode
   turns off while they run.
   `persist.gammaos.gamepad.browser_pkgs` lists the browsers they apply to

@@ -20390,10 +20390,10 @@ index a164106f4c2..601e8e0b2bd 100644
      shared_libs: [
 diff --git a/frameworks/native/services/gammapad/BrowserMode.cpp b/frameworks/native/services/gammapad/BrowserMode.cpp
 new file mode 100644
-index 00000000000..272e3d4f45d
+index 00000000000..320de0efa36
 --- /dev/null
 +++ b/frameworks/native/services/gammapad/BrowserMode.cpp
-@@ -0,0 +1,517 @@
+@@ -0,0 +1,532 @@
 +#define LOG_TAG "gammapad"
 +
 +#include "BrowserMode.h"
@@ -20541,7 +20541,7 @@ index 00000000000..272e3d4f45d
 +void BrowserMode::resetInput() {
 +    mRelease.clear();
 +    mPadDown.clear();
-+    mSelectHeld = mStartHeld = mChord = false;
++    mSelectHeld = mStartHeld = mChord = mModeHeld = false;
 +    mLX = mLY = mRX = mRY = mHatX = mHatY = mDpadBtns = 0;
 +    mLtBtn = mRtBtn = mLtAxis = mRtAxis = mCursorA = mCursorX = false;
 +    mAccX = mAccY = mScrollX = mScrollY = 0;
@@ -20584,9 +20584,24 @@ index 00000000000..272e3d4f45d
 +    if (ev.type == EV_KEY) {
 +        int code = ev.code;
 +        bool pressed = ev.value != 0;
-+        if (code == BTN_MODE) return false;
++        if (code == BTN_MODE || code == KEY_F10) {   // the Anbernic button (F10 on the RG Cube's pad)
++            if (ev.value != 2 && pressed != mModeHeld) {
++                if (pressed) {
++                    mModeHeld = true;
++                    if (!mChord) releaseOutputs();
++                    mRelease.clear();
++                } else {
++                    mModeHeld = false;
++                    if (!mChord) endChord();
++                }
++            }
++            return false;
++        }
++        const bool padButton = (code >= BTN_A && code <= BTN_THUMBR) ||
++                               (code >= BTN_DPAD_UP && code <= BTN_DPAD_RIGHT);
++        if (!padButton) return false;   // the system's (a Back key)
 +        if (ev.value == 2) return !mPadDown.count(code);
-+        if (mChord || mPadDown.count(code)) {
++        if (mChord || (mModeHeld && pressed) || mPadDown.count(code)) {
 +            if (pressed) {
 +                mPadDown.insert(code);
 +            } else {
@@ -20594,7 +20609,7 @@ index 00000000000..272e3d4f45d
 +            }
 +            if (code >= BTN_DPAD_UP && code <= BTN_DPAD_RIGHT) {
 +                trackDpadButton(code, pressed);
-+                if (!mChord) refreshArrows();
++                if (!mChord && !mModeHeld) refreshArrows();
 +            }
 +            if (mChord) {
 +                if (code == BTN_SELECT) mSelectHeld = pressed;
@@ -20608,7 +20623,7 @@ index 00000000000..272e3d4f45d
 +    }
 +
 +    if (ev.type == EV_ABS) {
-+        if (mChord) {
++        if (mChord || mModeHeld) {
 +            trackAxis(ev.code, ev.value);
 +            return false;
 +        }
@@ -20913,10 +20928,10 @@ index 00000000000..272e3d4f45d
 +} // namespace gammapad
 diff --git a/frameworks/native/services/gammapad/BrowserMode.h b/frameworks/native/services/gammapad/BrowserMode.h
 new file mode 100644
-index 00000000000..c960cbd1712
+index 00000000000..44fbd217c52
 --- /dev/null
 +++ b/frameworks/native/services/gammapad/BrowserMode.h
-@@ -0,0 +1,116 @@
+@@ -0,0 +1,119 @@
 +#pragma once
 +
 +#include "VirtualKeyboard.h"
@@ -20941,7 +20956,9 @@ index 00000000000..c960cbd1712
 +// the browser's keyboard shortcuts instead of reaching the browser as a gamepad, so the browser's
 +// own controller handling never sees it. Every action also has a button-only form (Select
 +// combos and cursor mode) for devices without thumbsticks. Start + Select held together passes
-+// through to the virtual gamepad for the system hotkeys; the Mode (Anbernic) button always does.
++// through to the virtual gamepad for the system hotkeys; the Anbernic button (Mode, or F10 on the
++// RG Cube) always does, with the buttons pressed while it is held, and so does any key that is not
++// one of the pad's buttons (a Back key).
 +class BrowserMode {
 +public:
 +    using ToastCallback = std::function<void(const std::string&)>;
@@ -21020,6 +21037,7 @@ index 00000000000..c960cbd1712
 +    bool mSelectHeld = false, mSelectUsed = false;
 +    bool mStartHeld = false;
 +    bool mChord = false;
++    bool mModeHeld = false;   // the Anbernic button: the buttons pressed with it are its hotkeys
 +
 +    int mLX = 0, mLY = 0, mRX = 0, mRY = 0;
 +    int mHatX = 0, mHatY = 0;
