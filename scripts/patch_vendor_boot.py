@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
-"""Patches the RG Cube 1.2 vendor_boot's DisplayPort driver (sprd-drm.ko).
+"""Patches the RG Cube 1.2 vendor_boot: its DisplayPort driver (sprd-drm.ko) and its first-stage
+module list.
 
   patch_vendor_boot.py IN OUT
 
-Applies sprd_drm.py's patch to the copy recovery loads from the vendor ramdisk.
+Applies sprd_drm.py's patch to the copy recovery loads from the vendor ramdisk. The first stage no
+longer loads the LED driver (cust-leds.ko): its probe takes a second, during which nothing else in
+the boot could run. It loads later, in the background, from vendor_dlkm (patch_vendor_dlkm.py);
+recovery still loads it from here (modules.load.recovery).
 
 The ramdisk is otherwise byte-identical. The image is repacked and re-signed
 with the AOSP test key it was signed with, keeping its salt and properties.
@@ -21,6 +25,8 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from sprd_drm import patch_module  # noqa: E402
 
 MODULE = "lib/modules/sprd-drm.ko"
+FIRST_STAGE = "lib/modules/modules.load"
+DEFERRED = "cust-leds.ko"
 PARTITION_SIZE = 104857600
 
 
@@ -45,6 +51,35 @@ def find_cpio_entry(cpio, name):
             break
         pos = (data + size + 3) & ~3
     sys.exit("vendor ramdisk: no %s" % name)
+
+
+def replace_cpio_entry(cpio, name, data):
+    """CPIO with the newc entry NAME's data replaced by DATA (its size may change)."""
+    pos = 0
+    while pos + 110 <= len(cpio):
+        hdr = cpio[pos:pos + 110]
+        if hdr[:6] not in (b"070701", b"070702"):
+            sys.exit("vendor ramdisk: bad cpio header at %d" % pos)
+        size = int(hdr[54:62], 16)
+        namesize = int(hdr[94:102], 16)
+        entry = cpio[pos + 110:pos + 110 + namesize - 1].decode()
+        off = (pos + 110 + namesize + 3) & ~3
+        end = (off + size + 3) & ~3
+        if entry == name:
+            pad = b"\0" * (((len(data) + 3) & ~3) - len(data))
+            header = hdr[:54] + b"%08X" % len(data) + hdr[62:]
+            return cpio[:pos] + header + cpio[pos + 110:off] + data + pad + cpio[end:]
+        if entry == "TRAILER!!!":
+            break
+        pos = end
+    sys.exit("vendor ramdisk: no %s" % name)
+
+
+def drop_deferred(data):
+    mods = data.decode().split()
+    if DEFERRED not in mods:
+        sys.exit("vendor ramdisk: the first stage does not load %s" % DEFERRED)
+    return ("\n".join(m for m in mods if m != DEFERRED) + "\n").encode()
 
 
 def footer_info(image):
@@ -88,6 +123,8 @@ def main():
         cpio = run("lz4", "-dc", ramdisk, capture_output=True).stdout
         off, size = find_cpio_entry(cpio, MODULE)
         cpio = cpio[:off] + patch_module(cpio[off:off + size]) + cpio[off + size:]
+        off, size = find_cpio_entry(cpio, FIRST_STAGE)
+        cpio = replace_cpio_entry(cpio, FIRST_STAGE, drop_deferred(cpio[off:off + size]))
         cpio_path = os.path.join(tmp, "ramdisk.cpio")
         with open(cpio_path, "wb") as f:
             f.write(cpio)
@@ -109,7 +146,7 @@ def main():
         cpio2 = run("lz4", "-dc", os.path.join(check, "vendor_ramdisk00"), capture_output=True).stdout
         if cpio2 != cpio:
             sys.exit("vendor_boot: repacked ramdisk does not match")
-    print("patched %s -> %s" % (MODULE, dst))
+    print("patched %s and %s -> %s" % (MODULE, FIRST_STAGE, dst))
 
 
 if __name__ == "__main__":

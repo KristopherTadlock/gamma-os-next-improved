@@ -236,8 +236,9 @@ It also changes Nano:
     screenshots, videos and the rest). It also leaves Favorites, collections,
     Recently Played and, with the ES-DE folder on the card, its gamelist.
   - **Set Boxart** offers the game's own pictures (screenshot, title screen,
-    miximage, fan art and the rest), **Browse Files...** for a PNG or JPEG
-    anywhere on the device, the card or a share, and the **Photo Library**.
+    miximage, fan art and the rest) and **Browse Files...** for a PNG or JPEG
+    anywhere on the device, the card or a share. The picked cover shows at
+    once, in every theme, in place of the theme's scraped cover or miximage.
   - **Search Games** opens the keyboard over the game's options, which stay
     open behind it until a result is chosen.
   - **Information** shows where the game's file is, as ES-DE's metadata editor
@@ -270,6 +271,14 @@ It also changes Nano:
   Android Games**. The Boxart Scraper knows the system (ScreenScraper
   searches by the game's name). A game shows its icon until it has a cover,
   and a scraped or chosen cover replaces the icon in ES-DE themes too.
+- **Touch** follows what is on screen: every input registers where it is drawn
+  and what touching it does (`NanoTouch.h`): rows, entries, buttons, sliders,
+  keyboard keys, dialog buttons and the button hints, which press their button
+  ("B Back" goes back). Lists scroll with a drag and fling, in every theme and
+  player. Before, each screen worked out its own layout again for touch, and
+  taps could land on the wrong item.
+- **Dialogs** wrap long text and shrink it to fit, at 640x480 too, in every
+  theme; their buttons fit or stack.
 - **Nano Keyboard** is the system keyboard in Nano mode. When an app such as
   Brave wants text, it hands the field to Nano, which shows its own on-screen
   keyboard over the app (the one its search uses, driven by the controller),
@@ -279,6 +288,14 @@ It also changes Nano:
   half a minute while Android doesn't list it yet (`persist.gammaos.nano.ime=0`
   keeps Android's keyboard), and Boot Android switches back to another
   keyboard.
+- **Languages:** Nano's prompts, messages and menus, the ES-DE theme and the
+  DS emulator's menu included, are translated into the 21 languages the Nano
+  Keyboard types: Spanish, French, German, Italian, Portuguese, Dutch,
+  Russian, Polish, Turkish, Greek, Hebrew, Arabic, Thai, Japanese, Korean,
+  Simplified and Traditional Chinese, Danish, Finnish, Swedish and Norwegian
+  (bokmål), the last seven new. The translations are keyed by the English
+  text (`ps3xmb/i18n/<code>.json`); a file in `/data/system/nano_i18n/`
+  overrides the shipped one.
 - **Boxart Scraper** is faster. Covers and fan art for every game come first
   and show as each one lands; screenshots, manuals and videos follow, lighter
   media first. Requests reuse their connections. A ScreenScraper account that
@@ -378,7 +395,10 @@ It also changes Nano:
   in a device running ES-DE (or bring one from there) and both see the same
   games, favourites, collections and media. A Nano scrape keeps covers, fan art
   and metadata already in the folder (ES-DE's, for example) unless Overwrite is
-  on, and Clear Boxart deletes only pictures Nano downloaded.
+  on, and Clear Boxart deletes only pictures Nano downloaded. Systems the
+  card's ES-DE ROM folder has games for and Nano does not list yet (Xbox, for
+  one) are added; running the move again on a card that already holds ES-DE
+  picks them up too.
 - **Move Emulator Settings to microSD** (Game Settings): moves the settings of
   every emulator GammaOS ships, and the saves and states kept with them, to
   `emulator_config/<emulator>` on the card and points each emulator there:
@@ -556,7 +576,8 @@ The tools it uses:
   SELinux label, the original UUID and build time, and no filesystem feature
   the original lacks. `scripts/patch_vendor_boot.py` applies it to the copy
   recovery loads, in `vendor_boot`, then repacks that image and signs it again
-  with the AOSP test key it was signed with.
+  with the AOSP test key it was signed with. The same two scripts change the
+  order the kernel modules load in (Boot time, below).
 - `scripts/odm_sepolicy.py` compiles the SELinux policy for the new system,
   exactly as init would, and stores it on the odm partition with the system's
   policy hashes. Anbernic's odm carries the policy for the 1.2 system, so
@@ -587,6 +608,36 @@ The tools it uses:
   the vector logo and Android's Roboto, at the screen's own size, so they look
   the same and stay sharp on any screen, 640x480 included. The charging
   pictures and the fastboot logo are Anbernic's.
+- **Boot sound:** with the ES-DE theme and navigation sounds on, the first 2 s
+  of Pixabay's "Computer Startup Sound Effect" (Pixabay Content License) play
+  as the boot screen gives way to the home. `mods/57-boot-sound.sh` downloads
+  it at build time, checks its SHA-256 and installs it; the repository does
+  not carry it. Sound can only play once Android's audio is up, so the boot
+  screen stays up until it is (a minute at most, if audio never starts) and
+  the sound plays as it goes: the home shows about 3–5 s later than without
+  it. A game cannot start any sooner either way, since boot only
+  completes after audio is up.
+- The kernel's random generator: the RG Cube's hardware generator does not feed
+  it, so anything wanting random numbers early waited about 2 s for it, and the
+  vendor's BoringSSL self tests held up init that long at every boot.
+  `nano-seedrng` credits it at early-init with a seed the previous boot saved
+  on `/metadata` (deleted as it is read, a fresh one saved once the device is
+  up); on a device whose generator is ready it does nothing.
+- The LED driver (`cust-leds.ko`) takes a second to start. It was loaded in the
+  first stage, where nothing else can run; it now loads last, in the
+  background (`scripts/patch_vendor_boot.py`, `scripts/patch_vendor_dlkm.py`).
+- The background module list started with the Wi-Fi/Bluetooth base, which
+  pulls in the PCIe driver, and that waits a second for a link the RG Cube
+  does not have (nothing is on its PCIe). The display and GPU drivers, the
+  controls, touch and audio waited behind it; the radios and PCIe now load
+  last.
+- SurfaceFlinger, and Nano with it, waited about 1.7 s for the display
+  composer, which started with the other vendor services: the early start
+  list did not know the RG Cube's name for it, `vendor.hwcomposer-2-4`. On the
+  RG Cube, the early start waits for the display and GPU drivers' device nodes
+  first.
+- A restart or power-off waited 3 s for `wificond`, which does not exit when
+  asked; it is now stopped outright.
 - Nano sets up the USB mode (MTP and the rest) in the background once
   system_server's USB service is up, with a cable in. Before that its helper,
   a Java process, could only fail and retry while the system was starting.
