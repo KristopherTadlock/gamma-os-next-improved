@@ -348,11 +348,14 @@ It also changes Nano:
   and metadata already in the folder (ES-DE's, for example) unless Overwrite is
   on, and Clear Boxart deletes only pictures Nano downloaded.
 - **Move Emulator Settings to microSD** (Game Settings): moves the settings of
-  RetroArch, PPSSPP, Flycast and the built-in DS emulator, and the saves and
-  states kept with them, to `emulator_config/<emulator>` on the card and points
-  each emulator there. GammaOS keeps RetroArch's saves and states next to the
-  ROMs, so those stay where they are. Emulators that only change their folder
-  themselves (DraStic, M64Plus FZ, Dolphin, Azahar, WatermelonDS, ARMSX2,
+  every emulator GammaOS ships, and the saves and states kept with them, to
+  `emulator_config/<emulator>` on the card and points each emulator there:
+  RetroArch, PPSSPP, Flycast, DraStic (its whole system folder), M64Plus FZ (its
+  game data, which it copies in and out around each game) and the built-in DS
+  emulator. They reach the card by plain folder paths, which GammaOS's
+  MediaProvider allows every app. GammaOS keeps RetroArch's saves and states
+  next to the ROMs, so those stay where they are. Emulators you install that
+  only change their folder themselves (Dolphin, Azahar, WatermelonDS, ARMSX2,
   hakuX, Vita3K, ScummVM) keep theirs.
 - Both moves ask first, show their progress and never overwrite what is already
   on the card. Internal copies of files the card already had go to

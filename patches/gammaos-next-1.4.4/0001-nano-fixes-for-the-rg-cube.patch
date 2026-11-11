@@ -16173,10 +16173,10 @@ index 7b4e9412c26..6c42e1edbfe 100644
  
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoSdMove.cpp b/frameworks/base/cmds/gammaos-nano/NanoSdMove.cpp
 new file mode 100644
-index 00000000000..8239338510a
+index 00000000000..62c4d73eab5
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/NanoSdMove.cpp
-@@ -0,0 +1,967 @@
+@@ -0,0 +1,1102 @@
 +/*
 + * Copyright (C) 2026 GammaOS
 + *
@@ -16238,13 +16238,17 @@ index 00000000000..8239338510a
 +static const char* const kFlycastPrefs = "/data/data/com.flycast.emulator/shared_prefs/com.flycast.emulator_preferences.xml";
 +static const char* const kFlycastDefHome = "/storage/emulated/0/Android/data/com.flycast.emulator/files";
 +static const char* const kDrasticNanoDefDir = "/storage/emulated/0/drastic-nano";
++static const char* const kDrasticPkg = "com.dsemu.drastic";
++static const char* const kDrasticFsPrefs = "/data/data/com.dsemu.drastic/shared_prefs/_Dra$t1c_FS$_.xml";
++static const char* const kDrasticDefDir = "/data/user/0/com.dsemu.drastic/files/DraStic";
++static const char* const kMupenPkg = "org.mupen64plusae.v3.fzurita";
++static const char* const kMupenPrefs = "/data/data/org.mupen64plusae.v3.fzurita/shared_prefs/org.mupen64plusae.v3.fzurita_preferences.xml";
++static const char* const kMupenInternalData = "/data/data/org.mupen64plusae.v3.fzurita/files/GameData";
 +
-+enum { kGroupRetroArch = 0, kGroupDrasticNano, kGroupPpsspp, kGroupFlycast, kGroupEsde };
++enum { kGroupRetroArch = 0, kGroupDrasticNano, kGroupPpsspp, kGroupFlycast, kGroupEsde, kGroupDrastic, kGroupMupen };
 +
 +// Emulators whose folder only the emulator itself can change: their settings stay where they are.
 +static const std::pair<const char*, const char*> kEmuNotMovable[] = {
-+    {"com.dsemu.drastic", "DraStic"},
-+    {"org.mupen64plusae.v3.fzurita", "M64Plus FZ"},
 +    {"org.dolphinemu.dolphinemu", "Dolphin"},
 +    {"org.azahar_emu.azahar", "Azahar"},
 +    {"me.magnum.melondualds", "WatermelonDS"},
@@ -16807,6 +16811,99 @@ index 00000000000..8239338510a
 +    return v.empty() || v[0] != '/' ? std::string() : v;
 +}
 +
++// A <string> of an app's SharedPreferences file ("" = not set).
++static std::string sdPrefsGet(const std::string& prefs, const std::string& name) {
++    const std::string key = "<string name=\"" + name + "\">";
++    const size_t a = prefs.find(key);
++    if (a == std::string::npos) return std::string();
++    const size_t b = prefs.find("</string>", a);
++    if (b == std::string::npos) return std::string();
++    std::string v = prefs.substr(a + key.size(), b - a - key.size());
++    for (const auto& e : {std::make_pair("&amp;", "&"), std::make_pair("&lt;", "<"), std::make_pair("&gt;", ">"),
++                          std::make_pair("&quot;", "\""), std::make_pair("&apos;", "'")})
++        for (size_t p = v.find(e.first); p != std::string::npos; p = v.find(e.first, p + 1)) v.replace(p, strlen(e.first), e.second);
++    return v;
++}
++
++// Sets a <string> in SharedPreferences text (a file never written, or an empty <map />, made one).
++static bool sdPrefsSet(std::string* prefs, const std::string& name, const std::string& value) {
++    if (prefs->find("<map") == std::string::npos)
++        *prefs = "<?xml version='1.0' encoding='utf-8' standalone='yes' ?>\n<map>\n</map>\n";
++    const size_t empty = prefs->find("<map />");
++    if (empty != std::string::npos) prefs->replace(empty, 7, "<map>\n</map>");
++    std::string esc;
++    for (char c : value) esc += c == '&' ? "&amp;" : c == '<' ? "&lt;" : c == '>' ? "&gt;" : std::string(1, c);
++    const std::string key = "<string name=\"" + name + "\">";
++    const size_t a = prefs->find(key);
++    if (a != std::string::npos) {
++        const size_t b = prefs->find("</string>", a);
++        if (b == std::string::npos) return false;
++        prefs->replace(a + key.size(), b - a - key.size(), esc);
++        return true;
++    }
++    const size_t end = prefs->rfind("</map>");
++    if (end == std::string::npos) return false;
++    prefs->insert(end, "    " + key + esc + "</string>\n");
++    return true;
++}
++
++// DraStic's system folder: _SystemPath, "/fp<length of the parent><parent>/<name>" for a folder
++// ("/ss..." is one picked through Android, a content:// address: "" then). Its app folder when unset.
++static std::string drasticSystemDir() {
++    std::string prefs;
++    if (!sdReadFile(kDrasticFsPrefs, &prefs)) return kDrasticDefDir;
++    const std::string v = sdPrefsGet(prefs, "_SystemPath");
++    if (v.empty()) return kDrasticDefDir;
++    if (v.compare(0, 3, "/fp") != 0) return std::string();
++    size_t i = 3, n = 0;
++    while (i < v.size() && isdigit((unsigned char)v[i])) n = n * 10 + (v[i++] - '0');
++    if (i == 3 || i + n > v.size()) return std::string();
++    std::string dir = v.substr(i, n) + v.substr(i + n);
++    while (dir.size() > 1 && dir.back() == '/') dir.pop_back();
++    return !dir.empty() && dir[0] == '/' ? dir : std::string();
++}
++
++static std::string drasticSystemPathValue(const std::string& dir) {
++    const size_t sl = dir.find_last_of('/');
++    const std::string parent = dir.substr(0, sl);
++    return "/fp" + std::to_string(parent.size()) + parent + dir.substr(sl);
++}
++
++// M64Plus FZ keeps game data in its app folder and, set to external storage, copies each game's
++// data from and back to <folder>/GameData around play. The folder: gameDataStoragePath, a file://
++// address ("" = a content:// one picked through Android, or internal storage when *internal).
++static std::string mupenDataDir(bool* internal) {
++    std::string prefs;
++    sdReadFile(kMupenPrefs, &prefs);
++    const std::string type = sdPrefsGet(prefs, "gameDataStorageType");
++    std::string path = sdPrefsGet(prefs, "gameDataStoragePath");
++    *internal = type == "internal";
++    if (*internal) return std::string();
++    if (path.empty()) return "/storage/emulated/0/M64Plus";   // its default (made at its next start)
++    if (path.compare(0, 7, "file://") != 0) return std::string();
++    std::string dir;
++    for (size_t i = 7; i < path.size(); i++) {
++        if (path[i] == '%' && i + 2 < path.size() && isxdigit((unsigned char)path[i + 1]) && isxdigit((unsigned char)path[i + 2])) {
++            dir += (char)strtol(path.substr(i + 1, 2).c_str(), nullptr, 16);
++            i += 2;
++        } else {
++            dir += path[i];
++        }
++    }
++    while (dir.size() > 1 && dir.back() == '/') dir.pop_back();
++    return !dir.empty() && dir[0] == '/' ? dir : std::string();
++}
++
++static std::string sdFileUri(const std::string& path) {   // as Android's Uri.fromFile writes it
++    static const char kHex[] = "0123456789ABCDEF";
++    std::string u = "file://";
++    for (unsigned char c : path) {
++        if (isalnum(c) || strchr("/-_.~", c)) u += (char)c;
++        else { u += '%'; u += kHex[c >> 4]; u += kHex[c & 15]; }
++    }
++    return u;
++}
++
 +void NanoMenu::emuMoveOffer() {
 +    const std::string sd = sdCardRoot();
 +    if (sd.empty()) { photoShowBanner(trDyn("Insert a microSD card first.")); return; }
@@ -16817,6 +16914,11 @@ index 00000000000..8239338510a
 +    if (packageInstalled(kFlycastPkg)) {
 +        std::string prefs;
 +        if (!flycastHome(&prefs).empty()) movable.push_back("Flycast");
++    }
++    if (packageInstalled(kDrasticPkg)) (drasticSystemDir().empty() ? notMovable : movable).push_back("DraStic");
++    if (packageInstalled(kMupenPkg)) {
++        bool internal = false;
++        (!mupenDataDir(&internal).empty() || internal ? movable : notMovable).push_back("M64Plus FZ");
 +    }
 +    movable.push_back(trDyn("the built-in DS emulator"));
 +    for (const auto& e : kEmuNotMovable) if (packageInstalled(e.first)) notMovable.push_back(e.second);
@@ -16920,6 +17022,31 @@ index 00000000000..8239338510a
 +        }
 +    }
 +
++    if (packageInstalled(kDrasticPkg)) {   // DraStic's whole system folder: BIOS, config, saves, states, cheats
++        const std::string from = drasticSystemDir();
++        const std::string to = card + "/drastic";
++        if (!from.empty() && from != to) {
++            FileCopyPair p{rawStoragePath(from), to};
++            p.move = true; p.backup = backup + "/drastic"; p.group = kGroupDrastic;
++            pairs.push_back(p);
++            mSdMoveEmuDirs["drastic"] = to;
++            mFileJobStopPkgs.push_back(kDrasticPkg);
++        }
++    }
++
++    if (packageInstalled(kMupenPkg)) {   // M64Plus FZ's game data (saves and states)
++        bool internal = false;
++        const std::string dir = mupenDataDir(&internal);
++        const std::string to = card + "/m64plus";
++        if ((internal || !dir.empty()) && dir != to) {
++            FileCopyPair p{internal ? std::string(kMupenInternalData) : rawStoragePath(dir + "/GameData"), to + "/GameData"};
++            p.move = true; p.backup = backup + "/m64plus/GameData"; p.group = kGroupMupen;
++            pairs.push_back(p);
++            mSdMoveEmuDirs["m64plus"] = to;
++            mFileJobStopPkgs.push_back(kMupenPkg);
++        }
++    }
++
 +    if (pairs.empty()) { photoShowBanner(trDyn("The emulator settings are already on the microSD card.")); return; }
 +    for (const auto& p : pairs) {
 +        if (!p.move || !sdTooBroad(p.src, false)) continue;
@@ -16981,25 +17108,32 @@ index 00000000000..8239338510a
 +            system("am force-stop com.flycast.emulator >/dev/null 2>&1");
 +            sdMkdirs(it->second);
 +            std::string prefs;
-+            const std::string key = "<string name=\"home_directory\">";
-+            const std::string val = it->second + "/";
-+            if (!sdReadFile(kFlycastPrefs, &prefs) || prefs.find("<map") == std::string::npos)   // never started
-+                prefs = "<?xml version='1.0' encoding='utf-8' standalone='yes' ?>\n<map>\n</map>\n";
-+            const size_t empty = prefs.find("<map />");
-+            if (empty != std::string::npos) prefs.replace(empty, 7, "<map>\n</map>");
-+            const size_t a = prefs.find(key);
-+            if (a != std::string::npos) {
-+                const size_t b = prefs.find("</string>", a);
-+                if (b == std::string::npos) return false;
-+                prefs.replace(a + key.size(), b - a - key.size(), val);
-+            } else {
-+                const size_t end = prefs.rfind("</map>");
-+                if (end == std::string::npos) return false;
-+                prefs.insert(end, "    " + key + val + "</string>\n");
-+            }
-+            if (!sdWriteAppFile(kFlycastPrefs, prefs)) return false;
++            sdReadFile(kFlycastPrefs, &prefs);
++            if (!sdPrefsSet(&prefs, "home_directory", it->second + "/") || !sdWriteAppFile(kFlycastPrefs, prefs)) return false;
 +            system("appops set --uid com.flycast.emulator MANAGE_EXTERNAL_STORAGE allow >/dev/null 2>&1");
 +            return true;
++        }
++        // The two below reach the card through GammaOS's MediaProvider, which lets every app use any
++        // folder by its path; they are pointed at plain folders, not ones picked through Android.
++        case kGroupDrastic: {
++            auto it = mSdMoveEmuDirs.find("drastic");
++            if (it == mSdMoveEmuDirs.end()) return true;
++            system("am force-stop com.dsemu.drastic >/dev/null 2>&1");
++            sdMkdirs(it->second);
++            std::string prefs;
++            sdReadFile(kDrasticFsPrefs, &prefs);
++            return sdPrefsSet(&prefs, "_SystemPath", drasticSystemPathValue(it->second)) && sdWriteAppFile(kDrasticFsPrefs, prefs);
++        }
++        case kGroupMupen: {
++            auto it = mSdMoveEmuDirs.find("m64plus");
++            if (it == mSdMoveEmuDirs.end()) return true;
++            system("am force-stop org.mupen64plusae.v3.fzurita >/dev/null 2>&1");
++            sdMkdirs(it->second + "/GameData");
++            std::string prefs;
++            sdReadFile(kMupenPrefs, &prefs);
++            return sdPrefsSet(&prefs, "gameDataStorageType", "external")
++                   && sdPrefsSet(&prefs, "gameDataStoragePath", sdFileUri(it->second))
++                   && sdWriteAppFile(kMupenPrefs, prefs);
 +        }
 +    }
 +    return true;
@@ -17116,7 +17250,8 @@ index 00000000000..8239338510a
 +                                    == mFileJobFailedGroups.end();
 +        mFileJobStopPkgs.clear();
 +        if (mSdMoveConflictKind == 4)
-+            for (const char* pkg : {"com.retroarch.aarch64", kPpssppPkg, kFlycastPkg}) mFileJobStopPkgs.push_back(pkg);
++            for (const char* pkg : {"com.retroarch.aarch64", kPpssppPkg, kFlycastPkg, kDrasticPkg, kMupenPkg})
++                mFileJobStopPkgs.push_back(pkg);
 +        else
 +            mFileJobStopPkgs.push_back(kEsdePkg);
 +        if (!fileCopyStart(5, "Overwrite on SD Card", std::move(pairs))) {   // the choice again
