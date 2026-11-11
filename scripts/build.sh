@@ -20,6 +20,12 @@
 # odm gets a precompiled SELinux policy matching the system image
 # (scripts/odm_sepolicy.py), so init does not compile one at every boot. That
 # needs secilc (from the AOSP host build) and debugfs on PATH.
+#
+# With SYSTEM_IMG, the bootloader's boot picture (BootLogo) becomes Nano's boot
+# screen without its status line (scripts/bootlogo.py), so the screen from
+# power-on carries straight into Nano's. That needs nano-bootlogo (from the AOSP
+# host build) on PATH; BOOT_LOGO_SVG and BOOT_LOGO_FONT default to the logo and
+# Roboto in the AOSP tree MKBOOTIMG is in (or AOSP=<tree>).
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -58,6 +64,15 @@ done
 mkbootimg="${MKBOOTIMG:-}"; mkbootimg="${mkbootimg%% *}"
 [[ -n "$mkbootimg" && ( -f "$mkbootimg" || -n "$(command -v "$mkbootimg")" ) && -f "${AVB_KEY:-}" ]] || {
   echo "MKBOOTIMG and AVB_KEY are required (DisplayPort driver patch)" >&2; exit 1; }
+
+if [[ -n "${SYSTEM_IMG:-}" ]]; then
+  AOSP="${AOSP:-${mkbootimg%/system/tools/mkbootimg/mkbootimg.py}}"
+  BOOT_LOGO_SVG="${BOOT_LOGO_SVG:-$AOSP/frameworks/base/cmds/gammaos-nano/bootscreen/thimsy.svg}"
+  BOOT_LOGO_FONT="${BOOT_LOGO_FONT:-$AOSP/external/roboto-fonts/Roboto-Regular.ttf}"
+  command -v nano-bootlogo >/dev/null || { echo "nano-bootlogo is required (boot picture)" >&2; exit 1; }
+  [[ -f "$BOOT_LOGO_SVG" && -f "$BOOT_LOGO_FONT" ]] || {
+    echo "BOOT_LOGO_SVG and BOOT_LOGO_FONT are required (boot picture)" >&2; exit 1; }
+fi
 
 mkdir -p "$WORK/bin" "$WORK/images" "$WORK/mnt" "$OUT"
 export CRC16ARC="$WORK/bin/crc16arc"
@@ -145,6 +160,14 @@ for slot in VENDORBOOT VENDORBOOT_B; do
   python3 -I "$ROOT/scripts/pactool.py" replace "$pac.partial" "$slot" "$vendor_boot.patched"
 done
 rm -f "$vendor_boot" "$vendor_boot.patched"
+if [[ -n "${SYSTEM_IMG:-}" ]]; then
+  logo="$WORK/images/logo.img"
+  python3 -I "$ROOT/scripts/pactool.py" extract "$WORK/pac/$NAME.pac" logo.img "$logo"
+  nano-bootlogo "$BOOT_LOGO_SVG" "$BOOT_LOGO_FONT" 720 720 "$logo.rgba"
+  python3 -I "$ROOT/scripts/bootlogo.py" "$logo" "$logo.rgba" "$logo.new"
+  python3 -I "$ROOT/scripts/pactool.py" replace "$pac.partial" logo.img "$logo.new"
+  rm -f "$logo" "$logo.rgba" "$logo.new"
+fi
 python3 -I "$ROOT/scripts/pactool.py" fixcrc "$pac.partial"
 python3 -I "$ROOT/scripts/pactool.py" setinfo "$pac.partial" "Improved_v$VERSION$VARIANT" RG_Cube_GammaOS_Next_Improved
 mv "$pac.partial" "$pac"

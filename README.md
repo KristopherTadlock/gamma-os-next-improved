@@ -574,10 +574,19 @@ The tools it uses:
   every boot and restarted audio just after it started; init holds a restart
   back 5 s, and system_server waited about 2 s for it.
 - No boot intro: Nano's cold-boot animation, its photosensitivity notice and
-  its jingle are removed in every theme (a replacement is planned), so the
-  home, or the setup wizard on a new device, shows as soon as it is ready. The
-  intro ran 13–17 s over a system that was ready sooner. Its sounds and images
-  are no longer installed.
+  its jingle are removed in every theme, so the home, or the setup wizard on a
+  new device, shows as soon as it is ready. The intro ran 13–17 s over a
+  system that was ready sooner. Its sounds and images are no longer installed.
+- **Boot screen:** from power-on the screen shows "Thimsy OS", the logo and
+  "Loading...". The bootloader shows it until Android can draw (the BootLogo
+  partition's boot picture, `scripts/bootlogo.py`); Nano then draws the same
+  picture with a line saying what the device is doing ("Starting Android",
+  "Loading your theme", ...) and closes it as soon as the home can be drawn.
+  Both are drawn by the same code (`bootscreen/NanoBootArt.cpp` in the Nano
+  patch, and its host tool `nano-bootlogo` for the bootloader's picture), from
+  the vector logo and Android's Roboto, at the screen's own size, so they look
+  the same and stay sharp on any screen, 640x480 included. The charging
+  pictures and the fastboot logo are Anbernic's.
 - Nano sets up the USB mode (MTP and the rest) in the background once
   system_server's USB service is up, with a cable in. Before that its helper,
   a Java process, could only fail and retry while the system was starting.

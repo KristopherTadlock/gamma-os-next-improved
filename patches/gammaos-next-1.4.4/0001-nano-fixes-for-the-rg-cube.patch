@@ -381,10 +381,10 @@ index 2ff1dad7970..a230afabec9 100644
          // returning to the XMB.
          if (actions.powerOffRequested || overlay.powerOffRequested()) {
 diff --git a/frameworks/base/cmds/gammaos-nano/Android.bp b/frameworks/base/cmds/gammaos-nano/Android.bp
-index 0f747c9a45c..8ed3f85b10c 100644
+index 0f747c9a45c..8618a7e1641 100644
 --- a/frameworks/base/cmds/gammaos-nano/Android.bp
 +++ b/frameworks/base/cmds/gammaos-nano/Android.bp
-@@ -77,15 +77,16 @@ cc_binary {
+@@ -77,15 +77,18 @@ cc_binary {
          "NanoEsdeTheme.cpp",
          "NanoThemeEngine.cpp",
          "NanoMenuEsdeMenu.cpp",
@@ -393,6 +393,8 @@ index 0f747c9a45c..8ed3f85b10c 100644
          "NanoControlCenter.cpp",
          "NanoMenuPS3Globe.cpp",
          "NanoMenuPS3Boot.cpp",
++        "NanoBootScreen.cpp",
++        "bootscreen/NanoBootArt.cpp",
          "NanoBootChime.cpp",
 -        "NanoHalChime.cpp",
          "NanoOtaCheck.cpp",
@@ -402,7 +404,7 @@ index 0f747c9a45c..8ed3f85b10c 100644
          "NanoMenuSetupWizard.cpp",
          "NanoMenuStrings.cpp",
          "NanoBtStable.cpp",
-@@ -111,11 +112,15 @@ cc_binary {
+@@ -111,11 +114,15 @@ cc_binary {
          "NanoAacDec.cpp",
          "NanoCea608.cpp",
          "NanoScraper.cpp",
@@ -418,7 +420,7 @@ index 0f747c9a45c..8ed3f85b10c 100644
          "NanoI18n.cpp",
          "NanoOsk.cpp",
          "LibretroRunner.cpp",
-@@ -133,6 +138,7 @@ cc_binary {
+@@ -133,6 +140,7 @@ cc_binary {
          "liba52_nano",   // AC-3 decoder (no AC-3 codec on the device)
          "libtinyxml2",   // XML DOM parser for the ES-DE theme engine (NanoEsdeTheme)
          "libnanosvg_nano",   // SVG rasterizer for ES-DE theme logos (NanoThemeEngine)
@@ -426,7 +428,7 @@ index 0f747c9a45c..8ed3f85b10c 100644
          // Share storage + credential encoding, shared with the gammaos-sharefs daemon so a share
          // added in the menu is written exactly as the daemon expects to read it.
          "libgammaos_sharecfg",
-@@ -143,14 +149,13 @@ cc_binary {
+@@ -143,14 +151,13 @@ cc_binary {
          "jni_headers",
          "native_headers",   // <android/imagedecoder.h> + <android/bitmap.h> (photo viewer decode)
          "libgammargb_process_headers",   // shared GammaRGB colour pipeline (parity with SF sampler)
@@ -442,7 +444,7 @@ index 0f747c9a45c..8ed3f85b10c 100644
          "libbinder_ndk",
          "libcutils",
          "liblog",
-@@ -172,21 +177,20 @@ cc_binary {
+@@ -172,21 +179,22 @@ cc_binary {
          "libandroid",   // APerformanceHint (ADPF render-thread hint session)
          "libaaudio",    // GammaEQ audio preview + music player output (AAudio)
          "libmediandk",  // music player decode: AMediaExtractor + AMediaCodec -> PCM
@@ -455,8 +457,10 @@ index 0f747c9a45c..8ed3f85b10c 100644
      ],
  
      init_rc: ["gammaos-nano.rc"],
++    host_required: ["nano-bootlogo"],   // the bootloader's picture of the boot screen (scripts/bootlogo.py)
      required: [
 +        "gammaos-nano-scrape",
++        "nano_bootscreen",
          "nano-ce-unlock.sh",
          "nano-pmdown.sh",
          "joypad_uevent_fixup.sh",
@@ -467,7 +471,7 @@ index 0f747c9a45c..8ed3f85b10c 100644
          "nano_xmb_icons",
          "nano_xmb_normalmaps",
          "nano_xmb_glass",
-@@ -211,6 +215,34 @@ cc_binary {
+@@ -211,6 +219,54 @@ cc_binary {
      ],
  }
  
@@ -499,10 +503,38 @@ index 0f747c9a45c..8ed3f85b10c 100644
 +    ],
 +}
 +
++// The boot screen's picture (bootscreen/NanoBootArt.cpp), drawn on the host for the bootloader's
++// logo partition (scripts/bootlogo.py in gamma-os-next-improved) exactly as Nano draws it.
++cc_binary_host {
++    name: "nano-bootlogo",
++    srcs: [
++        "bootscreen/NanoBootArt.cpp",
++        "bootscreen/nano_bootlogo.cpp",
++    ],
++    cflags: ["-Wall", "-Werror"],
++    static_libs: ["libnanosvg_nano", "libft2.nodep"],
++}
++
++// The boot screen's logo (NanoBootScreen.cpp; the bootloader picture is drawn from it too).
++prebuilt_etc {
++    name: "nano_bootscreen",
++    src: "bootscreen/thimsy.svg",
++    sub_dir: "nano_xmb/boot",
++    filename: "logo.svg",
++}
++
  // Vendored liba52 (a52dec 0.7.4, GPL-2) - AC-3 decoder. The device has no hardware
  // or software AC-3 codec, so NanoAc3 uses this to decode AC-3 audio in .ts / MKV / VOB.
  // Pure-C generic path (no SIMD / djbfft / memalign); -w because the 2002-era source
-@@ -330,7 +362,7 @@ sh_binary {
+@@ -249,6 +305,7 @@ cc_library_static {
+ // source is not clean under Soong's warning set (same treatment as liba52_nano).
+ cc_library_static {
+     name: "libnanosvg_nano",
++    host_supported: true,
+     srcs: ["nanosvg/nanosvg_impl.c"],
+     local_include_dirs: ["nanosvg"],
+     export_include_dirs: ["nanosvg"],
+@@ -330,7 +387,7 @@ sh_binary {
  
  // GammaOS Nano XMB assets. Ported from the PS3 XMB recreation: the captured
  // cloth-wave geometry, per-month gradient textures, normal-map / glass icon
@@ -511,7 +543,7 @@ index 0f747c9a45c..8ed3f85b10c 100644
  // /system/etc/nano_xmb/<sub_dir>/; the renderer also checks
  // /data/system/nano_xmb/ first so assets can be pushed during development
  // without rebuilding the system image.
-@@ -388,12 +420,6 @@ prebuilt_etc {
+@@ -388,12 +445,6 @@ prebuilt_etc {
      sub_dir: "nano_xmb/gradients",
  }
  
@@ -524,7 +556,7 @@ index 0f747c9a45c..8ed3f85b10c 100644
  prebuilt_etc {
      name: "nano_xmb_icons",
      srcs: ["ps3xmb/icons/*.png"],
-@@ -423,7 +449,27 @@ prebuilt_etc {
+@@ -423,7 +474,27 @@ prebuilt_etc {
  // /data/system/nano_xmb/audio/ first (dev override), else this install path.
  prebuilt_etc {
      name: "nano_xmb_audio",
@@ -553,7 +585,7 @@ index 0f747c9a45c..8ed3f85b10c 100644
      sub_dir: "nano_xmb/audio",
  }
  
-@@ -543,7 +589,12 @@ prebuilt_etc {
+@@ -543,7 +614,12 @@ prebuilt_etc {
  // first, this is the bundled fallback).
  prebuilt_etc {
      name: "nano_xmb_nds",
@@ -751,6 +783,166 @@ index e7eb3c14744..05ffbc7b30e 100644
  void nanoDirectStopLoop   ();             // clear the loop; worker idles + closes once the queue drains
  void nanoDirectHoldOpen   (bool on);      // hold card0 open (silent) while true so one-shots mix without a re-open
  void nanoDirectShutdown   ();             // stop everything, close the PCM, let the worker exit
+diff --git a/frameworks/base/cmds/gammaos-nano/NanoBootScreen.cpp b/frameworks/base/cmds/gammaos-nano/NanoBootScreen.cpp
+new file mode 100644
+index 00000000000..0dd0ca41d44
+--- /dev/null
++++ b/frameworks/base/cmds/gammaos-nano/NanoBootScreen.cpp
+@@ -0,0 +1,154 @@
++/*
++ * Copyright (C) 2026 GammaOS
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++// The boot screen: on a cold boot Nano's first frames show the logo, "Loading..." and what the
++// device is doing, over the home that is still getting ready, and it goes as soon as the home
++// (or the setup wizard) can be drawn. The picture is bootscreen/NanoBootArt's, the one the
++// bootloader shows before Nano starts, so the status line is the only thing that appears.
++
++#define LOG_TAG "NanoMenu"
++
++#include "NanoMenu.h"
++#include "NanoI18n.h"
++#include "bootscreen/NanoBootArt.h"
++
++#include <cutils/properties.h>
++#include <log/log.h>
++#include <unistd.h>
++#include <utils/SystemClock.h>
++#include <utils/Timers.h>
++
++namespace android {
++
++static const char* const kBootLogo = "nano_xmb/boot/logo.svg";
++static const char* const kBootFont = "/system/fonts/Roboto-Regular.ttf";
++
++static nanoboot::Art bootArt() {
++    nanoboot::Art art;
++    const std::string dev = std::string("/data/system/") + kBootLogo;   // a development override first
++    art.svgPath = access(dev.c_str(), R_OK) == 0 ? dev : std::string("/system/etc/") + kBootLogo;
++    art.fontPath = kBootFont;
++    return art;
++}
++
++// Cold boot only: not a restart after an app (boot completed, or the DRM hand-back), not the
++// Quick Resume path, and only in the home process.
++void NanoMenu::bootScreenArm(bool quickResume) {
++    if (mOverlayMode || quickResume) return;
++    char bc[PROPERTY_VALUE_MAX] = {}, fd[PROPERTY_VALUE_MAX] = {};
++    property_get("sys.boot_completed", bc, "0");
++    property_get("sys.gammaos.nano.force_drm", fd, "0");
++    if (strcmp(bc, "1") == 0 || strcmp(fd, "1") == 0) return;
++    mBootScreenActive = true;
++    mBootScreenFrames = 0;
++    mBootScreenReadyFrames = 0;
++    mBootScreenStartMs = (int64_t)uptimeMillis();
++    ALOGI("bootscreen: shown");
++}
++
++// The ES-DE home loads its theme the first time it is drawn, which stalls the frame: it waits
++// until the boot screen has been on screen, so what the stall is for can be read.
++bool NanoMenu::bootScreenDefersHome() const {
++    return mBootScreenActive && mBootScreenFrames < 2;
++}
++
++// What the device is doing, in words for anyone. Android's own steps until the home starts
++// getting ready, then the home's.
++std::string NanoMenu::bootScreenStatus() const {
++    if (mEsdeTheme && !mSetupWizardActive) {
++        if (bootScreenDefersHome() && mBootScreenFrames == 1) return trDyn("Loading your theme");
++        if (mEsdeLoaded && !bootScreenDefersHome()) return trDyn("Getting the menu ready");
++    }
++    char v[PROPERTY_VALUE_MAX] = {};
++    property_get("init.svc.zygote", v, "");
++    if (strcmp(v, "running") != 0) return trDyn("Starting up");
++    property_get("sys.system_server.start_count", v, "");
++    if (!v[0]) return trDyn("Starting Android");
++    property_get("sys.boot_completed", v, "0");
++    if (v[0] != '1') return trDyn("Starting system services");
++    return trDyn("Almost ready");
++}
++
++void NanoMenu::bootScreenClose() {
++    if (mBootScreenBaseTex) glDeleteTextures(1, &mBootScreenBaseTex);
++    if (mBootScreenStatusTex) glDeleteTextures(1, &mBootScreenStatusTex);
++    mBootScreenBaseTex = mBootScreenStatusTex = 0;
++    mBootScreenStatus.clear();
++    mBootScreenActive = false;
++    mDisplayDirty = true;
++    ALOGI("bootscreen: closed after %lld ms, %d frames",
++          (long long)((int64_t)uptimeMillis() - mBootScreenStartMs), mBootScreenFrames);
++}
++
++static GLuint bootUpload(const uint8_t* rgba, int w, int h) {
++    GLuint tex = 0;
++    glGenTextures(1, &tex);
++    glBindTexture(GL_TEXTURE_2D, tex);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_NEAREST);   // drawn 1:1
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_NEAREST);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++    glPixelStorei(GL_UNPACK_ALIGNMENT, 1);
++    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA, w, h, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
++    return tex;
++}
++
++// Drawn last in the primary pass, over whatever the home drew under it.
++void NanoMenu::renderBootScreen() {
++    if (!mBootScreenActive) return;
++    if (mBootScreenFrames == 0) {
++        std::vector<uint8_t> px;
++        if (!nanoboot::renderBase(bootArt(), mWidth, mHeight, &px)) {
++            ALOGW("bootscreen: the logo or font could not be read");
++            bootScreenClose();
++            return;
++        }
++        mBootScreenBaseTex = bootUpload(px.data(), mWidth, mHeight);
++    }
++
++    // Ready: the setup wizard or the home has been drawn under the boot screen (the ES-DE home once
++    // its theme is in and its first pictures have had a few frames to decode).
++    bool ready;
++    if (mSetupWizardActive || !mEsdeTheme) ready = mBootScreenFrames >= 2;
++    else ready = mEsdeLoaded && !bootScreenDefersHome() && ++mBootScreenReadyFrames > 8;
++    if (ready || (int64_t)uptimeMillis() - mBootScreenStartMs > 30000) {
++        bootScreenClose();
++        return;
++    }
++
++    const std::string status = bootScreenStatus();
++    if (status != mBootScreenStatus) {
++        if (mBootScreenStatusTex) glDeleteTextures(1, &mBootScreenStatusTex);
++        mBootScreenStatusTex = 0;
++        mBootScreenStatus = status;
++        const nanoboot::Line line = nanoboot::renderStatus(bootArt(), mWidth, mHeight, status);
++        if (!line.rgba.empty()) {
++            mBootScreenStatusTex = bootUpload(line.rgba.data(), line.w, line.h);
++            mBootScreenStatusRect[0] = line.x; mBootScreenStatusRect[1] = line.y;
++            mBootScreenStatusRect[2] = line.w; mBootScreenStatusRect[3] = line.h;
++        }
++    }
++
++    setUiBlend();
++    drawIconTex(mBootScreenBaseTex, 0.0f, 0.0f, (float)mWidth, (float)mHeight, 1.0f, 1.0f, 1.0f, 1.0f);
++    if (mBootScreenStatusTex)
++        drawIconTex(mBootScreenStatusTex, (float)mBootScreenStatusRect[0], (float)mBootScreenStatusRect[1],
++                    (float)mBootScreenStatusRect[2], (float)mBootScreenStatusRect[3], 1.0f, 1.0f, 1.0f, 1.0f);
++    mBootScreenFrames++;
++    mDisplayDirty = true;
++}
++
++}  // namespace android
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoEsdeStore.cpp b/frameworks/base/cmds/gammaos-nano/NanoEsdeStore.cpp
 new file mode 100644
 index 00000000000..b3a1a7d12b4
@@ -2383,7 +2575,7 @@ index 00000000000..69a466875bb
 +}  // namespace nanohotkeys
 +}  // namespace android
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenu.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenu.cpp
-index dcd7bbaf475..d5fb050e2b7 100644
+index dcd7bbaf475..5d98d61af50 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenu.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenu.cpp
 @@ -75,6 +75,7 @@ extern "C" uint32_t __system_property_serial(const prop_info* __pi);
@@ -2449,7 +2641,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
      // The separate persist.gammaos.nano.minima bool is still honoured as a fallback so a device already
      // toggled to Minima stays there across the enum migration.
      int homeTheme = android::base::GetIntProperty("persist.gammaos.nano.ndstheme", 0);
-@@ -1597,37 +1602,14 @@ bool NanoMenu::threadLoop() {
+@@ -1597,38 +1602,7 @@ bool NanoMenu::threadLoop() {
              "persist.gammaos.nano.ps3xmb.controlcenter", false);
      ALOGI("NanoMenu: persist read quick_resume=%d xmb_mode=%d ps3xmb=%d nds=%d",
            mQuickResumeEnabled ? 1 : 0, mXmbMode ? 1 : 0, mPs3Xmb ? 1 : 0, mNdsTheme ? 1 : 0);
@@ -2459,14 +2651,10 @@ index dcd7bbaf475..d5fb050e2b7 100644
 -    // force_drm) and QR / minimal-boot fast paths skip it. A dev knob
 -    // (persist.gammaos.nano.ps3boot_skip) skips it for fast iteration.
 -    if (mPs3Xmb && !sDrasticQrFastPath) {
-+    // ES-DE home on a cold boot: hold black for its first frames so the theme art that is
-+    // still decoding is never seen. App-return restarts (boot_completed / force_drm), the QR
-+    // fast path and the setup wizard skip it.
-+    if (mEsdeTheme && !sDrasticQrFastPath && !mSetupWizardActive) {
-         char bc[PROPERTY_VALUE_MAX] = {}, fd[PROPERTY_VALUE_MAX] = {};
+-        char bc[PROPERTY_VALUE_MAX] = {}, fd[PROPERTY_VALUE_MAX] = {};
 -        char sd[PROPERTY_VALUE_MAX] = {}, sk[PROPERTY_VALUE_MAX] = {};
-         property_get("sys.boot_completed", bc, "0");
-         property_get("sys.gammaos.nano.force_drm", fd, "0");
+-        property_get("sys.boot_completed", bc, "0");
+-        property_get("sys.gammaos.nano.force_drm", fd, "0");
 -        property_get("persist.gammaos.nano.setup_done", sd, "");
 -        property_get("persist.gammaos.nano.ps3boot_skip", sk, "0");
 -        // This arming runs on the render thread's first iteration. On the force-SF path
@@ -2488,11 +2676,12 @@ index dcd7bbaf475..d5fb050e2b7 100644
 -            ALOGI("NanoMenu: PS3 boot intro armed (coldBoot=%d fresh=%d)",
 -                  coldBoot ? 1 : 0, fresh ? 1 : 0);
 -        }
-+        if (strcmp(bc, "1") != 0 && strcmp(fd, "1") != 0) mEsdeColdHoldFrames = kEsdeColdHoldFrames;
-     }
+-    }
++    bootScreenArm(sDrasticQrFastPath);   // a cold boot: the boot screen until the home can draw
      // Re-read wallpaper effect (constructor ran before persist props loaded)
      {
-@@ -1838,6 +1820,7 @@ bool NanoMenu::threadLoop() {
+         char wallpaper[PROPERTY_VALUE_MAX] = {};
+@@ -1838,6 +1812,7 @@ bool NanoMenu::threadLoop() {
                                            && itn->second == touchDev);
                      while (read(fd, &drain_ev, sizeof(drain_ev)) == sizeof(drain_ev)) {
                          const struct input_event& ie = drain_ev;
@@ -2500,7 +2689,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
                          if (isTouch) {
                              // Bottom digitizer -> DS touchscreen.
                              if (ie.type == EV_ABS) {
-@@ -2423,6 +2406,7 @@ bool NanoMenu::threadLoop() {
+@@ -2423,6 +2398,7 @@ bool NanoMenu::threadLoop() {
                  for (int fd : mInputFds) {
                      struct input_event ev;
                      while (read(fd, &ev, sizeof(ev)) == sizeof(ev)) {
@@ -2508,7 +2697,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
                          if (ev.type == EV_KEY) {
                              const bool pressed = (ev.value != 0);
                              // BACK: short-press toggles overlay
-@@ -3580,6 +3564,7 @@ if (sRingPrimedCount >= 2) {
+@@ -3580,6 +3556,7 @@ if (sRingPrimedCount >= 2) {
                                  for (int fd : mInputFds) {
                                      struct input_event ev;
                                      while (read(fd, &ev, sizeof(ev)) == sizeof(ev)) {
@@ -2516,7 +2705,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
                                          if (ev.type == EV_KEY) {
                                              bool pressed = (ev.value != 0);
                                              // BACK: short-press toggles
-@@ -4058,6 +4043,7 @@ if (sRingPrimedCount >= 2) {
+@@ -4058,6 +4035,7 @@ if (sRingPrimedCount >= 2) {
          // the screen-off park at ~3455 used to skip render() and freeze the heartbeat.)
          mRenderHeartbeat.fetch_add(1, std::memory_order_relaxed);
          if (!mWatchdogStarted) { mWatchdogStarted = true; startRenderWatchdog(); }
@@ -2524,7 +2713,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
  
          // GammaOS hardware-rotate (force-SF): SurfaceFlinger is pinned at ROTATION_0 for nano's
          // layer (DisplayRotation forces the angle from sys.gammaos.rotate.state whenever nano is
-@@ -4444,6 +4430,7 @@ if (sRingPrimedCount >= 2) {
+@@ -4444,6 +4422,7 @@ if (sRingPrimedCount >= 2) {
                                                // summoned over). Reached only when a higher-priority gate in
                                                // controlCenterActive() (app_launched=0) trips, never mid-session.
                  hideControlCenterLayer();
@@ -2532,7 +2721,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
                  // Hidden overlay: block on the show_overlay trigger instead of
                  // spin-polling at 30Hz. A spin-poll wakes this thread 30x/sec
                  // even with nothing to do, and while a 3D game is foreground
-@@ -4624,6 +4611,7 @@ if (sRingPrimedCount >= 2) {
+@@ -4624,6 +4603,7 @@ if (sRingPrimedCount >= 2) {
              // to the launched card (pollInput does this for every other launch; this path
              // exits below without ever reaching it).
              if (mNdsTheme && mPs3Xmb) ndsSaveReturnPath();
@@ -2540,7 +2729,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
              // Clear the stale stock-DraStic launch state the standalone XMB launch
              // path set (launch_app=com.dsemu.drastic + launch_intent=file). This
              // DRM-direct path runs the drastic-nano BINARY via start=1 and never uses
-@@ -4840,11 +4828,12 @@ if (sRingPrimedCount >= 2) {
+@@ -4840,11 +4820,12 @@ if (sRingPrimedCount >= 2) {
              }
          }
          pollInput();
@@ -2554,7 +2743,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
          // Guarantee the direct-PCM engine hands card0 to the audio HAL once boot completes,
          // even on a first boot where the setup wizard render branch never runs the audio ticks.
          // Without this, card0 can stay owned by our engine and all system audio dies after setup.
-@@ -4864,6 +4853,11 @@ if (sRingPrimedCount >= 2) {
+@@ -4864,6 +4845,11 @@ if (sRingPrimedCount >= 2) {
              mShowLaunchBusy = false;
              mLaunchBusyTimer = 0;
              handleSelect();
@@ -2566,7 +2755,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
          }
  
          // Adaptive framerate:
-@@ -4908,7 +4902,7 @@ if (sRingPrimedCount >= 2) {
+@@ -4908,7 +4894,7 @@ if (sRingPrimedCount >= 2) {
          bool ps3Settled = mPs3Xmb && !mPs3CatAnimActive
                         && mPs3ItemAnimStart < 0.0f && mPs3SubAnimStart < 0.0f
                         && mOverlayEnterStart < 0.0f
@@ -2575,7 +2764,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
                         && !mPs3TzActive && !mShowBrightnessBar && !mShowVolumeBar
                         && mLaunchFadeStart == 0 && !mOverlayLaunchPending
                         && !mXmbItemFling && !mXmbTouchTracking
-@@ -5046,14 +5040,13 @@ if (sRingPrimedCount >= 2) {
+@@ -5046,14 +5032,13 @@ if (sRingPrimedCount >= 2) {
              // user's mode when it returns (the framework drives display standby for the
              // overlay, but not the CPU clocks). Also fully close the home audio: the DSi
              // menu_ambiance BGM must NOT keep playing behind a dark screen, and a merely
@@ -2593,7 +2782,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
                  nanoApplyPerfClock("powersave"); property_set("sys.gammaos.nano.screenoff", "1"); sOvlPwrSave = true;
              }
              else if (!screenOff && sOvlPwrSave) { property_set("sys.gammaos.nano.screenoff", "0"); nanoRestorePerfClock(); sOvlPwrSave = false; }
-@@ -5095,6 +5088,7 @@ if (sRingPrimedCount >= 2) {
+@@ -5095,6 +5080,7 @@ if (sRingPrimedCount >= 2) {
                  sOvlAudioWake = false;
              }
              if (screenOff) {
@@ -2601,7 +2790,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
                  usleep(250000);   // 4Hz idle poll while the panel is off (no audio)
                  continue;
              }
-@@ -5119,16 +5113,13 @@ if (sRingPrimedCount >= 2) {
+@@ -5119,16 +5105,13 @@ if (sRingPrimedCount >= 2) {
              static bool sSfPwrSave = false;
              if (screenOff && !sSfPwrSave) {
                  // Fully close nano's home audio behind the dark panel. Stopping the
@@ -2621,7 +2810,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
                  nanoApplyPerfClock("powersave"); property_set("sys.gammaos.nano.screenoff", "1"); sSfPwrSave = true;
              }
              else if (!screenOff && sSfPwrSave) { property_set("sys.gammaos.nano.screenoff", "0"); nanoRestorePerfClock(); sSfPwrSave = false; }
-@@ -5162,6 +5153,7 @@ if (sRingPrimedCount >= 2) {
+@@ -5162,6 +5145,7 @@ if (sRingPrimedCount >= 2) {
              if (screenOff) {
                  // The screen stays on during a system update: wake it again (see otaScreenOffTick).
                  if (mOtaFlowActive) otaScreenOffTick();
@@ -2629,7 +2818,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
                  usleep(250000);   // 4Hz idle while the framework holds the panel off
                  continue;
              }
-@@ -5204,7 +5196,7 @@ if (sRingPrimedCount >= 2) {
+@@ -5204,7 +5188,7 @@ if (sRingPrimedCount >= 2) {
              const bool esdeQuiet = mEsdeTheme && !mNdsTheme && !mMinimaTheme && !mEsdeWantsFastFrame
                  && !mPs3OptActive && !mPs3OptClosing;
              const bool ndsSettled = (ndsQuiet || minimaQuiet || esdeQuiet) && mPs3Xmb && !mOverlayMode && sNdsIdleRedrawMs > 0
@@ -2638,7 +2827,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
                  && !mPs3DlgActive && !mPs3DlgClosing && !mPs3TzActive
                  && mLaunchFadeStart == 0 && !mOverlayLaunchPending && !mWaitForRelease
                  && !mShowLaunchBusy && !mShowBrightnessBar && !mShowVolumeBar
-@@ -5239,7 +5231,6 @@ if (sRingPrimedCount >= 2) {
+@@ -5239,7 +5223,6 @@ if (sRingPrimedCount >= 2) {
              }
          }
  
@@ -2646,7 +2835,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
          if (!ndsIdleSkip) {
          mMinimaWantsFrame = false;   // the Minima renderer re-arms it while anything animates
          render();
-@@ -5249,7 +5240,7 @@ if (sRingPrimedCount >= 2) {
+@@ -5249,7 +5232,7 @@ if (sRingPrimedCount >= 2) {
          // ~90 ms stall right as the tile lifts. Once per process; the ring upload needs this
          // thread's GL context, so it runs here rather than on a worker.
          if (mNdsTheme && !mNdsRingLoaded && mLaunchFadeStart == 0 && !mOverlayLaunchPending
@@ -2655,7 +2844,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
              ensureNdsRing();
              ndsSfxPreload(NDS_SFX_LAUNCH);
          }
-@@ -5324,13 +5315,13 @@ if (sRingPrimedCount >= 2) {
+@@ -5324,13 +5307,13 @@ if (sRingPrimedCount >= 2) {
          if (++exitCheckCounter >= exitCheckInterval) {
              exitCheckCounter = 0;
              // Test hook: sys.gammaos.nano.direct_test=<wav> plays that file through the direct
@@ -2671,7 +2860,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
                  }
              }
              // GammaOS Nano orientation: publish the foreground-aware orientation
-@@ -5406,7 +5397,7 @@ if (sRingPrimedCount >= 2) {
+@@ -5406,7 +5389,7 @@ if (sRingPrimedCount >= 2) {
                      // skipped while the setup wizard runs (below), so applyBrightness ran here every
                      // tick for the whole wizard: each call forked a shell on the render thread that
                      // ran a Java `settings put` (measured 4 forks a second, 70 to 100 ms frames, the
@@ -2680,7 +2869,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
                      // already asserted by the first call; a changed value re-asserts through it.
                      static int sBootAssertedValue = -1;
                      if (sBootAssertedValue != mBrightness) {
-@@ -5680,6 +5671,7 @@ if (sRingPrimedCount >= 2) {
+@@ -5680,6 +5663,7 @@ if (sRingPrimedCount >= 2) {
                      property_get("sys.boot_completed", val, "0");
                      if (!strcmp(val, "1")) {
                          mXmbBootCompleted = true;
@@ -2688,7 +2877,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
                          // During the first-run setup wizard the device is under heavy memory
                          // pressure (RetroArch/ROM extraction). Defer the initial ROM scan, which
                          // reads and caches every share, until setup finishes. finishSetupWizard()
-@@ -5701,6 +5693,7 @@ if (sRingPrimedCount >= 2) {
+@@ -5701,6 +5685,7 @@ if (sRingPrimedCount >= 2) {
                              auto& sys = mXmbSystems[i];
                              auto& res = mBgScanResults[i];
                              if (!sys.enabled) continue;   // disabled systems are never scanned
@@ -2696,7 +2885,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
                              // Guard: don't replace with fewer ROMs when storage
                              // is partially mounted. Two checks:
                              // 1. Path count: if fewer source dirs, storage not ready
-@@ -5830,6 +5823,13 @@ if (sRingPrimedCount >= 2) {
+@@ -5830,6 +5815,13 @@ if (sRingPrimedCount >= 2) {
                  // the media drains below) because a scrape runs while the user is
                  // deep in the Settings submenu with the progress modal up.
                  scraperDrainResults();
@@ -2710,7 +2899,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
  
                  // IPTV: rebuild the open channel-groups screen when the background fetch/
                  // parse finishes. Must run every frame (not only at the settled XMB root)
-@@ -5855,8 +5855,8 @@ if (sRingPrimedCount >= 2) {
+@@ -5855,8 +5847,8 @@ if (sRingPrimedCount >= 2) {
                      // setup.sh extraction I/O). Already unreachable in setup because the initial
                      // scan is deferred (mXmbSystems empty), but gate explicitly to survive refactors.
                      int64_t now = elapsedRealtime();
@@ -2721,7 +2910,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
                          forceRescanAllSystems();
                      }
                  }
-@@ -5890,7 +5890,7 @@ if (sRingPrimedCount >= 2) {
+@@ -5890,7 +5882,7 @@ if (sRingPrimedCount >= 2) {
                  if (mPs3Xmb && mPs3Stack.empty()
                      && !mVidActive && !mMpActive && !mPvActive
                      && !mPs3DlgActive && !mOskActive && !mPs3WizActive
@@ -2730,7 +2919,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
                      && animSettledOrNonXmbTheme) {
                      // During the SetupWizard (esp. INSTALLING, while setup.sh extracts ~1.3GB of ROMs on a
                      // ~1GB device) do NOT drain scan results / rebuild the XMB columns / kick library scans:
-@@ -5996,6 +5996,7 @@ if (sRingPrimedCount >= 2) {
+@@ -5996,6 +5988,7 @@ if (sRingPrimedCount >= 2) {
          // wallpaper so the app (or a later video clip) can use it, and stop burning power decoding a
          // background the user cannot see.
          if (mWpVideoTop) wpVideoStop();
@@ -2738,7 +2927,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
          drmStop();
          if (!mDrmBootPath) {
              setupSecondaryEglSurfaces();
-@@ -6004,6 +6005,7 @@ if (sRingPrimedCount >= 2) {
+@@ -6004,6 +5997,7 @@ if (sRingPrimedCount >= 2) {
  
      // Only re-apply performance clocks when launching an app (not on bootanim.exit)
      // Run in background — setclock_max.sh has a 20s retry loop that must not block exit.
@@ -2747,7 +2936,7 @@ index dcd7bbaf475..d5fb050e2b7 100644
          char mode[PROPERTY_VALUE_MAX] = {};
          property_get("persist.gammaos.performance_mode", mode, "stock");
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenu.h b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
-index 88e7cae6699..264e3bd7193 100644
+index 88e7cae6699..df0704fcd4a 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 @@ -61,6 +61,7 @@ static inline void nanoThreadNormalPriority() {
@@ -3214,7 +3403,7 @@ index 88e7cae6699..264e3bd7193 100644
      void minimaAccent(float& r, float& g, float& b) const;          // accent RGB from the shared Colour setting
      NdsPal ndsTopPal() const;                                       // ndsPal() with the mint canvas + teal text recoloured to a non-Original accent
      bool   ndsEffectActive() const { return mNdsTheme && mCurrentEffect != 0; }   // a Background Effect replaces the DSi wallpaper/field
-@@ -2064,30 +2290,15 @@ private:
+@@ -2064,30 +2290,24 @@ private:
      float mPs3UiScale = 1.0f;     // persist.gammaos.nano.ps3xmb.uiscale (menu zoom)
      float mUserFontScale = 1.0f;  // user Font Size (persist.gammaos.nano.fontscale mirror of System font_scale)
      void  refreshUserFontScale(); // cheap per-frame prop read -> ps3::gFontScale (all themes)
@@ -3244,9 +3433,18 @@ index 88e7cae6699..264e3bd7193 100644
 -    int64_t mDsiEnterAudioStartMs = 0;   // uptimeMillis at the enter fanfare (ambiance starts +2.58s)
 +    // ES-DE home on a cold boot: the first frames are drawn black so the theme art still
 +    // decoding (esdeArtTex's per-frame budget) is never seen, then the home shows at once.
-+    static constexpr int kEsdeColdHoldFrames = 8;
-+    int  mEsdeColdHoldFrames = 0;        // black frames still to draw, 0 = none
-+    void renderEsdeColdStartHold();
++    // Boot screen (NanoBootScreen.cpp): the logo and what the device is doing, until the home can draw.
++    bool    mBootScreenActive = false;
++    int     mBootScreenFrames = 0, mBootScreenReadyFrames = 0;
++    int64_t mBootScreenStartMs = 0;
++    GLuint  mBootScreenBaseTex = 0, mBootScreenStatusTex = 0;
++    int     mBootScreenStatusRect[4] = {0, 0, 0, 0};
++    std::string mBootScreenStatus;
++    void bootScreenArm(bool quickResume);
++    bool bootScreenDefersHome() const;
++    std::string bootScreenStatus() const;
++    void bootScreenClose();
++    void renderBootScreen();
 +    // XMB chrome reveal multipliers (1 = fully shown): the in-game overlay entrance, the
 +    // standalone slide clock and the music player cross-fade scale these.
 +    float  mPs3ChromeLabelReveal = 1.0f; // category-label fade-in
@@ -3254,7 +3452,7 @@ index 88e7cae6699..264e3bd7193 100644
      // ---- PS3 Settings dialogs + Theme Settings (NanoMenuPS3Menu.cpp) ----
      // action='dialog' DATA leaves open either a side-panel chooser (Theme
      // Settings: Theme/Colour/Background/Font/Day-Night) or a fullscreen message
-@@ -2296,6 +2507,7 @@ private:
+@@ -2296,6 +2516,7 @@ private:
      struct VidPending { bool isStream = false; std::string file; std::string url; int w = 0, h = 0;
                          int resumeChoice = -1; double resumeSec = 0.0; int vidIdx = 0; };
      VidPending mVidPending;                         // params captured at vidBeginOpen, applied on adopt
@@ -3262,7 +3460,7 @@ index 88e7cae6699..264e3bd7193 100644
      void   vidBeginOpen(const VidPending& p);       // render: GL alloc + spawn the open worker
      bool   vidOpenTitleRun();                       // worker: blocking title open (reads mVidPending)
      bool   vidOpenStreamRun();                      // worker: blocking IPTV stream open
-@@ -2427,9 +2639,28 @@ private:
+@@ -2427,9 +2648,28 @@ private:
      std::atomic<bool> mEsdeBgVideoOpenDone{false};
      std::atomic<bool> mEsdeBgVideoOpenOk{false};
      bool   mEsdeBgVideoAdopted = false;
@@ -3293,7 +3491,7 @@ index 88e7cae6699..264e3bd7193 100644
      // Live hover preview in the Video Wallpaper picker: decode the currently-focused video and draw it
      // into its grid cell. Only ONE decoder runs at a time (the single HW decoder), so the tick stops the
      // video wallpaper while previewing and lets wpVideoTick re-adopt it on leaving the picker. Mirrors
-@@ -2470,7 +2701,9 @@ private:
+@@ -2470,7 +2710,9 @@ private:
      std::string mBoxartPickRom;                   // ROM path the boxart picker is targeting ("" = none)
      std::string mBoxartPickName;                  // its display name (seeds the manifest title if empty)
      bool   mBoxartPick = false;                   // the photo grid is picking a custom cover for a game
@@ -3304,7 +3502,7 @@ index 88e7cae6699..264e3bd7193 100644
      void   boxartApplyPick(const std::string& srcFile);  // copy the picked image into the cover cache + refresh
      void   resetBoxart(const std::string& romPath);      // remove a game's custom cover from the cache + manifest
      // Date and Time settings (functional). Date Format / Time Format are nano-
-@@ -2555,6 +2788,9 @@ private:
+@@ -2555,6 +2797,9 @@ private:
      std::string themeButtonText(const char* in);
      bool   mFaceLetters = true;   // Button Prompts: letters (default) vs PlayStation
      bool   mFaceSwapOk  = false;  // OK Button: false = A/Cross, true = B/Circle
@@ -3314,7 +3512,7 @@ index 88e7cae6699..264e3bd7193 100644
      void   ps3DlgIllustration(int kind, float cx, float cy, float sz, float ap);
      void   ps3FillCircle(float cx, float cy, float rad, float r, float g, float b, float a);
      void   ps3StrokeRing(float cx, float cy, float radX, float radY, float lw,
-@@ -2580,14 +2816,6 @@ private:
+@@ -2580,14 +2825,6 @@ private:
      // Early-returns when a is tiny, so dark wallpapers (low mPs3ShadowAlpha) skip it.
      void   drawTextStroke(const char* s, float x, float y, float scale, float a);
      void   drawIconStroke(unsigned int tex, float x, float y, float w, float h, float a);
@@ -3329,7 +3527,7 @@ index 88e7cae6699..264e3bd7193 100644
      std::vector<Ps3Cat> mPs3Cats;
      std::vector<Ps3Level> mPs3Stack;   // empty = at category top level
      int mPs3CatIdx = -1;
-@@ -2809,15 +3037,51 @@ private:
+@@ -2809,15 +3046,51 @@ private:
      // performance-mode side-panel chooser, and the kill-apps backend.
      void buildQuickPowerSubmenu(Ps3Level& out);
      void openQuickPowerMenu();   // power-hold (menu visible) -> Quick Menu Power submenu, all themes
@@ -3387,7 +3585,7 @@ index 88e7cae6699..264e3bd7193 100644
      void buildGamepadSubmenu(Ps3Level& out);         // top-level Gamepad Settings section list
      // Gamepad Settings sub-sections (grouped for readability) + shared row helpers.
      void gpLeaf(Ps3Level& out, const char* label, const char* bindLabel, int icon);
-@@ -2829,6 +3093,9 @@ private:
+@@ -2829,6 +3102,9 @@ private:
      void buildGpRumble(Ps3Level& out);
      void buildGpMapping(Ps3Level& out);
      void buildGpTouch(Ps3Level& out);
@@ -3397,7 +3595,7 @@ index 88e7cae6699..264e3bd7193 100644
      void gamepadTestOpen();                          // enter the live controller test screen
      void gamepadCalibOpen();                         // enter the analog calibration wizard
      void gpCaptureEvent(int fd, int type, int code, int value); // mirror a raw event -> maps
-@@ -2839,7 +3106,7 @@ private:
+@@ -2839,7 +3115,7 @@ private:
      void gpDialogHeader(const char* title, int iconIdx, float ap); // icon + title + top/bottom dividers
      float gpAxisNorm(int absCode);                   // latest axis value normalised to [-1,1]
      // Full-screen HSV colour picker (all themes) - see the mCp* state block above.
@@ -3406,7 +3604,7 @@ index 88e7cae6699..264e3bd7193 100644
      void renderColorPicker();                        // draw the Hue/Brightness field + preview + hints
      bool colorPickerHandleKey(int code, int value);  // confirm / cancel / saturation / hold-exit (press edges)
      void colorPickerTick();                          // per-frame cursor move from held d-pad / stick / hat
-@@ -2955,7 +3222,7 @@ private:
+@@ -2955,7 +3231,7 @@ private:
      void buildShaderBrowser(const std::string& path, Ps3Level& out);  // custom-preset file browser
      void shaderOpenBrowserDefault();                  // open the browser at the RetroArch subfolder for the active type (still traversable up)
      void shaderSelectPreset(const std::string& path);                 // point the shader loader at a custom preset (SF reads it in place) + arm meta poll
@@ -3415,7 +3613,7 @@ index 88e7cae6699..264e3bd7193 100644
      void openShaderOptChooser(const std::string& spec); // discrete-option chooser (key|opts|title)
      std::string shaderOptCurrentLabel(const std::string& spec); // display label of a shader-opt row's current value
      void openShaderParamSlider(int idx);             // live slider for mShaderParams[idx]
-@@ -2965,7 +3232,6 @@ private:
+@@ -2965,7 +3241,6 @@ private:
      void writeShaderParams();                         // rewrite .shader_params from mShaderParams (custom)
      std::string shaderCurType();                      // active shader type ("" when disabled)
      bool isCustomShaderType(const std::string& t);    // true for custom/custom-vk/custom-gl
@@ -3423,7 +3621,7 @@ index 88e7cae6699..264e3bd7193 100644
      std::string shaderTypeLabel();                    // friendly label of the active shader for the menu row
      void shaderRebuildOpenLevel();                    // rebuild the open GammaShader/Params level in place (keep cursor)
      void shaderMetaTick();                            // per-frame: pick up custom .shader_param_meta once SF publishes it
-@@ -2999,6 +3265,8 @@ private:
+@@ -2999,6 +3274,8 @@ private:
      bool resetSystemToBuiltinDefaults(int sysIdx);  // restore a built-in's config from kXmbSystemDefs
      int mGsEditIdx = -1;   // mXmbSystems index currently open in the editor (for chooser/OSK writeback)
      int mGsRemoveSrcIdx = -1;  // scan-source index awaiting a remove-confirm (dialog theme key 45)
@@ -3432,7 +3630,7 @@ index 88e7cae6699..264e3bd7193 100644
      float mGsTintOrigR = 1.0f, mGsTintOrigG = 1.0f, mGsTintOrigB = 1.0f;  // exact tint at chooser open (cancel restore)
      int  ps3TopScreenKind() const { return mPs3Stack.empty() ? 0 : mPs3Stack.back().screenKind; }
  
-@@ -3038,10 +3306,42 @@ private:
+@@ -3038,10 +3315,42 @@ private:
      void loadEmuCatalog();                     // parse the bundled Daijishou JSONs once
      void buildEmulatorPicker(Ps3Level& out);   // build the filtered emulator list screen
      void gsOpenEmulatorPicker();               // open the emulator chooser for mGsEditIdx
@@ -3475,7 +3673,7 @@ index 88e7cae6699..264e3bd7193 100644
  
      // ---- Add / remove custom systems ----
      void gsAddSystem();                        // "Add New System" -> emulator picker in add mode
-@@ -3073,6 +3373,68 @@ private:
+@@ -3073,6 +3382,68 @@ private:
      std::vector<std::string> mountedShareNames() const;
      void gsFolderSelect(const std::string& path); // add a folder as a rawpath scan source
      void drasticDataFolderSelect(const std::string& path); // #90: set persist.gammaos.drastic.data_dir (folder-picker target 5)
@@ -3544,7 +3742,7 @@ index 88e7cae6699..264e3bd7193 100644
      void drasticCheatsFolderSelect(const std::string& path); // persist.gammaos.drastic.cheats_dir (folder-picker target 8)
      void drasticPerfRestoreCheck();            // put back the global performance mode a per-game one parked
      void mouseModeHomeGuard();                 // gammapad mouse mode off whenever the home is the foreground
-@@ -3081,6 +3443,7 @@ private:
+@@ -3081,6 +3452,7 @@ private:
      void gsRemoveScanSource(int srcIdx);       // drop a scan source from the edited system
      void gsDisableDefaultFolder(const std::string& alias);  // remove a default scan folder (alias) from the edited system
      void gsEnableDefaultFolder(const std::string& alias);   // restore a previously-removed default scan folder
@@ -3552,7 +3750,7 @@ index 88e7cae6699..264e3bd7193 100644
      void gsAfterScanFolderChange(XmbSystem& sys);           // re-scan + persist + rebuild after a scan-folder edit
      void gsOpenRemoveScanSourceConfirm(int srcIdx);  // Cancel / Remove Folder confirm for a scan source
  
-@@ -3251,7 +3614,7 @@ private:
+@@ -3251,7 +3623,7 @@ private:
          std::string m3uPath;              // non-empty: derived from this .m3u (regenerated on scan);
                                            // empty: user-created (preserved across scans)
      };
@@ -3561,7 +3759,7 @@ index 88e7cae6699..264e3bd7193 100644
      std::vector<std::string> mMusicFolders;
      std::vector<MusicTrack>  mMusicTracks;
      std::vector<MusicPlaylist> mMusicPlaylists;
-@@ -3303,6 +3666,15 @@ private:
+@@ -3303,6 +3675,15 @@ private:
          // altemulator string enables the altemulator badge when non-empty.
          bool favorite = false, completed = false, kidgame = false, broken = false;
          std::string controller, altemulator;
@@ -3577,7 +3775,7 @@ index 88e7cae6699..264e3bd7193 100644
      };
      std::unordered_map<std::string, ScrapeEntry> mScrapeIndex;
      bool mScrapeIndexLoaded = false;
-@@ -3310,6 +3682,7 @@ private:
+@@ -3310,6 +3691,7 @@ private:
      void scraperEnsureLoaded();            // lazy-load index.json
      void scraperPollReload();              // per-frame: live-reload index/names on an external token bump
      void loadScrapeIndex();
@@ -3585,7 +3783,7 @@ index 88e7cae6699..264e3bd7193 100644
      void saveScrapeIndex();
      const ScrapeEntry* scrapeEntryFor(const std::string& romPath);
      const ScrapeEntry* scrapeIndexLookup(const std::string& romPath);   // the manifest entry alone (no cart art)
-@@ -3332,9 +3705,75 @@ private:
+@@ -3332,9 +3714,75 @@ private:
      // scrape store which can differ (e.g. a timezone-shifted release date). Loaded lazily per system
      // and merged with the scrape store's cover paths; absent gamelist.xml -> falls back to the store.
      std::unordered_map<std::string, ScrapeEntry> mEsdeGamelistMeta;  // full romPath -> gamelist metadata
@@ -3662,7 +3860,7 @@ index 88e7cae6699..264e3bd7193 100644
      // Per-game title override (Rename / Edit Title). A user-typed name that overrides
      // the basename-minus-extension display name everywhere (columns / recents / search /
      // Info) AND becomes the scraper search query so a corrected title can match. Stored
-@@ -3392,38 +3831,42 @@ private:
+@@ -3392,38 +3840,42 @@ private:
      void openHelpPage();                    // Settings > User Guide: scrollable, themed help page
      void scrapeOneSystem(int sysIdx);      // Game Systems editor action
      // One ROM of work, fully snapshotted so the worker never touches mXmbSystems.
@@ -3732,7 +3930,7 @@ index 88e7cae6699..264e3bd7193 100644
      // scrape worker state
      std::mutex mScrapeMutex;
      bool mScrapeRunning = false;           // worker alive
-@@ -3432,9 +3875,26 @@ private:
+@@ -3432,9 +3884,26 @@ private:
      bool mScrapeDoneFlag = false;          // worker finished -> show summary
      int  mScrapeDone = 0, mScrapeTotal = 0, mScrapeHits = 0, mScrapeFail = 0;
      std::string mScrapeStatus;             // "System / Game" current line (under mutex)
@@ -3760,7 +3958,7 @@ index 88e7cae6699..264e3bd7193 100644
      // Where scraped covers/fanart + index.json live. Default is internal storage; the Boxart
      // Folder setting (persist.gammaos.scraper.dir) moves it to any browsable folder, typically the
      // SD card. names.json (title overrides) always stays in the default internal dir.
-@@ -3445,10 +3905,14 @@ private:
+@@ -3445,10 +3914,14 @@ private:
      int64_t mScrapeDirPollMs = 0;          // availability probe throttle (once a second, uptime)
      std::string mScrapeMoveSrc, mScrapeMoveDst;   // relocation in flight: old/new folder ("" = none)
      bool mScrapeMoveMode = false;          // the progress modal fronts a relocation (wording), until the next scrape
@@ -3775,7 +3973,7 @@ index 88e7cae6699..264e3bd7193 100644
      void scrapeMoveThreadFunc(std::vector<std::pair<std::string, ScrapeEntry>> entries,
                                std::string src, std::string dst);
      void gsOpenClearArtConfirm();          // Game Systems editor: Clear Boxart confirm (theme key 49)
-@@ -3457,8 +3921,11 @@ private:
+@@ -3457,8 +3930,11 @@ private:
      // cartridge icon, freed when leaving the Game category and on sleep/occlusion.
      // ar = width/height. pixel = a PICO-8 cart label: 128x128 pixel art uploaded NEAREST, drawn at an
      // integer multiple of its size (cartPixelSize) so every cart pixel stays square.
@@ -3788,7 +3986,7 @@ index 88e7cae6699..264e3bd7193 100644
      bool mScrapeBoxartOn = false;        // per-frame cache of scraperBoxartEnabled()
      bool mNdsTileIcon = false;           // per-frame cache of persist.gammaos.nano.nds.tileicon (DS Icons On Tiles)
      // Data-loss guards: a loader sets its flag true when the on-disk file EXISTS but could not be
-@@ -3543,36 +4010,19 @@ private:
+@@ -3543,36 +4019,19 @@ private:
      // entry; open()/play() on first track play.
      NanoAudioPlayer mMusicPlayer;
  
@@ -3831,7 +4029,7 @@ index 88e7cae6699..264e3bd7193 100644
      NanoAudioPlayer mAmbiancePlayer;
      std::atomic<bool> mAmbiancePlaying{false};
      void ndsAmbianceTick(bool wantOnHome);   // per-frame: start/loop/stop the carousel ambiance
-@@ -4915,6 +5365,9 @@ private:
+@@ -4915,6 +5374,9 @@ private:
      // it red) and beveled into a normal map for the XMB glass relight. Lazily built + cached.
      GLuint mHeartIconTex = 0, mHeartNmapTex = 0;
      void   ensureHeartIcon();               // build mHeartIconTex + mHeartNmapTex once
@@ -3841,7 +4039,7 @@ index 88e7cae6699..264e3bd7193 100644
      GLuint gpGlassNmap(bool round, float wpx, float hpx);    // cached bevel nmap for a gamepad-tester button shape
      // Resolve a system iconRef (builtin:/retroarch:/core:/file:) to a (colour
      // tex, glass bevel nmap) pair, cached by ref string. See NanoMenuPS3Icons.cpp.
-@@ -4935,11 +5388,14 @@ private:
+@@ -4935,11 +5397,14 @@ private:
          std::vector<std::string> activePaths;
          std::string activePath;
          bool valid;              // true if scan found at least one path
@@ -3856,7 +4054,7 @@ index 88e7cae6699..264e3bd7193 100644
      void bgScanThreadFunc();                  // the thread entry point
  
      // Settings column. Pinned as the leftmost XMB column at sentinel index -2.
-@@ -5086,6 +5542,7 @@ private:
+@@ -5086,6 +5551,7 @@ private:
      std::string mBtWizInPasskey;              // inbound passkey to display for confirmation
      std::atomic<bool> mBtWizRadioOn{true};    // cached real radio state (dumpsys enabled:)
      std::atomic<bool> mBtWizToggling{false};  // a radio enable/disable is settling
@@ -3864,7 +4062,7 @@ index 88e7cae6699..264e3bd7193 100644
      float mBtWizManageRefreshT = -999.0f;     // last live-refresh time while sitting on Manage
      void btWizToggleRadioAsync(bool on);      // enable/disable the radio + settle + refresh
  
-@@ -5176,6 +5633,7 @@ private:
+@@ -5176,6 +5642,7 @@ private:
      bool    mCursorVisible = false;             // shown while recently moved/clicked
      int64_t mLastPointerMs = 0;                 // last pointer activity (auto-hide timer)
      bool    mTouchFromPointer = false;          // current touch frame is a mouse click, not a finger
@@ -3872,7 +4070,7 @@ index 88e7cae6699..264e3bd7193 100644
      bool    mKbdShiftHeld = false;              // physical-keyboard shift state (for OSK typing)
      void    drawPointerCursor();                // draw the mouse cursor overlay (NanoMenuRender.cpp)
      int     kbdCodeToCp(int code, bool shift);  // USB-keyboard keycode -> printable codepoint (0 = none)
-@@ -5400,6 +5858,33 @@ private:
+@@ -5400,6 +5867,33 @@ private:
                                    // globe on black until ready so the one-time texture
                                    // load spike isn't charged against the 360ms fade
      int mTzSelOnOpen = 0;         // mTzSelected when the globe opened (restore on cancel)
@@ -7571,7 +7769,7 @@ index 25ca944af11..f53c5c8b8d1 100644
  // scalar each frame; the wave crest swells with a half-sine over reveal
  // 0.001..0.40 (peak ~0.20), receding by 0.40, and replays in reverse on close.
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Boot.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Boot.cpp
-index 95933cb3497..12143697cfe 100644
+index 95933cb3497..1aef597a966 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Boot.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Boot.cpp
 @@ -1,196 +1,25 @@
@@ -7953,7 +8151,7 @@ index 95933cb3497..12143697cfe 100644
  // audio HAL was grabbing it (EBUSY), permanently latching gEng.failed and dropping all PS3 early
  // SFX onto the still-blocked AAudio path -> silence until boot_completed. Fix: hold card0 open with
  // SILENCE through the pre-boot-complete window (nav one-shots mix in), then hand it to the HAL at
-@@ -617,538 +371,14 @@ void NanoMenu::nanoDirectHandoffTick() {
+@@ -617,538 +371,4 @@ void NanoMenu::nanoDirectHandoffTick() {
      mDirectHandedOff = true;
  }
  
@@ -8299,12 +8497,7 @@ index 95933cb3497..12143697cfe 100644
 -}
 -
 -void NanoMenu::renderNdsBootOverlay(bool primary) {
-+// ES-DE home on a cold boot: draw the first frames black so the theme art still decoding
-+// (esdeArtTex's per-frame budget) lands unseen, then show the home at once.
-+void NanoMenu::renderEsdeColdStartHold() {
-+    if (mEsdeColdHoldFrames <= 0) return;
-+    mEsdeColdHoldFrames--;
-     setUiBlend();
+-    setUiBlend();
 -    ensureNdsAssets();
 -    if (!mPs3BootPlatesLoaded) {
 -        mPs3BootLogoTex   = loadPs3BootPlate("logo_white.png");
@@ -8494,10 +8687,8 @@ index 95933cb3497..12143697cfe 100644
 -        drawQuad(0.0f, 0.0f, rw, rh, coverC, coverC, coverC, a);
 -    }
 -    mNdsFontPref = prevFont; mTextOutlineMode = prevOutline;
-+    drawQuad(0.0f, 0.0f, (float)mWidth, (float)mHeight, 0.0f, 0.0f, 0.0f, 1.0f);
-+    mDisplayDirty = true;
- }
- 
+-}
+-
  } // namespace android
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Clock.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Clock.cpp
 index c6999092cc9..4b159f71850 100644
@@ -13273,7 +13464,7 @@ index 0fe8f2e31e5..3bbb5e05a70 100644
      all.reserve(mPhotos.size());
      for (size_t i = 0; i < mPhotos.size(); i++) all.push_back((int)i);
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuRender.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuRender.cpp
-index b0e278f3bc0..7de2a9ba81c 100644
+index b0e278f3bc0..3354970904e 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuRender.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuRender.cpp
 @@ -58,6 +58,7 @@ extern "C" uint32_t __system_property_serial(const prop_info* __pi);
@@ -13757,15 +13948,18 @@ index b0e278f3bc0..7de2a9ba81c 100644
              // ES-DE theme engine home (renderEsde). renderPs3Xmb is skipped for the home,
              // so pump the shared per-frame lifecycle ticks here exactly as DSi/Minima do,
              // or App Info / File Explorer / bulk-add would hang on "Loading...". Modals
-@@ -6392,6 +6373,7 @@ void NanoMenu::render() {
-                     renderEsdeHome();   // renderEsde() plus any active system<->gamelist transition
+@@ -6389,7 +6370,9 @@ void NanoMenu::render() {
+                     gsAutoAddTick();
+                     feTick();
+                     nsTick();
+-                    renderEsdeHome();   // renderEsde() plus any active system<->gamelist transition
++                    // renderEsde() plus any active system<->gamelist transition; on a cold boot,
++                    // once the boot screen has shown (the first draw loads the theme, a stall).
++                    if (!bootScreenDefersHome()) renderEsdeHome();
                  }
              }
-+            renderEsdeColdStartHold();
          } else {
-             renderPs3Xmb();
-         }
-@@ -6402,8 +6384,11 @@ void NanoMenu::render() {
+@@ -6402,8 +6385,11 @@ void NanoMenu::render() {
          else if (mGpCalibActive) renderGamepadCalib();
          else if (mGpCaptureActive) renderGamepadCapture();
          else if (mCpActive) renderColorPicker();
@@ -13778,7 +13972,16 @@ index b0e278f3bc0..7de2a9ba81c 100644
          // Dual-screen: the home OSK (search / Wi-Fi password / System Name) draws on the BOTTOM touch
          // panel via the secondary pass (oskOnSecondary hoisted above the setup-wizard branch); a
          // single-panel device draws it here on the only panel.
-@@ -6937,6 +6922,7 @@ if (sRingPrimedCount >= 2) {
+@@ -6707,6 +6693,8 @@ void NanoMenu::render() {
+     }
+     } // close drasticActive-else wrapper
+ 
++    renderBootScreen();   // a cold boot: over everything until the home can draw
++
+     // Mouse cursor overlay: drawn last (over the XMB, dialogs, OSK and scrims) while blend is
+     // still enabled and before the screenshot capture, so it sits on top of everything and is
+     // captured in the sys.gammaos.nano.shot PPM. Self-hides after a few idle seconds.
+@@ -6937,6 +6925,7 @@ if (sRingPrimedCount >= 2) {
              SurfaceComposerClient::Transaction t;
              t.show(mFlingerSurfaceControl);
              t.apply();
@@ -13786,7 +13989,7 @@ index b0e278f3bc0..7de2a9ba81c 100644
              mOverlayPendingShow = false;
          }
          // Restart path (returning from game): readyToRun() saw boot
-@@ -7072,15 +7058,7 @@ if (sRingPrimedCount >= 2) {
+@@ -7072,15 +7061,7 @@ if (sRingPrimedCount >= 2) {
              drastic->renderBottomScreen(sDrasticSaturation, sDrasticGradient);
              drawDrasticQrOverlay(mWidth, mHeight,
                                   sDrasticSaturation, sDrasticGradient);
@@ -13803,7 +14006,7 @@ index b0e278f3bc0..7de2a9ba81c 100644
              // DSi theme dual-panel: a live secondary always shows the carousel (never the PS3
              // wave), independent of the primary's stacking mode (same resolution as primary).
              // During first-run setup, show the DSi setup backdrop instead of the home carousel
-@@ -7090,7 +7068,7 @@ if (sRingPrimedCount >= 2) {
+@@ -7090,7 +7071,7 @@ if (sRingPrimedCount >= 2) {
              if (i == 0 && mPs3WizActive) renderNetWizard();       // WiFi/BT setup wizard on the bottom panel
              if (i == 0 && mGSearchActive) renderGlobalSearch();   // global search results on the bottom panel
              if (i == 0) renderOsk();   // DSi keyboard/OSK on the bottom touch panel (self-gates on mOskActive)
@@ -13812,7 +14015,7 @@ index b0e278f3bc0..7de2a9ba81c 100644
              // Minima live secondary (the RG DS bottom): the category + boxart panel, NOT the PS3 wave.
              // This is the pass that runs in overlay mode and after returning from an app (the DRM
              // secondary above is skipped once HWC owns the display), so it fixes the bottom showing
-@@ -7099,7 +7077,7 @@ if (sRingPrimedCount >= 2) {
+@@ -7099,7 +7080,7 @@ if (sRingPrimedCount >= 2) {
              if (i == 0 && mPs3WizActive) renderNetWizard();
              if (i == 0 && mGSearchActive) renderGlobalSearch();
              if (i == 0) renderOsk();
@@ -13821,7 +14024,7 @@ index b0e278f3bc0..7de2a9ba81c 100644
              // ES-DE live secondary: a plain themed backdrop, not the PS3 wave (mirrors the
              // DRM secondary branch). A themed bottom view is a follow-up.
              renderEsdeSecondary();
-@@ -7110,7 +7088,7 @@ if (sRingPrimedCount >= 2) {
+@@ -7110,7 +7091,7 @@ if (sRingPrimedCount >= 2) {
              renderEffect();
              // Dual-screen XMB: static PSP clock on the bottom panel (opt-in), over the wave. No
              // mWidth/mHeight remap here - on the SF path they already equal the secondary dims.
@@ -22660,6 +22863,389 @@ index 857edadb1e6..9f373feb452 100644
  // Apply the actual system<->gamelist state change. On entering a gamelist the grid cursor/scroll
  // are snapped so it does not ease in from the previous system's state.
  void NanoMenu::esdeApplyViewSwap(bool toGamelist) {
+diff --git a/frameworks/base/cmds/gammaos-nano/bootscreen/NanoBootArt.cpp b/frameworks/base/cmds/gammaos-nano/bootscreen/NanoBootArt.cpp
+new file mode 100644
+index 00000000000..0258b2f7e7f
+--- /dev/null
++++ b/frameworks/base/cmds/gammaos-nano/bootscreen/NanoBootArt.cpp
+@@ -0,0 +1,244 @@
++/*
++ * Copyright (C) 2026 GammaOS
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++#include "NanoBootArt.h"
++
++#include <ft2build.h>
++#include FT_FREETYPE_H
++#include FT_MULTIPLE_MASTERS_H
++
++#include <algorithm>
++#include <cmath>
++#include <cstring>
++
++extern "C" {
++#include "nanosvg.h"
++#include "nanosvgrast.h"
++}
++
++namespace nanoboot {
++
++// Proportions of the frame's shorter side, chosen so a 640x480 screen still has room below the
++// status line: the logo is half of it, the title and text sit just outside the logo.
++static constexpr float kLogoH = 0.50f;
++static constexpr float kTitlePx = 0.085f, kTitleGap = 0.050f;
++static constexpr float kLoadingPx = 0.052f, kLoadingGap = 0.040f;
++static constexpr float kStatusPx = 0.036f, kStatusGap = 0.022f;
++static constexpr float kTitleWeight = 600.0f;   // Roboto's weight axis; the rest is its default (400)
++
++namespace {
++
++struct Svg {
++    NSVGimage* img = nullptr;
++    float x0 = 0, y0 = 0, x1 = 0, y1 = 0;   // the drawing's own bounds, in SVG units
++    explicit Svg(const std::string& path) {
++        std::vector<char> buf;
++        if (FILE* f = fopen(path.c_str(), "rb")) {
++            char tmp[65536];
++            size_t n;
++            while ((n = fread(tmp, 1, sizeof(tmp), f)) > 0) buf.insert(buf.end(), tmp, tmp + n);
++            fclose(f);
++        }
++        if (buf.empty()) return;
++        buf.push_back('\0');
++        img = nsvgParse(buf.data(), "px", 96.0f);   // parses in place
++        if (!img) return;
++        bool any = false;
++        for (NSVGshape* s = img->shapes; s; s = s->next) {
++            if (!(s->flags & NSVG_FLAGS_VISIBLE)) continue;
++            if (!any) { x0 = s->bounds[0]; y0 = s->bounds[1]; x1 = s->bounds[2]; y1 = s->bounds[3]; any = true; }
++            x0 = std::min(x0, s->bounds[0]); y0 = std::min(y0, s->bounds[1]);
++            x1 = std::max(x1, s->bounds[2]); y1 = std::max(y1, s->bounds[3]);
++        }
++        if (!any || x1 <= x0 || y1 <= y0) { nsvgDelete(img); img = nullptr; }
++    }
++    ~Svg() { if (img) nsvgDelete(img); }
++};
++
++struct Font {
++    FT_Library lib = nullptr;
++    FT_Face face = nullptr;
++    explicit Font(const std::string& path) {
++        if (FT_Init_FreeType(&lib) != 0) { lib = nullptr; return; }
++        if (FT_New_Face(lib, path.c_str(), 0, &face) != 0) face = nullptr;
++    }
++    ~Font() {
++        if (face) FT_Done_Face(face);
++        if (lib) FT_Done_FreeType(lib);
++    }
++    void weight(float w) {   // a variable font's weight; a static one stays as it is
++        FT_MM_Var* mm = nullptr;
++        if (!face || !FT_HAS_MULTIPLE_MASTERS(face) || FT_Get_MM_Var(face, &mm) != 0) return;
++        std::vector<FT_Fixed> c(mm->num_axis);
++        for (FT_UInt i = 0; i < mm->num_axis; i++) {
++            c[i] = mm->axis[i].def;
++            if (mm->axis[i].tag == FT_MAKE_TAG('w', 'g', 'h', 't'))
++                c[i] = std::clamp<FT_Fixed>((FT_Fixed)(w * 65536.0f), mm->axis[i].minimum, mm->axis[i].maximum);
++        }
++        FT_Set_Var_Design_Coordinates(face, mm->num_axis, c.data());
++        FT_Done_MM_Var(lib, mm);
++    }
++};
++
++// Text measured and drawn in 26.6 pixels, so a line's glyphs keep their sub-pixel advances.
++struct Glyphs {
++    struct G { int x, y, w, h; std::vector<uint8_t> a; };   // left/top offsets from the pen at the baseline
++    std::vector<G> g;
++    int left = 0, right = 0, top = 0, bottom = 0;   // the line's ink, relative to its origin
++};
++
++Glyphs shape(Font& font, const std::string& text, float px) {
++    Glyphs out;
++    if (!font.face || text.empty()) return out;
++    FT_Set_Char_Size(font.face, 0, (FT_F26Dot6)lroundf(px * 64.0f), 72, 72);
++    long pen = 0;   // 26.6
++    FT_UInt prev = 0;
++    bool any = false;
++    for (size_t i = 0; i < text.size();) {
++        // UTF-8 to a code point
++        uint32_t cp = (unsigned char)text[i];
++        int n = cp < 0x80 ? 1 : cp < 0xE0 ? 2 : cp < 0xF0 ? 3 : 4;
++        if (n > 1) cp &= (0x7F >> n);
++        for (int k = 1; k < n && i + k < text.size(); k++) cp = (cp << 6) | ((unsigned char)text[i + k] & 0x3F);
++        i += n;
++        FT_UInt gi = FT_Get_Char_Index(font.face, cp);
++        if (prev && gi && FT_HAS_KERNING(font.face)) {
++            FT_Vector k;
++            if (FT_Get_Kerning(font.face, prev, gi, FT_KERNING_UNFITTED, &k) == 0) pen += k.x;
++        }
++        prev = gi;
++        FT_Vector shift = {pen & 63, 0};
++        FT_Set_Transform(font.face, nullptr, &shift);
++        if (FT_Load_Glyph(font.face, gi, FT_LOAD_DEFAULT | FT_LOAD_NO_HINTING) != 0
++            || FT_Render_Glyph(font.face->glyph, FT_RENDER_MODE_NORMAL) != 0) continue;
++        const FT_GlyphSlot s = font.face->glyph;
++        Glyphs::G g;
++        g.x = (int)(pen >> 6) + s->bitmap_left;
++        g.y = -s->bitmap_top;
++        g.w = (int)s->bitmap.width;
++        g.h = (int)s->bitmap.rows;
++        g.a.resize((size_t)g.w * g.h);
++        for (int r = 0; r < g.h; r++) memcpy(&g.a[(size_t)r * g.w], s->bitmap.buffer + r * s->bitmap.pitch, g.w);
++        if (g.w > 0 && g.h > 0) {
++            if (!any) { out.left = g.x; out.right = g.x + g.w; out.top = g.y; out.bottom = g.y + g.h; any = true; }
++            out.left = std::min(out.left, g.x); out.right = std::max(out.right, g.x + g.w);
++            out.top = std::min(out.top, g.y); out.bottom = std::max(out.bottom, g.y + g.h);
++        }
++        pen += s->advance.x;
++        out.g.push_back(std::move(g));
++    }
++    FT_Set_Transform(font.face, nullptr, nullptr);
++    return out;
++}
++
++// White text over an RGBA frame, its line centred on cx with its baseline at base.
++void blit(const Glyphs& t, int cx, int base, int w, int h, std::vector<uint8_t>* rgba) {
++    const int ox = cx - (t.left + t.right) / 2;
++    for (const auto& g : t.g)
++        for (int r = 0; r < g.h; r++) {
++            const int y = base + g.y + r;
++            if (y < 0 || y >= h) continue;
++            for (int c = 0; c < g.w; c++) {
++                const int x = ox + g.x + c;
++                if (x < 0 || x >= w) continue;
++                const int a = g.a[(size_t)r * g.w + c];
++                uint8_t* p = &(*rgba)[((size_t)y * w + x) * 4];
++                for (int k = 0; k < 3; k++) p[k] = (uint8_t)((255 * a + p[k] * (255 - a) + 127) / 255);
++            }
++        }
++}
++
++}  // namespace
++
++bool layout(const Art& art, int w, int h, Layout* out) {
++    Svg svg(art.svgPath);
++    if (!svg.img || w <= 0 || h <= 0) return false;
++    const float u = (float)std::min(w, h);
++    Layout L;
++    L.w = w; L.h = h;
++    L.logoScale = kLogoH * u / (svg.y1 - svg.y0);
++    L.logoW = (int)ceilf((svg.x1 - svg.x0) * L.logoScale);
++    L.logoH = (int)ceilf((svg.y1 - svg.y0) * L.logoScale);
++    L.logoLeft = (w - L.logoW) / 2;
++    L.logoTop = (h - L.logoH) / 2;
++    L.logoX = L.logoLeft - (int)lroundf(svg.x0 * L.logoScale);
++    L.logoY = L.logoTop - (int)lroundf(svg.y0 * L.logoScale);
++    L.titlePx = kTitlePx * u;
++    L.loadingPx = kLoadingPx * u;
++    L.statusPx = kStatusPx * u;
++    // Baselines: the title's sits a gap above the logo; the others are a gap plus their ascent
++    // (taken as 0.72 of their size, Roboto's cap height) below the line above.
++    L.titleBase = L.logoTop - (int)lroundf(kTitleGap * u);
++    L.loadingBase = L.logoTop + L.logoH + (int)lroundf(kLoadingGap * u + 0.72f * L.loadingPx);
++    L.statusBase = L.loadingBase + (int)lroundf(kStatusGap * u + 0.72f * L.statusPx + 0.25f * L.loadingPx);
++    *out = L;
++    return true;
++}
++
++bool renderBase(const Art& art, int w, int h, std::vector<uint8_t>* rgba) {
++    Layout L;
++    if (!layout(art, w, h, &L)) return false;
++    rgba->assign((size_t)w * h * 4, 0);
++    for (size_t i = 3; i < rgba->size(); i += 4) (*rgba)[i] = 255;
++
++    // The logo, rasterised at its final size (never scaled as pixels), over the black.
++    Svg svg(art.svgPath);
++    if (!svg.img) return false;
++    std::vector<uint8_t> logo((size_t)w * h * 4, 0);
++    if (NSVGrasterizer* r = nsvgCreateRasterizer()) {
++        nsvgRasterize(r, svg.img, (float)L.logoX, (float)L.logoY, L.logoScale, logo.data(), w, h, w * 4);
++        nsvgDeleteRasterizer(r);
++    }
++    for (size_t i = 0; i < logo.size(); i += 4) {
++        const int a = logo[i + 3];
++        for (int k = 0; k < 3; k++) (*rgba)[i + k] = (uint8_t)((logo[i + k] * a + (*rgba)[i + k] * (255 - a) + 127) / 255);
++    }
++
++    Font font(art.fontPath);
++    if (!font.face) return false;
++    font.weight(kTitleWeight);
++    blit(shape(font, art.title, L.titlePx), w / 2, L.titleBase, w, h, rgba);
++    font.weight(400.0f);
++    blit(shape(font, art.loading, L.loadingPx), w / 2, L.loadingBase, w, h, rgba);
++    return true;
++}
++
++Line renderStatus(const Art& art, int w, int h, const std::string& text) {
++    Line out;
++    Layout L;
++    if (text.empty() || !layout(art, w, h, &L)) return out;
++    Font font(art.fontPath);
++    if (!font.face) return out;
++    font.weight(400.0f);
++    const Glyphs t = shape(font, text, L.statusPx);
++    if (t.right <= t.left || t.bottom <= t.top) return out;
++    out.w = t.right - t.left;
++    out.h = t.bottom - t.top;
++    out.x = w / 2 - (t.left + t.right) / 2 + t.left;
++    out.y = L.statusBase + t.top;
++    out.rgba.assign((size_t)out.w * out.h * 4, 0);
++    for (const auto& g : t.g)
++        for (int r = 0; r < g.h; r++)
++            for (int c = 0; c < g.w; c++) {
++                const int x = g.x - t.left + c, y = g.y - t.top + r;
++                uint8_t* p = &out.rgba[((size_t)y * out.w + x) * 4];
++                p[0] = p[1] = p[2] = 255;
++                p[3] = std::max<uint8_t>(p[3], g.a[(size_t)r * g.w + c]);
++            }
++    return out;
++}
++
++}  // namespace nanoboot
+diff --git a/frameworks/base/cmds/gammaos-nano/bootscreen/NanoBootArt.h b/frameworks/base/cmds/gammaos-nano/bootscreen/NanoBootArt.h
+new file mode 100644
+index 00000000000..e3409d52949
+--- /dev/null
++++ b/frameworks/base/cmds/gammaos-nano/bootscreen/NanoBootArt.h
+@@ -0,0 +1,58 @@
++/*
++ * Copyright (C) 2026 GammaOS
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++// The boot screen's picture: the title, the logo centred in the frame, "Loading..." and a status
++// line, drawn for any screen size from the vector logo and the font. Nano draws it on the device
++// (NanoBootScreen.cpp) and the host tool nano-bootlogo draws the same picture, without a status,
++// for the bootloader's logo partition, so the bootloader's picture turns into Nano's unchanged.
++
++#pragma once
++
++#include <cstdint>
++#include <string>
++#include <vector>
++
++namespace nanoboot {
++
++struct Art {
++    std::string svgPath;    // the logo
++    std::string fontPath;   // the text's font
++    std::string title = "Thimsy OS";
++    std::string loading = "Loading...";
++};
++
++struct Layout {   // in pixels of a w x h frame
++    int w = 0, h = 0;
++    float logoScale = 0;                 // SVG units -> pixels
++    int logoX = 0, logoY = 0;            // where the SVG's origin lands
++    int logoW = 0, logoH = 0;            // the logo's drawn box
++    int logoLeft = 0, logoTop = 0;
++    float titlePx = 0, loadingPx = 0, statusPx = 0;
++    int titleBase = 0, loadingBase = 0, statusBase = 0;   // text baselines
++};
++
++// The frame's layout. False when the logo cannot be read.
++bool layout(const Art& art, int w, int h, Layout* out);
++
++// The whole frame as RGBA (w x h, opaque): black, the title, the logo and "Loading...".
++bool renderBase(const Art& art, int w, int h, std::vector<uint8_t>* rgba);
++
++// A line of text, centred: its RGBA pixels (white, alpha = coverage) and where they go in the
++// frame. Empty when the text is empty or the font cannot be read.
++struct Line { int x = 0, y = 0, w = 0, h = 0; std::vector<uint8_t> rgba; };
++Line renderStatus(const Art& art, int w, int h, const std::string& text);
++
++}  // namespace nanoboot
+diff --git a/frameworks/base/cmds/gammaos-nano/bootscreen/nano_bootlogo.cpp b/frameworks/base/cmds/gammaos-nano/bootscreen/nano_bootlogo.cpp
+new file mode 100644
+index 00000000000..9030fc84c4e
+--- /dev/null
++++ b/frameworks/base/cmds/gammaos-nano/bootscreen/nano_bootlogo.cpp
+@@ -0,0 +1,55 @@
++/*
++ * Copyright (C) 2026 GammaOS
++ *
++ * Licensed under the Apache License, Version 2.0 (the "License");
++ * you may not use this file except in compliance with the License.
++ * You may obtain a copy of the License at
++ *
++ *      http://www.apache.org/licenses/LICENSE-2.0
++ *
++ * Unless required by applicable law or agreed to in writing, software
++ * distributed under the License is distributed on an "AS IS" BASIS,
++ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
++ * See the License for the specific language governing permissions and
++ * limitations under the License.
++ */
++
++// nano-bootlogo SVG FONT WIDTH HEIGHT OUT.rgba [STATUS]
++// The boot screen as Nano draws it (NanoBootArt), as raw RGBA: for the bootloader's logo partition
++// (no status) and for checking the layout at other screen sizes.
++
++#include "NanoBootArt.h"
++
++#include <cstdio>
++#include <cstdlib>
++
++int main(int argc, char** argv) {
++    if (argc != 6 && argc != 7) {
++        fprintf(stderr, "usage: nano-bootlogo SVG FONT WIDTH HEIGHT OUT.rgba [STATUS]\n");
++        return 2;
++    }
++    nanoboot::Art art;
++    art.svgPath = argv[1];
++    art.fontPath = argv[2];
++    const int w = atoi(argv[3]), h = atoi(argv[4]);
++    std::vector<uint8_t> rgba;
++    if (!nanoboot::renderBase(art, w, h, &rgba)) {
++        fprintf(stderr, "nano-bootlogo: cannot draw %s with %s\n", argv[1], argv[2]);
++        return 1;
++    }
++    if (argc == 7) {
++        const nanoboot::Line s = nanoboot::renderStatus(art, w, h, argv[6]);
++        for (int y = 0; y < s.h; y++)
++            for (int x = 0; x < s.w; x++) {
++                const int fx = s.x + x, fy = s.y + y;
++                if (fx < 0 || fy < 0 || fx >= w || fy >= h) continue;
++                const uint8_t* p = &s.rgba[((size_t)y * s.w + x) * 4];
++                uint8_t* q = &rgba[((size_t)fy * w + fx) * 4];
++                for (int k = 0; k < 3; k++) q[k] = (uint8_t)((p[k] * p[3] + q[k] * (255 - p[3]) + 127) / 255);
++            }
++    }
++    FILE* f = fopen(argv[5], "wb");
++    if (!f || fwrite(rgba.data(), 1, rgba.size(), f) != rgba.size()) { perror(argv[5]); return 1; }
++    fclose(f);
++    return 0;
++}
+diff --git a/frameworks/base/cmds/gammaos-nano/bootscreen/thimsy.svg b/frameworks/base/cmds/gammaos-nano/bootscreen/thimsy.svg
+new file mode 100644
+index 00000000000..25dcf62f117
+--- /dev/null
++++ b/frameworks/base/cmds/gammaos-nano/bootscreen/thimsy.svg
+@@ -0,0 +1 @@
++<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 640 480" width="640" height="480"><path fill="#FFFFFF" fill-rule="evenodd" d="M210.0,411.1 L212.6,403.4 L214.5,400.3 L219.0,395.8 L222.2,394.2 L223.8,393.8 L228.1,394.2 L230.6,396.0 L231.4,397.5 L231.4,398.7 L231.0,399.9 L227.5,402.6 L227.1,403.4 L227.1,407.4 L229.2,410.3 L232.4,410.7 L240.4,406.6 L240.8,400.3 L241.6,398.3 L243.8,395.8 L247.7,393.8 L250.5,393.8 L251.4,392.8 L251.8,387.7 L252.2,387.3 L253.0,373.6 L255.0,363.8 L251.1,358.6 L251.1,355.5 L254.6,350.4 L254.2,342.9 L256.6,334.3 L259.3,328.8 L259.3,328.0 L266.4,314.6 L266.4,313.1 L261.7,309.1 L258.1,302.1 L256.9,298.1 L256.6,292.6 L253.0,287.1 L249.9,280.9 L247.1,273.4 L245.6,267.1 L242.8,264.8 L241.2,262.4 L240.4,259.6 L240.4,257.7 L241.2,255.3 L244.4,251.4 L244.4,245.5 L245.6,243.1 L248.9,240.6 L254.8,239.4 L273.6,219.4 L278.4,216.2 L282.3,212.3 L285.6,210.5 L285.6,209.8 L283.9,208.0 L283.1,208.0 L281.9,209.2 L277.2,211.9 L274.8,210.3 L269.7,210.7 L269.1,209.4 L270.7,207.8 L271.5,206.2 L271.5,204.6 L270.1,203.7 L267.0,203.3 L264.6,202.1 L261.9,200.1 L258.7,197.0 L257.1,198.6 L255.2,197.0 L254.4,197.8 L252.8,197.8 L251.1,200.3 L251.1,203.9 L251.4,204.2 L250.1,204.8 L247.5,201.9 L245.9,197.6 L245.9,192.9 L247.1,189.7 L246.5,188.7 L245.0,189.1 L241.0,191.5 L236.7,195.4 L235.7,194.8 L236.1,192.1 L238.1,187.8 L242.0,182.6 L239.1,182.4 L235.5,183.6 L234.9,183.0 L235.3,181.9 L237.9,179.3 L241.0,177.7 L244.6,177.3 L245.2,176.8 L244.4,174.4 L244.4,170.9 L244.8,170.1 L246.1,169.1 L250.5,169.5 L251.1,166.5 L252.2,164.2 L251.8,161.4 L249.5,155.1 L247.5,147.7 L233.0,103.3 L233.0,98.2 L235.7,91.9 L237.7,89.1 L246.9,80.3 L254.0,75.6 L263.4,70.9 L270.5,68.5 L276.0,67.3 L278.8,67.3 L279.1,66.9 L285.4,67.3 L290.1,69.3 L293.1,72.2 L322.9,113.5 L329.8,121.9 L333.0,122.7 L334.9,123.9 L337.9,126.9 L339.8,130.0 L341.2,130.6 L343.0,129.2 L346.1,124.1 L346.5,122.1 L346.1,118.6 L347.1,118.0 L348.5,119.4 L350.1,123.3 L350.1,128.0 L348.9,130.8 L348.9,132.4 L355.4,132.9 L356.3,133.9 L355.8,134.5 L353.0,135.3 L352.4,136.3 L355.8,138.1 L359.5,141.4 L360.3,142.6 L359.7,143.9 L350.6,142.0 L347.7,142.2 L348.1,143.8 L349.7,145.3 L351.2,148.5 L351.6,152.8 L351.0,153.4 L349.5,153.4 L348.5,155.5 L348.5,157.5 L346.9,165.0 L346.9,170.1 L346.1,173.6 L346.7,174.6 L348.1,172.8 L348.1,171.6 L349.7,168.1 L354.4,163.8 L355.2,161.4 L357.1,158.7 L360.1,156.5 L365.2,155.7 L378.7,142.2 L384.6,134.3 L384.6,128.0 L385.4,124.1 L386.6,120.6 L387.4,119.8 L387.4,118.2 L385.8,116.2 L385.0,114.3 L385.0,110.8 L386.2,108.4 L388.0,106.6 L389.5,105.8 L395.8,106.2 L396.4,105.6 L396.8,74.6 L397.2,74.2 L397.2,59.3 L397.6,57.3 L401.5,46.7 L406.2,37.3 L409.6,33.9 L412.3,34.3 L414.1,36.1 L416.1,40.8 L419.2,50.6 L420.8,58.1 L420.8,62.0 L420.4,62.4 L419.2,74.2 L418.0,80.1 L416.4,95.4 L416.1,95.8 L416.1,98.2 L414.9,104.1 L414.9,107.2 L415.5,107.8 L419.4,107.4 L421.8,108.2 L423.9,110.4 L424.7,111.9 L425.1,113.9 L424.7,117.0 L423.5,119.0 L421.4,120.4 L420.0,122.1 L420.4,123.3 L419.6,126.5 L420.0,133.5 L418.0,137.1 L417.6,141.0 L416.4,143.4 L413.9,145.9 L411.7,147.3 L410.2,151.6 L408.4,153.4 L404.9,154.9 L401.3,154.9 L399.8,154.2 L397.8,154.2 L388.6,168.9 L381.5,177.9 L381.5,180.7 L382.3,183.8 L382.3,188.9 L381.5,192.1 L379.9,194.8 L378.5,196.2 L374.6,197.8 L372.4,200.7 L370.3,202.5 L368.3,203.3 L364.8,203.7 L355.9,213.3 L349.3,221.9 L348.5,223.9 L348.5,237.2 L348.9,237.6 L348.9,240.0 L351.2,249.4 L356.3,260.8 L356.3,263.6 L355.6,265.1 L353.0,267.7 L346.1,272.2 L345.7,275.0 L350.1,280.1 L355.9,291.5 L363.8,303.6 L363.8,306.0 L363.0,307.6 L360.3,310.3 L360.3,311.9 L367.3,325.6 L370.9,333.9 L372.4,339.0 L372.8,343.3 L373.2,343.7 L372.8,349.6 L377.6,357.1 L377.2,359.8 L374.0,363.8 L376.4,370.0 L377.9,376.3 L378.7,383.0 L379.1,383.4 L379.1,386.1 L379.5,386.5 L379.5,389.3 L379.9,389.7 L379.9,392.4 L381.1,398.3 L382.5,399.7 L385.2,399.7 L389.5,401.7 L390.9,403.0 L392.5,405.8 L393.3,408.9 L393.3,412.9 L397.8,415.8 L401.3,417.4 L403.7,417.0 L404.7,416.0 L405.8,413.2 L405.1,409.3 L401.5,406.6 L401.9,403.4 L404.9,401.3 L409.6,400.9 L411.1,401.3 L415.1,403.6 L418.8,408.1 L420.8,412.1 L422.3,417.2 L422.7,425.8 L421.9,429.8 L420.0,434.5 L418.4,436.8 L413.1,441.7 L407.6,444.1 L401.7,445.3 L391.9,445.3 L386.0,443.7 L379.3,439.8 L374.6,440.9 L369.5,440.6 L364.4,439.4 L360.9,437.8 L358.7,435.6 L356.3,429.0 L356.7,420.7 L354.8,418.4 L353.2,414.0 L353.2,412.1 L354.4,408.1 L358.7,403.8 L358.3,401.5 L355.6,396.0 L351.2,389.7 L347.3,382.2 L345.7,376.7 L344.9,371.6 L344.4,371.0 L340.4,369.8 L339.1,368.5 L338.3,366.5 L338.3,361.4 L337.9,360.6 L333.2,355.9 L329.2,349.6 L325.3,341.8 L321.4,335.9 L316.1,330.6 L313.3,328.6 L311.8,328.6 L304.9,335.5 L302.5,338.6 L300.9,341.0 L295.8,351.6 L293.1,355.5 L289.6,359.0 L289.6,364.9 L288.8,366.5 L287.0,367.9 L284.6,368.7 L284.1,369.6 L283.7,375.9 L282.1,381.0 L277.0,390.1 L274.2,396.4 L274.2,397.1 L278.6,401.1 L279.7,403.0 L280.1,409.3 L278.9,412.1 L277.0,414.4 L277.8,418.4 L277.4,423.1 L275.4,427.0 L275.0,429.0 L272.9,431.1 L267.0,433.1 L261.9,433.5 L261.5,433.9 L257.5,433.9 L255.2,433.1 L253.2,433.1 L245.8,436.6 L240.2,437.8 L234.0,438.2 L233.6,437.8 L226.5,437.4 L220.2,435.1 L215.7,431.3 L211.8,425.0 L210.0,419.3 Z M410.0,37.5 L405.1,46.3 L400.3,58.5 L399.6,108.8 L398.6,110.2 L397.0,110.2 L393.5,109.0 L390.3,109.0 L388.2,111.1 L388.6,114.7 L389.9,116.1 L393.7,117.8 L389.7,121.4 L388.9,122.9 L387.4,130.0 L387.4,132.8 L387.8,133.1 L387.4,136.3 L380.7,144.5 L366.4,158.9 L361.6,159.3 L358.3,162.2 L356.3,166.5 L352.0,170.1 L350.4,175.6 L338.9,187.2 L337.9,186.6 L338.3,185.8 L338.3,181.9 L338.7,180.7 L341.8,177.1 L343.4,173.2 L344.2,162.6 L346.1,153.2 L346.1,150.8 L345.5,150.2 L341.2,153.0 L340.6,152.4 L340.2,150.0 L339.1,147.3 L340.4,146.3 L341.2,146.3 L348.3,148.7 L348.5,147.7 L346.9,145.3 L344.8,143.2 L343.2,142.4 L342.2,141.0 L343.2,140.0 L345.1,140.0 L345.5,139.6 L353.2,139.8 L351.4,138.4 L347.9,137.7 L345.1,137.7 L344.6,137.1 L345.1,136.1 L346.9,135.1 L346.7,134.5 L345.1,134.5 L344.6,133.9 L347.3,129.2 L347.5,127.1 L341.2,134.1 L338.5,135.3 L337.9,134.7 L337.1,130.8 L335.9,129.2 L331.8,125.5 L328.2,125.1 L326.5,123.3 L291.9,75.8 L288.6,72.1 L286.6,70.9 L283.5,70.1 L278.4,70.1 L270.5,71.7 L260.3,75.6 L249.3,82.3 L243.8,87.0 L238.9,92.7 L236.5,97.0 L236.1,98.2 L236.1,103.7 L241.6,119.4 L241.6,120.6 L245.9,132.8 L245.9,133.9 L255.4,162.6 L255.4,165.0 L254.2,166.9 L253.8,168.9 L254.2,169.3 L254.6,173.6 L254.0,174.2 L252.4,174.2 L248.9,172.6 L247.5,173.2 L247.9,175.2 L249.5,177.5 L249.5,178.7 L248.9,179.3 L244.2,179.3 L243.6,179.9 L246.1,180.5 L247.5,181.5 L246.1,183.2 L244.2,184.0 L240.8,187.4 L240.4,188.9 L241.0,189.1 L242.6,187.9 L247.3,186.0 L251.2,186.0 L251.8,186.6 L249.5,189.3 L247.9,193.6 L247.9,197.2 L248.9,198.9 L250.3,192.9 L250.9,192.3 L251.6,193.4 L253.0,191.3 L256.0,188.7 L256.6,189.3 L256.4,192.7 L257.5,191.9 L258.7,191.9 L260.9,194.8 L264.2,198.2 L266.6,199.7 L269.7,200.9 L273.2,200.9 L274.2,201.9 L274.0,207.2 L275.8,205.8 L277.2,203.3 L277.8,203.9 L278.0,208.0 L279.5,206.4 L280.7,206.4 L281.7,204.6 L282.7,204.1 L285.4,206.0 L291.3,208.4 L291.9,209.8 L289.0,212.7 L283.9,215.1 L281.5,217.8 L275.6,221.7 L256.0,242.6 L255.2,242.9 L251.6,242.9 L248.9,244.1 L247.5,245.9 L247.1,247.5 L247.5,252.6 L244.4,256.1 L243.6,258.1 L243.6,259.6 L244.4,261.6 L248.7,265.9 L249.9,271.8 L252.2,278.5 L256.2,286.4 L259.7,291.9 L260.1,298.5 L260.9,300.9 L264.4,307.6 L266.2,308.9 L267.0,308.9 L269.9,311.9 L270.3,313.9 L267.9,317.8 L259.3,335.9 L257.3,342.5 L257.3,346.5 L258.1,348.8 L258.1,350.8 L254.2,356.3 L254.6,358.6 L258.5,362.6 L256.2,373.6 L254.2,396.4 L253.2,397.3 L248.1,396.9 L245.4,398.5 L243.6,401.9 L243.6,405.4 L244.4,407.8 L239.1,411.1 L235.1,413.1 L232.4,413.8 L229.2,413.8 L227.7,413.1 L225.1,410.5 L224.3,408.9 L223.9,403.4 L225.1,400.7 L227.5,398.3 L226.1,396.9 L222.6,397.3 L220.6,398.5 L216.9,402.2 L214.9,405.8 L212.9,413.2 L212.9,417.2 L213.7,421.1 L216.9,427.8 L220.6,431.5 L224.1,433.5 L232.0,435.1 L240.6,434.7 L245.4,433.5 L253.2,429.6 L257.5,430.7 L263.0,430.7 L270.9,428.8 L272.3,427.4 L272.7,425.4 L274.6,421.5 L274.6,418.0 L273.4,414.8 L273.4,413.2 L276.2,410.5 L277.0,408.9 L277.0,404.6 L276.2,403.0 L274.4,401.3 L271.3,399.7 L270.3,398.3 L273.1,390.9 L277.4,383.8 L279.3,379.5 L280.9,373.6 L280.9,368.1 L281.3,366.9 L282.3,365.9 L285.4,365.1 L286.4,364.1 L286.8,362.6 L286.4,357.1 L291.9,352.0 L294.3,348.0 L297.8,340.2 L302.1,333.9 L307.8,327.8 L311.8,324.7 L313.7,325.1 L317.6,327.8 L323.7,333.9 L328.8,341.8 L334.7,352.8 L341.0,359.0 L341.4,359.8 L341.0,361.8 L341.4,366.1 L342.8,367.5 L347.1,368.3 L348.1,369.6 L348.9,376.3 L350.8,382.6 L359.1,396.0 L362.6,404.2 L362.6,405.0 L361.2,406.4 L358.5,407.9 L357.1,409.7 L356.3,411.7 L356.3,414.4 L357.1,416.4 L360.3,419.5 L360.3,421.9 L359.5,423.9 L359.5,428.6 L361.1,431.7 L361.1,433.3 L362.8,435.4 L367.5,437.0 L372.6,437.4 L373.0,437.8 L375.0,437.8 L378.1,436.6 L380.1,436.6 L387.6,440.9 L391.5,442.1 L397.8,442.5 L398.2,442.1 L401.7,442.1 L402.1,441.7 L406.0,441.3 L411.9,439.0 L416.1,434.9 L418.4,430.5 L419.6,425.8 L419.2,417.6 L416.8,410.9 L413.1,406.0 L409.6,404.0 L406.4,404.0 L405.4,404.6 L405.4,405.4 L407.4,407.0 L408.6,409.3 L409.0,411.3 L408.6,415.2 L407.4,417.6 L405.6,419.3 L404.5,420.1 L400.9,420.5 L397.8,419.3 L395.0,417.4 L390.7,415.4 L389.7,414.4 L390.1,408.5 L389.3,406.2 L386.8,403.6 L384.8,402.8 L379.7,403.2 L378.7,401.9 L377.2,394.8 L376.4,386.1 L376.0,385.8 L374.8,376.7 L373.2,370.4 L370.5,363.8 L370.5,362.2 L374.4,357.9 L373.2,355.5 L369.7,351.2 L370.1,343.7 L369.7,343.3 L369.3,339.4 L367.3,333.5 L359.5,317.4 L359.5,316.6 L356.3,311.1 L356.3,309.9 L360.3,306.0 L360.7,304.4 L352.8,292.2 L346.9,280.9 L343.0,276.5 L342.2,275.0 L342.2,273.0 L343.8,269.9 L344.8,268.9 L349.5,266.5 L353.2,262.8 L353.2,261.6 L350.8,256.9 L347.3,247.1 L345.7,239.6 L345.3,223.9 L346.5,220.4 L353.2,211.7 L362.8,200.9 L366.8,200.5 L368.7,199.7 L372.6,195.0 L375.8,194.2 L377.9,192.1 L379.1,188.9 L379.1,183.0 L377.9,179.1 L378.3,176.8 L386.2,166.9 L396.4,150.0 L397.8,149.1 L399.8,151.0 L401.3,151.8 L404.9,151.8 L406.4,151.0 L408.2,148.9 L408.6,145.7 L411.9,143.6 L414.1,141.4 L414.9,139.8 L414.9,136.7 L416.8,133.1 L417.2,131.2 L416.4,128.8 L416.4,126.5 L417.2,124.9 L417.2,122.5 L416.1,119.4 L417.4,118.4 L419.8,118.0 L421.6,116.2 L421.9,113.5 L421.6,112.3 L419.4,110.6 L411.9,110.9 L411.3,110.4 L411.3,107.2 L411.7,106.8 L411.7,104.5 L412.1,104.1 L412.1,101.7 L413.3,95.8 L414.5,83.6 L414.9,83.2 L416.4,69.1 L417.2,66.0 L417.2,63.2 L417.6,62.8 L417.6,57.7 L416.1,50.6 L412.5,40.0 L411.3,37.7 L410.0,37.5 Z M410.0,43.4 L411.3,44.4 L412.5,47.9 L414.5,55.4 L415.3,60.9 L414.9,61.2 L414.5,67.1 L414.1,67.5 L413.3,76.2 L412.9,76.6 L412.9,78.9 L411.7,84.8 L411.7,87.6 L411.3,88.0 L411.3,90.7 L410.6,93.9 L409.0,108.0 L408.6,110.0 L407.6,110.9 L406.4,110.9 L405.8,110.4 L405.8,106.4 L406.2,106.0 L406.2,100.9 L406.6,100.5 L407.4,85.6 L407.8,85.2 L407.8,80.5 L408.2,80.1 L408.6,66.4 L408.2,66.4 L408.2,68.3 L407.8,68.7 L407.0,79.7 L406.6,80.1 L405.1,109.6 L404.1,110.6 L402.9,110.6 L401.9,109.2 L401.9,105.2 L402.3,104.9 L402.3,83.2 L402.7,82.9 L402.7,61.6 L403.1,61.2 L403.1,58.5 L404.7,53.8 L409.0,44.4 L410.0,43.4 Z M278.4,73.2 L284.2,73.2 L286.2,74.0 L288.4,76.2 L288.4,77.8 L289.2,79.3 L290.5,79.9 L292.3,81.7 L293.9,84.0 L293.9,84.8 L296.2,87.6 L294.3,89.5 L295.2,90.5 L296.0,90.5 L297.2,89.3 L298.2,89.9 L299.8,92.3 L299.4,95.0 L300.4,96.0 L301.9,96.0 L303.7,97.4 L304.9,100.9 L308.4,103.7 L323.7,125.3 L322.8,126.3 L316.9,127.4 L310.6,129.4 L296.4,135.3 L282.7,142.8 L272.5,149.8 L271.3,149.8 L270.3,148.9 L268.3,144.9 L264.4,135.1 L262.8,132.4 L262.1,130.0 L262.1,127.6 L259.3,124.9 L261.3,122.5 L261.3,119.4 L260.3,118.4 L257.5,118.0 L256.6,116.6 L256.6,115.9 L253.8,113.1 L255.8,110.0 L255.8,108.4 L254.0,106.2 L252.4,106.2 L251.4,105.2 L251.4,104.1 L249.5,102.5 L250.3,96.6 L248.5,94.4 L247.7,94.4 L246.7,93.5 L245.9,90.7 L246.7,89.1 L249.7,86.2 L258.7,79.9 L267.4,76.0 L278.4,73.2 Z M284.6,77.6 L284.4,78.9 L285.8,79.5 L286.4,78.5 L285.4,77.6 L284.6,77.6 Z M279.9,78.7 L279.7,80.1 L281.1,80.3 L281.3,79.3 L279.9,78.7 Z M274.4,80.7 L274.2,81.3 L274.8,81.9 L275.8,81.7 L275.2,80.7 L274.4,80.7 Z M268.5,82.7 L267.9,83.6 L268.9,84.6 L269.9,83.6 L268.5,82.7 Z M290.1,83.1 L289.6,84.4 L290.1,85.0 L291.3,85.0 L291.5,84.0 L290.1,83.1 Z M285.0,84.2 L284.8,85.2 L285.8,86.2 L286.8,85.2 L286.2,84.2 L285.0,84.2 Z M280.7,85.0 L280.1,86.0 L281.5,87.0 L282.1,86.0 L280.7,85.0 Z M263.0,85.4 L262.1,86.4 L262.1,87.2 L262.6,87.8 L263.8,87.8 L264.0,86.0 L263.0,85.4 Z M274.8,87.4 L274.2,88.4 L275.2,89.3 L276.2,88.8 L276.2,88.0 L274.8,87.4 Z M257.5,88.6 L256.6,89.1 L256.6,90.7 L257.9,91.7 L258.9,90.7 L258.9,89.5 L257.5,88.6 Z M289.8,89.3 L289.6,90.7 L291.3,91.3 L291.5,89.9 L290.9,89.3 L289.8,89.3 Z M268.5,90.1 L267.9,91.1 L268.9,92.1 L269.7,92.1 L270.3,90.7 L269.7,90.1 L268.5,90.1 Z M285.8,91.3 L285.2,91.9 L286.2,92.5 L286.4,91.9 L285.8,91.3 Z M251.6,91.7 L251.1,92.7 L251.4,94.2 L252.8,95.6 L253.8,95.0 L254.2,93.1 L253.2,91.7 L251.6,91.7 Z M280.7,91.7 L280.5,93.1 L281.1,93.7 L282.3,93.7 L282.5,92.3 L281.9,91.7 L280.7,91.7 Z M263.0,92.9 L262.4,93.5 L262.4,95.0 L263.4,95.6 L264.4,94.6 L264.4,93.5 L263.0,92.9 Z M274.8,94.4 L274.6,95.8 L276.0,96.4 L276.6,95.4 L276.2,94.6 L274.8,94.4 Z M294.9,94.4 L294.3,95.0 L294.7,96.2 L295.6,96.8 L296.4,96.4 L296.6,95.4 L295.6,94.4 L294.9,94.4 Z M257.5,96.0 L256.6,97.0 L256.9,98.6 L257.5,99.2 L258.7,99.2 L259.3,98.6 L259.3,97.0 L257.5,96.0 Z M288.2,96.4 L288.0,97.8 L288.6,98.4 L289.8,98.4 L289.9,97.0 L289.4,96.4 L288.2,96.4 Z M268.9,97.2 L268.3,98.6 L269.3,99.6 L270.1,99.6 L270.7,98.2 L269.7,97.2 L268.9,97.2 Z M281.5,98.8 L280.9,99.4 L281.3,100.1 L282.7,100.7 L283.3,99.4 L282.7,98.8 L281.5,98.8 Z M251.2,99.2 L251.1,100.1 L251.8,102.5 L252.8,103.9 L253.6,103.9 L255.0,102.1 L254.6,100.1 L253.6,99.2 L251.2,99.2 Z M300.8,99.2 L299.8,100.5 L300.8,101.9 L301.9,101.9 L302.1,100.1 L300.8,99.2 Z M263.0,100.3 L262.4,100.9 L262.8,102.5 L263.4,103.1 L264.6,103.1 L265.2,102.1 L264.8,100.9 L264.2,100.3 L263.0,100.3 Z M294.9,100.7 L294.3,101.3 L294.3,102.5 L295.6,103.5 L296.6,102.1 L296.0,101.1 L294.9,100.7 Z M275.2,101.5 L274.6,102.5 L276.0,103.5 L276.6,102.1 L275.2,101.5 Z M288.2,103.1 L288.0,104.5 L288.6,105.1 L289.8,105.1 L289.9,103.7 L289.4,103.1 L288.2,103.1 Z M257.9,103.5 L257.3,104.1 L257.3,106.8 L258.7,107.4 L259.7,106.8 L260.1,104.9 L259.5,103.9 L257.9,103.5 Z M269.3,104.3 L268.3,105.6 L270.1,107.4 L271.1,106.4 L271.1,105.2 L270.1,104.3 L269.3,104.3 Z M306.2,105.1 L305.7,105.6 L306.1,106.4 L306.6,107.0 L307.8,107.0 L308.0,105.6 L307.4,105.1 L306.2,105.1 Z M281.9,105.8 L281.3,106.4 L281.7,107.6 L283.1,107.8 L283.7,106.8 L282.7,105.8 L281.9,105.8 Z M300.8,105.8 L300.6,107.2 L301.5,108.2 L302.3,108.2 L302.9,106.8 L301.9,105.8 L300.8,105.8 Z M294.9,107.4 L294.3,108.0 L294.3,109.2 L294.9,109.8 L296.0,109.8 L296.6,108.8 L296.0,107.8 L294.9,107.4 Z M263.0,107.8 L262.8,109.6 L263.2,110.4 L263.8,110.9 L265.0,110.9 L265.6,108.8 L264.6,107.8 L263.0,107.8 Z M275.2,109.0 L275.0,110.4 L275.6,110.9 L276.8,110.9 L277.4,110.4 L276.8,109.0 L275.2,109.0 Z M288.6,110.2 L288.0,111.5 L289.4,112.1 L289.9,110.8 L288.6,110.2 Z M258.3,110.6 L257.3,111.1 L257.3,113.9 L257.9,115.3 L259.5,115.7 L260.5,115.1 L260.9,113.1 L260.5,111.9 L258.3,110.6 Z M269.7,111.7 L268.7,112.3 L268.7,114.3 L269.3,114.9 L270.9,114.9 L271.5,113.1 L270.9,112.1 L269.7,111.7 Z M391.9,111.7 L394.6,111.7 L396.6,112.5 L401.3,112.9 L401.7,113.3 L418.2,113.3 L418.8,114.7 L417.4,115.7 L415.5,116.1 L410.0,116.1 L409.6,116.4 L402.1,116.1 L392.3,114.1 L391.3,113.1 L391.9,111.7 Z M282.3,112.9 L281.3,114.3 L281.9,115.3 L283.1,115.3 L283.7,113.9 L282.3,112.9 Z M263.8,115.3 L262.8,116.2 L262.8,117.4 L264.6,119.2 L266.0,118.2 L266.0,116.2 L265.0,115.3 L263.8,115.3 Z M275.6,116.1 L275.0,117.8 L276.0,118.8 L276.8,118.8 L277.4,118.2 L277.4,116.6 L275.6,116.1 Z M399.4,118.8 L401.5,120.2 L402.3,121.8 L402.7,124.5 L404.3,128.0 L403.3,129.0 L400.5,129.0 L398.4,127.2 L397.0,125.1 L395.8,125.5 L395.2,126.5 L396.8,128.4 L397.6,130.8 L396.8,136.3 L398.0,137.9 L399.2,142.6 L398.2,143.9 L395.4,143.6 L394.8,144.1 L395.2,144.5 L395.2,146.5 L394.4,148.1 L384.2,164.2 L377.9,172.4 L371.1,179.7 L369.9,180.1 L367.7,177.5 L366.2,174.0 L365.0,169.7 L365.0,166.5 L366.6,163.8 L371.3,157.9 L382.7,146.5 L388.2,139.4 L389.9,137.7 L390.9,137.5 L390.9,135.9 L390.1,133.9 L390.1,128.8 L391.3,124.1 L392.1,122.5 L393.9,121.2 L399.4,118.8 Z M408.4,119.2 L411.1,119.6 L413.5,120.8 L414.5,122.1 L414.5,124.9 L413.3,126.9 L413.3,128.0 L414.5,130.0 L414.5,132.4 L412.5,135.5 L412.1,139.4 L409.6,141.6 L407.6,140.4 L402.1,140.0 L400.3,138.2 L400.3,137.1 L401.3,135.7 L408.4,135.3 L409.0,134.7 L408.4,134.1 L406.0,134.1 L405.6,133.7 L401.3,133.7 L400.3,132.8 L400.9,131.8 L404.9,131.0 L408.0,127.1 L409.6,127.1 L410.2,126.5 L410.0,125.9 L406.4,125.5 L405.1,124.1 L404.7,122.9 L404.7,121.0 L406.4,119.6 L408.4,119.2 Z M269.7,119.6 L268.7,121.0 L269.1,122.1 L270.9,122.7 L271.9,121.0 L270.9,119.6 L269.7,119.6 Z M264.2,122.7 L263.6,123.3 L263.6,126.1 L264.2,126.7 L265.4,126.7 L266.4,125.7 L266.4,124.1 L265.8,123.1 L264.2,122.7 Z M324.7,128.2 L329.8,128.2 L331.8,129.4 L334.3,132.8 L334.3,135.1 L333.8,135.7 L332.2,134.9 L326.3,135.3 L321.6,136.5 L309.4,140.8 L294.9,147.9 L287.0,152.6 L279.9,157.7 L276.8,159.3 L274.0,159.3 L271.7,156.1 L270.5,156.1 L268.5,157.7 L267.9,157.1 L272.9,152.6 L279.9,147.5 L292.9,139.6 L307.4,132.9 L317.2,129.8 L318.8,129.8 L324.7,128.2 Z M328.6,138.4 L332.2,138.4 L333.6,139.4 L332.8,140.6 L334.1,141.6 L339.2,142.4 L341.4,143.8 L340.8,144.3 L334.9,143.9 L333.6,144.5 L336.7,148.5 L335.1,149.6 L336.7,153.2 L336.1,154.6 L330.6,149.1 L325.5,146.7 L319.6,145.1 L316.7,143.0 L318.4,141.2 L328.6,138.4 Z M252.0,139.2 L253.8,141.0 L254.6,144.1 L260.1,158.3 L260.1,159.9 L259.1,160.8 L257.7,159.9 L252.6,144.5 L252.6,143.4 L251.4,140.6 L252.0,139.2 Z M309.4,146.3 L311.0,146.7 L315.1,151.6 L316.3,154.4 L317.2,158.9 L317.8,157.5 L317.8,154.8 L316.7,150.4 L315.9,149.2 L316.5,148.3 L317.6,148.3 L320.4,149.8 L321.2,149.8 L322.0,148.7 L325.9,149.4 L328.2,150.6 L330.4,153.2 L331.6,157.9 L331.6,169.7 L334.3,176.8 L335.1,180.3 L335.1,183.8 L333.6,189.3 L330.0,194.8 L324.3,200.5 L318.8,204.4 L315.7,206.0 L311.4,207.2 L303.9,207.2 L303.5,206.8 L299.6,206.8 L293.3,205.6 L290.9,204.8 L284.6,201.3 L278.8,195.8 L277.6,195.8 L276.0,197.4 L271.7,198.2 L269.7,197.8 L265.0,195.0 L262.4,192.1 L256.9,183.0 L253.0,178.7 L252.6,177.5 L254.0,176.9 L256.4,177.7 L261.5,178.1 L268.5,179.7 L272.1,181.7 L277.6,188.3 L279.5,189.5 L280.7,189.5 L280.9,188.5 L278.6,183.4 L278.6,181.9 L281.3,174.8 L281.3,169.3 L279.3,163.0 L283.1,159.7 L291.3,154.2 L293.3,153.4 L294.5,152.2 L298.0,151.8 L300.9,154.4 L302.5,157.5 L302.9,159.5 L302.5,166.9 L303.1,167.1 L308.4,161.8 L310.0,158.3 L311.6,156.3 L311.6,154.8 L312.7,152.8 L312.7,151.6 L311.9,150.0 L308.8,146.9 L309.4,146.3 Z M305.1,146.7 L306.6,146.7 L307.6,147.7 L308.8,154.4 L307.6,159.9 L306.1,163.0 L304.7,164.4 L304.1,163.8 L304.9,160.6 L304.5,155.5 L303.3,152.8 L300.9,150.0 L300.9,149.2 L303.1,147.5 L305.1,146.7 Z M342.4,155.3 L343.4,155.9 L343.4,157.1 L342.6,158.7 L341.8,162.6 L341.0,171.6 L339.4,176.0 L337.7,177.3 L336.7,176.4 L335.9,172.0 L337.9,170.1 L337.5,166.9 L339.4,162.6 L338.5,162.8 L336.7,164.6 L334.9,167.5 L334.3,166.9 L334.3,163.8 L335.5,161.8 L342.4,155.3 Z M323.1,159.3 L319.0,163.0 L315.1,168.1 L315.3,169.1 L317.2,169.1 L317.8,169.7 L318.2,171.6 L320.0,174.2 L321.6,174.2 L322.6,173.2 L322.6,169.3 L321.4,167.3 L320.2,166.5 L320.2,165.4 L323.1,162.0 L325.3,160.6 L325.1,159.7 L323.1,159.3 Z M362.4,162.4 L363.8,163.0 L362.6,165.0 L363.0,172.8 L364.2,176.8 L366.9,182.6 L368.5,185.0 L371.1,187.6 L372.6,188.3 L374.8,187.0 L375.2,184.6 L375.8,184.0 L376.4,184.6 L376.0,188.9 L373.0,191.9 L369.1,191.5 L364.6,188.9 L364.6,190.1 L365.4,191.7 L368.1,194.8 L368.1,195.6 L366.8,197.0 L364.8,197.0 L362.8,196.2 L357.5,190.9 L355.6,187.0 L353.6,179.1 L353.6,174.8 L354.4,172.0 L355.4,171.1 L356.7,171.6 L357.1,175.2 L357.7,176.2 L358.3,176.0 L358.7,175.2 L359.1,167.3 L360.7,163.8 L362.4,162.4 Z M276.0,165.2 L277.2,165.2 L277.8,165.8 L278.9,168.9 L278.9,174.0 L278.4,174.6 L276.8,173.0 L276.2,174.0 L275.8,180.7 L276.6,183.8 L276.0,184.4 L274.6,182.6 L273.4,178.7 L270.9,175.8 L269.5,175.2 L269.5,174.4 L268.7,173.6 L269.9,170.9 L276.0,165.2 Z M289.4,167.9 L286.4,170.5 L286.4,171.2 L287.8,171.4 L289.0,170.7 L290.1,170.7 L294.1,171.8 L294.7,173.2 L293.5,175.6 L293.9,177.9 L296.0,180.9 L298.0,180.5 L298.6,179.5 L298.2,173.6 L298.8,173.0 L301.5,173.0 L302.5,172.4 L302.5,171.6 L292.5,168.3 L289.4,167.9 Z M313.7,178.9 L312.1,179.3 L310.4,181.1 L314.5,180.9 L315.5,181.9 L315.5,183.0 L316.1,183.6 L316.7,183.0 L316.7,181.1 L315.3,179.3 L313.7,178.9 Z M350.2,180.5 L351.6,181.5 L351.6,183.0 L353.2,188.1 L355.6,192.9 L359.5,197.6 L359.5,199.1 L348.5,211.7 L342.8,219.0 L342.2,218.4 L342.2,214.5 L341.4,214.9 L339.4,222.3 L339.4,227.4 L340.6,228.6 L340.6,229.8 L339.2,230.4 L335.1,225.9 L332.8,220.4 L331.2,212.1 L331.6,201.5 L333.6,196.8 L335.9,194.0 L337.7,192.3 L340.0,191.9 L345.7,185.0 L350.2,180.5 Z M259.5,181.7 L259.7,182.6 L261.5,184.0 L263.8,185.2 L266.6,185.6 L267.9,187.4 L268.3,190.1 L269.7,191.5 L270.3,191.3 L270.3,189.7 L272.7,188.1 L272.3,187.0 L270.1,184.8 L267.4,183.2 L259.5,181.7 Z M300.8,192.3 L299.4,193.6 L300.0,195.0 L301.1,194.6 L305.5,196.2 L311.0,196.2 L312.5,195.8 L315.5,194.0 L305.9,194.6 L303.1,193.8 L301.5,192.3 L300.8,192.3 Z M329.0,200.1 L330.0,200.7 L329.6,204.6 L329.2,205.0 L329.6,214.5 L332.0,223.1 L335.1,229.0 L337.7,231.6 L340.4,232.7 L342.0,230.8 L343.0,231.4 L343.0,234.9 L343.4,235.3 L343.4,238.8 L343.8,239.2 L344.2,243.5 L346.9,253.0 L350.1,259.6 L350.1,260.8 L349.5,261.4 L339.2,263.0 L327.1,266.9 L324.3,267.3 L322.9,265.5 L322.2,262.4 L320.6,250.6 L320.2,250.2 L319.8,243.1 L319.4,242.8 L319.4,237.6 L319.0,237.2 L319.0,220.0 L319.4,219.6 L319.4,216.8 L322.6,211.7 L324.5,204.2 L329.0,200.1 Z M321.2,207.6 L321.8,208.2 L319.4,213.7 L313.1,220.4 L311.6,222.7 L311.2,224.7 L311.8,224.9 L316.5,220.2 L317.4,220.8 L317.1,232.5 L317.4,232.9 L317.8,244.7 L318.2,245.1 L319.4,256.9 L321.8,268.7 L322.8,269.7 L324.7,269.7 L334.1,266.5 L339.2,265.7 L339.8,266.3 L339.8,269.9 L337.7,272.4 L336.1,273.2 L333.0,274.0 L332.4,273.4 L332.4,271.8 L331.8,271.6 L327.1,275.9 L323.1,277.5 L321.6,277.5 L319.6,278.3 L313.7,278.7 L308.6,277.5 L307.6,276.5 L310.8,273.0 L309.8,272.8 L303.9,275.9 L299.6,279.1 L296.0,280.7 L292.9,281.1 L286.2,279.1 L284.4,277.7 L284.4,275.8 L285.4,274.4 L292.9,274.8 L294.3,273.4 L295.1,266.7 L295.4,266.3 L295.4,263.6 L295.8,263.2 L295.8,259.2 L296.2,258.9 L296.2,246.3 L295.8,245.9 L296.2,227.0 L297.2,226.1 L298.0,226.1 L300.4,228.0 L301.7,228.2 L301.7,227.0 L300.9,225.5 L298.8,222.9 L294.5,220.9 L291.9,218.8 L291.5,215.2 L293.1,212.5 L295.2,210.3 L296.8,209.9 L297.8,210.9 L296.2,214.5 L296.2,217.6 L302.5,224.3 L304.5,228.6 L305.3,233.3 L305.9,233.9 L306.8,232.5 L307.2,228.2 L310.0,220.0 L316.7,214.1 L321.2,207.6 Z M302.7,211.1 L309.0,211.9 L309.4,212.3 L313.3,211.9 L313.9,212.5 L308.8,217.6 L307.2,220.4 L306.4,223.1 L305.5,224.1 L304.5,223.5 L302.9,220.8 L299.4,217.2 L300.0,215.8 L301.1,215.8 L301.7,215.2 L302.1,211.7 L302.7,211.1 Z M288.2,215.1 L289.6,215.6 L289.6,217.6 L290.3,220.0 L294.7,223.9 L294.7,229.4 L294.3,229.8 L294.7,258.9 L294.3,259.2 L294.3,263.2 L293.9,263.6 L293.5,268.7 L292.7,271.4 L291.3,272.4 L278.8,272.0 L278.2,271.0 L280.1,265.9 L282.1,256.1 L282.1,250.6 L282.5,250.2 L282.1,229.0 L282.5,228.6 L282.9,222.3 L284.4,217.2 L288.2,215.1 Z M280.3,222.5 L280.9,223.1 L280.9,225.9 L280.1,229.4 L280.1,239.2 L279.5,239.8 L278.0,237.8 L277.4,238.8 L277.8,242.4 L278.9,245.5 L278.9,247.9 L278.2,249.0 L274.0,253.2 L272.1,254.7 L271.3,254.7 L267.0,252.0 L258.3,248.1 L257.7,246.7 L260.9,242.4 L272.7,229.4 L278.4,223.7 L280.3,222.5 Z M305.9,237.4 L304.1,238.8 L304.1,242.0 L305.1,243.3 L306.2,243.3 L307.2,242.4 L307.2,240.0 L307.6,239.6 L307.2,238.4 L305.9,237.4 Z M252.0,246.1 L253.2,246.1 L254.8,248.8 L265.8,254.7 L272.3,260.4 L271.7,261.8 L270.1,261.8 L267.4,260.6 L266.4,260.8 L269.9,264.8 L269.9,266.3 L269.3,266.9 L261.1,263.8 L249.7,261.4 L247.1,259.6 L247.5,257.3 L250.1,254.7 L251.2,254.7 L252.4,255.5 L253.4,255.3 L253.4,254.5 L251.8,253.0 L250.3,249.8 L250.3,247.9 L252.0,246.1 Z M278.8,253.6 L280.1,254.1 L279.3,260.4 L277.0,268.7 L275.0,272.6 L275.0,274.2 L276.8,275.9 L280.3,277.5 L282.5,280.5 L282.9,282.0 L281.5,284.2 L279.9,284.2 L278.4,283.4 L272.1,283.8 L271.1,282.4 L270.3,278.9 L269.9,271.8 L273.1,269.1 L273.4,265.5 L275.4,263.2 L275.8,262.0 L275.8,260.0 L275.0,257.7 L278.8,253.6 Z M305.5,255.5 L304.5,256.9 L304.1,258.9 L304.5,260.0 L305.5,261.0 L306.2,261.0 L307.2,260.0 L306.1,258.9 L306.1,257.7 L307.2,256.1 L306.6,255.5 L305.5,255.5 Z M253.2,265.3 L263.8,268.1 L266.0,269.9 L267.9,281.6 L268.7,283.2 L268.7,284.4 L270.1,286.6 L272.1,286.9 L274.8,286.2 L277.6,286.2 L278.9,287.1 L278.6,289.1 L276.8,290.1 L276.2,291.1 L276.2,293.4 L275.4,295.0 L268.5,305.4 L267.4,305.4 L266.0,304.0 L263.6,299.3 L262.8,297.0 L262.8,291.9 L262.4,290.7 L258.5,284.4 L254.6,275.8 L252.2,267.1 L252.2,266.3 L253.2,265.3 Z M336.5,274.8 L338.5,274.8 L339.1,275.4 L338.1,276.7 L331.4,278.7 L327.9,280.3 L316.9,283.0 L309.8,283.8 L309.4,284.2 L305.9,284.2 L305.5,284.6 L295.6,284.6 L293.7,284.2 L293.1,283.6 L294.9,282.6 L296.8,282.6 L299.6,281.8 L310.6,281.4 L311.0,281.1 L314.1,281.1 L320.4,279.9 L329.0,277.5 L336.5,274.8 Z M274.0,278.3 L273.8,279.7 L274.4,280.3 L276.0,280.3 L276.6,279.7 L275.6,278.7 L274.0,278.3 Z M338.1,278.3 L340.4,278.7 L343.4,282.0 L349.3,293.4 L354.4,300.9 L355.2,302.5 L354.6,303.1 L346.3,303.1 L342.8,303.8 L338.5,305.4 L330.6,309.7 L322.0,313.7 L311.8,316.0 L299.2,315.6 L293.7,314.1 L280.7,308.6 L275.6,307.4 L272.9,307.4 L272.3,306.8 L273.4,304.0 L277.8,297.4 L282.9,287.9 L285.8,284.6 L288.2,284.6 L289.2,286.0 L288.0,291.9 L288.6,295.6 L289.2,295.0 L290.3,290.7 L291.5,288.3 L293.7,286.2 L309.4,285.8 L309.8,285.4 L312.1,285.4 L322.4,283.4 L329.4,281.1 L331.8,281.1 L333.2,282.4 L336.3,290.3 L337.3,290.9 L337.5,287.9 L335.5,281.2 L335.5,279.7 L338.1,278.3 Z M347.9,307.0 L349.5,307.0 L351.2,308.8 L359.1,324.5 L359.1,325.2 L361.8,330.4 L365.0,337.8 L366.2,342.5 L366.2,348.8 L365.4,352.0 L364.6,353.1 L364.6,354.3 L365.2,354.9 L367.5,354.1 L369.7,356.7 L369.7,357.9 L368.3,359.2 L364.4,361.6 L358.9,363.6 L353.0,364.7 L347.1,364.7 L345.3,363.8 L344.9,361.4 L345.9,360.4 L351.0,359.6 L352.4,358.6 L346.3,356.9 L343.2,355.3 L338.3,350.8 L332.8,341.4 L333.4,340.8 L334.1,340.8 L334.9,341.6 L335.9,341.4 L334.3,338.6 L319.8,324.1 L320.4,323.1 L322.0,323.5 L324.5,323.3 L323.1,321.9 L318.4,319.9 L317.4,319.0 L318.8,318.0 L322.8,317.2 L327.9,315.2 L340.0,308.9 L347.9,307.0 Z M276.8,311.7 L283.5,313.7 L294.9,318.8 L301.1,320.7 L302.1,322.1 L297.0,325.6 L300.0,325.8 L303.1,325.1 L303.7,326.0 L293.9,337.4 L293.1,339.0 L293.5,341.0 L288.8,349.6 L285.0,353.3 L282.7,354.5 L282.3,354.1 L280.3,354.1 L278.8,355.3 L274.4,356.5 L273.8,357.1 L274.4,358.1 L276.0,358.4 L281.9,358.4 L282.9,359.4 L282.9,361.4 L280.7,362.8 L276.8,362.8 L276.4,363.2 L269.7,362.8 L264.2,361.2 L261.9,360.0 L258.5,357.5 L258.5,356.3 L260.3,353.7 L263.0,354.9 L264.0,354.7 L264.0,353.9 L262.1,350.4 L261.3,347.2 L261.3,342.5 L262.1,339.0 L264.4,333.1 L273.1,316.2 L275.0,313.1 L276.8,311.7 Z M262.2,364.7 L269.7,366.7 L276.8,367.1 L277.4,367.7 L277.4,372.4 L276.6,376.3 L274.6,381.4 L270.7,387.7 L268.3,393.2 L266.8,397.9 L265.2,405.8 L264.2,406.8 L260.7,407.2 L259.3,406.2 L259.3,405.4 L256.9,401.1 L256.9,398.7 L258.1,392.8 L258.1,389.3 L258.5,388.9 L260.1,371.2 L260.9,367.3 L262.2,364.7 Z M365.6,364.7 L366.8,364.7 L368.1,366.5 L370.9,375.5 L372.8,385.8 L373.6,392.8 L374.8,397.5 L374.8,399.5 L376.4,404.6 L376.0,407.0 L374.8,408.1 L373.2,412.1 L371.9,413.4 L369.1,413.1 L368.1,411.7 L367.7,408.9 L363.8,397.9 L360.3,390.9 L356.7,385.8 L354.0,380.2 L352.0,372.8 L352.0,369.6 L353.0,368.7 L359.3,367.5 L365.6,364.7 Z M248.9,400.5 L251.2,400.5 L252.8,401.3 L255.0,403.4 L257.7,409.7 L258.7,410.7 L259.9,410.7 L261.5,409.9 L263.8,409.9 L268.5,407.9 L269.9,406.2 L269.1,404.2 L269.7,402.8 L271.3,402.8 L273.1,404.2 L273.8,405.4 L273.8,407.4 L273.1,408.9 L269.3,411.9 L265.2,414.0 L265.8,415.0 L268.9,414.6 L270.3,415.6 L270.7,416.8 L271.1,420.7 L269.9,423.9 L268.5,425.6 L265.0,426.8 L260.3,427.2 L259.7,426.6 L260.1,425.4 L259.5,424.8 L256.8,424.8 L252.8,426.0 L243.4,430.3 L239.5,430.7 L239.1,431.1 L233.2,431.1 L232.8,430.7 L228.9,430.3 L224.9,428.4 L223.4,428.4 L220.0,425.4 L217.7,421.1 L216.9,418.0 L216.9,411.3 L218.1,406.6 L220.2,403.6 L221.2,404.6 L220.8,406.6 L221.6,410.5 L223.9,414.4 L226.5,416.6 L228.9,417.8 L230.8,417.8 L232.4,416.6 L236.7,416.6 L239.9,417.4 L238.9,414.8 L239.9,413.8 L246.9,410.3 L249.7,409.9 L252.4,411.1 L253.0,410.9 L253.0,409.7 L250.9,407.2 L248.1,406.8 L247.1,405.8 L246.7,402.6 L248.9,400.5 Z M382.1,406.4 L385.2,406.8 L386.6,408.1 L387.0,410.9 L385.6,413.1 L383.2,413.1 L381.3,414.2 L379.5,416.0 L379.1,417.6 L382.9,416.2 L386.0,416.2 L392.3,419.3 L395.2,421.9 L392.1,424.6 L392.3,425.2 L396.6,423.7 L399.0,423.7 L399.4,423.3 L400.9,423.3 L402.3,424.6 L401.9,425.4 L402.5,426.0 L404.5,424.8 L410.2,419.1 L411.7,414.8 L411.7,411.3 L412.7,410.7 L414.1,412.5 L415.7,416.4 L416.1,424.6 L414.5,430.1 L412.5,433.3 L411.1,434.7 L409.2,435.4 L408.6,434.9 L409.4,433.3 L408.8,433.1 L405.6,435.8 L400.5,438.2 L393.9,438.6 L387.6,437.0 L383.2,434.3 L376.6,431.5 L373.8,431.5 L373.2,432.1 L373.6,433.3 L372.6,434.3 L365.6,432.7 L364.2,431.3 L364.2,430.1 L363.4,429.0 L363.0,424.6 L363.8,422.3 L364.8,421.3 L367.1,421.3 L368.1,420.3 L367.1,419.3 L362.4,417.0 L360.3,414.8 L359.5,412.9 L359.9,411.3 L362.0,409.1 L363.2,408.7 L364.2,409.7 L364.2,410.9 L363.4,412.1 L365.2,414.2 L367.5,415.4 L371.9,416.2 L373.4,418.2 L375.2,416.4 L376.0,412.5 L377.6,409.7 L379.3,407.9 L382.1,406.4 Z"/></svg>
+\ No newline at end of file
 diff --git a/frameworks/base/cmds/gammaos-nano/docs/ARCHITECTURE.md b/frameworks/base/cmds/gammaos-nano/docs/ARCHITECTURE.md
 index 6ea9728fdc3..43d05e59a9a 100644
 --- a/frameworks/base/cmds/gammaos-nano/docs/ARCHITECTURE.md
