@@ -1,6 +1,9 @@
-# gamma-os-next-improved
+<p align="center"><img src="docs/thimsy.png" alt="The Thimsy OS mascot: an elf in a thimble helmet, raising a sword" width="160"></p>
 
-A modified build of [GammaOS Next](https://github.com/TheGammaSqueeze/GammaOSNext)
+# Thimsy OS
+
+Thimsy OS, formerly gamma-os-next-improved, is a modified build of
+[GammaOS Next](https://github.com/TheGammaSqueeze/GammaOSNext)
 v1.2 (Full edition) for the **Anbernic RG Cube**.
 
 This repository doesn't contain firmware images. It holds the scripts and
@@ -11,7 +14,7 @@ build, so you can rebuild it yourself.
 
 - Upstream release: [`v.1.2.0-ANBERNICRGCUBE`](https://github.com/TheGammaSqueeze/GammaOSNext/releases/tag/v.1.2.0-ANBERNICRGCUBE)
 - Edition: Full (Android 14 / LineageOS 21, with Google Play)
-- Prebuilt firmware: [v1.0 release](https://github.com/KristopherTadlock/gamma-os-next-improved/releases/tag/v.1.0.0-ANBERNICRGCUBE)
+- Prebuilt firmware: none published at the moment; build it yourself (see Building)
 
 ## Changes from upstream
 
@@ -151,7 +154,7 @@ scripts/build.sh
 ```
 
 This downloads the official release, applies each script in `mods/` to its
-system partition, and writes `out/RG_Cube_GammaOS_Next_Improved_v1.0.pac`.
+system partition, and writes `out/RG_Cube_Thimsy_OS_v1.0.pac`.
 
 The tools it uses:
 

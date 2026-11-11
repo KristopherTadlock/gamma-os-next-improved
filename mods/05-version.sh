@@ -5,7 +5,7 @@
 set -euo pipefail
 
 PROP="$1/build.prop"
-VERSION="GammaOS_Next_Improved_v1.0"
+VERSION="Thimsy_OS_v1.0"
 work="$(realpath -m "$2")/version"
 
 mkdir -p "$work"

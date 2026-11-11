@@ -25,7 +25,7 @@ apk  hakuX-1.3.0.apk  name=hakuX Xbox emulator  url=https://github.com/rfandango
 # Vita3K 0.2.1, build 4277 (PS Vita). GPL-2.0.
 # Vita3K only publishes a rolling "continuous" Android build, so this exact
 # build is mirrored in this repo's releases.
-apk  vita3k-0.2.1.apk  name=Vita3K PS Vita emulator  url=https://github.com/KristopherTadlock/gamma-os-next-improved/releases/download/app-mirror-1/vita3k-0.2.1-build4277.apk  sha256=75d2f4fc7261c99979060944c8775cd2ad361a2bbe8ac31d92a6e8df6dd84976  source=https://github.com/Vita3K/Vita3K/tree/2f68c1bf0d44753eddc8263b6a4dd23fcd928f22
+apk  vita3k-0.2.1.apk  name=Vita3K PS Vita emulator  url=https://github.com/KristopherTadlock/thimsy-os/releases/download/app-mirror-1/vita3k-0.2.1-build4277.apk  sha256=75d2f4fc7261c99979060944c8775cd2ad361a2bbe8ac31d92a6e8df6dd84976  source=https://github.com/Vita3K/Vita3K/tree/2f68c1bf0d44753eddc8263b6a4dd23fcd928f22
 
 # ScummVM 2026.3.0 (point-and-click adventure games). GPL-3.0-or-later.
 # 2026.4.0 has no Android build yet.
