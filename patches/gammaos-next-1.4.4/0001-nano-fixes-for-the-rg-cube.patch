@@ -6816,7 +6816,7 @@ index d1b72700c49..c4416073fcd 100644
 +
  } // namespace android
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Folder.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Folder.cpp
-index b3221c1d5d6..bfbbbf35f9a 100644
+index b3221c1d5d6..0982f2ec35a 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Folder.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Folder.cpp
 @@ -25,6 +25,10 @@
@@ -6880,7 +6880,28 @@ index b3221c1d5d6..bfbbbf35f9a 100644
      saveSystemsConfig();
      gsRefreshStackLevels();
      if (!mPs3Stack.empty() && mPs3Stack.back().screenKind == GS_FOLDER)
-@@ -406,7 +409,8 @@ void NanoMenu::buildFolderBrowser(const std::string& path, Ps3Level& out) {
+@@ -391,6 +394,20 @@ static bool isStorageRoot(const std::string& p) {
+     return false;
+ }
+ 
++// A folder as the browser names it: a storage root as in the roots list, else its own name.
++static std::string folderBrowserName(const std::string& p) {
++    if (p.empty()) return trDyn("Storage");
++    if (p == "/storage/emulated/0") return trDyn("Internal storage");
++    if (isStorageRoot(p)) {
++        const size_t sl = p.find_last_of('/');
++        const char* kind = p.compare(0, 12, "/mnt/shares/") == 0 ? "Share: "
++                           : p.compare(0, 14, "/mnt/media_rw/") == 0 ? "Removable: " : "SD: ";
++        return std::string(trDyn(kind)) + p.substr(sl + 1);
++    }
++    const size_t sl = p.find_last_of('/');
++    return sl == std::string::npos ? p : p.substr(sl + 1);
++}
++
+ void NanoMenu::buildFolderBrowser(const std::string& path, Ps3Level& out) {
+     out.items.clear(); out.sel = 0; out.screenKind = GS_FOLDERBROWSE;
+     mGsFolderPath = path;
+@@ -406,7 +423,8 @@ void NanoMenu::buildFolderBrowser(const std::string& path, Ps3Level& out) {
          // #90 DraStic data-folder picker (target 5): offer a reset-to-default at the top of the roots,
          // since the roots pseudo-folder has no "Select This Folder". Selecting it clears the override.
          // Same for the Boxart Folder picker (target 7): "Use Default Folder" moves the art back to internal.
@@ -6890,7 +6911,60 @@ index b3221c1d5d6..bfbbbf35f9a 100644
              Ps3Item it; it.label = "Use Default Folder"; it.kind = PS3_GS_SELFOLDER; it.payloadStr = "@default";
              it.iconTex = iconTexForIcon(22); it.nmapTex = nmapForIcon(22); it.iconR = it.iconG = it.iconB = 1.0f;
              out.items.push_back(it);
-@@ -587,19 +591,37 @@ void NanoMenu::fbStopWorker() {
+@@ -440,9 +458,23 @@ void NanoMenu::buildFolderBrowser(const std::string& path, Ps3Level& out) {
+         return;
+     }
+     out.title = path;
+-    // Parent ("..") - a storage root goes back to the roots list ("").
+-    if (isStorageRoot(path)) addDir("..", "");
+-    else { size_t sl = path.rfind('/'); addDir("..", sl == std::string::npos ? "" : path.substr(0, sl)); }
++    // First the parent (".. <its name>"; a storage root goes back to the roots list, ""), then
++    // "Select This Folder", then the subfolders.
++    std::string parent;
++    if (!isStorageRoot(path)) { size_t sl = path.rfind('/'); parent = sl == std::string::npos ? "" : path.substr(0, sl); }
++    addDir(".. " + folderBrowserName(parent), parent);
++    // Icon-import picker (target 9) also lists selectable image files, so the user can browse to
++    // their own PNG; it selects a file, so it has no "Select This Folder". It used to share target
++    // 6 with the Syncthing folder picker, which therefore had no such row: a Syncthing folder could
++    // not be chosen at all (reported 2026-09-28).
++    const bool iconPick = (mFolderPickTarget == 9);
++    // "Select This Folder" - only when picking a folder. The icon-import picker selects a file
++    // instead, so it has no whole-folder action.
++    if (!iconPick) {
++        Ps3Item it; it.label = "Select This Folder"; it.kind = PS3_GS_SELFOLDER; it.payloadStr = path;
++        it.iconTex = iconTexForIcon(22); it.nmapTex = nmapForIcon(22); it.iconR = it.iconG = it.iconB = 1.0f;
++        out.items.push_back(it);
++    }
+ 
+     // Subdirectories, from the worker rather than from a blocking opendir+stat here.
+     //
+@@ -451,11 +483,6 @@ void NanoMenu::buildFolderBrowser(const std::string& path, Ps3Level& out) {
+     // which is what let the watchdog abort nano when a folder on an FTP share was opened. The
+     // listing is requested once and cached; until it arrives the screen shows "Loading..." and
+     // stays fully responsive, so Back still works if the server never answers.
+-    // Icon-import picker (target 9) also lists selectable image files, so the user can browse to
+-    // their own PNG. Every other picker lists directories only. It used to share target 6 with the
+-    // Syncthing folder picker, which therefore listed files and had no "Select This Folder" row:
+-    // a Syncthing folder could not be chosen at all (reported 2026-09-28).
+-    const bool iconPick = (mFolderPickTarget == 9);
+     auto isImageName = [](const std::string& n) {
+         size_t dot = n.rfind('.');
+         if (dot == std::string::npos) return false;
+@@ -482,13 +509,6 @@ void NanoMenu::buildFolderBrowser(const std::string& path, Ps3Level& out) {
+         it.iconTex = 0; it.nmapTex = 0; it.iconR = it.iconG = it.iconB = 0.55f;
+         out.items.push_back(it);
+     }
+-    // "Select this folder" - only when picking a folder. The icon-import picker selects a file
+-    // instead, so it has no whole-folder action.
+-    if (!iconPick) {
+-        Ps3Item it; it.label = "Select This Folder"; it.kind = PS3_GS_SELFOLDER; it.payloadStr = path;
+-        it.iconTex = iconTexForIcon(22); it.nmapTex = nmapForIcon(22); it.iconR = it.iconG = it.iconB = 1.0f;
+-        out.items.push_back(it);
+-    }
+ }
+ 
+ // Queue a directory listing for the folder browser. Render thread; never blocks.
+@@ -587,19 +607,37 @@ void NanoMenu::fbStopWorker() {
      mFbStarted = false;
  }
  
@@ -6934,7 +7008,7 @@ index b3221c1d5d6..bfbbbf35f9a 100644
      saveSystemsConfig();
      // Pop the browser, refresh the scan-folders screen + the Game category.
      if (!mPs3Stack.empty() && mPs3Stack.back().screenKind == GS_FOLDERBROWSE) mPs3Stack.pop_back();
-@@ -626,6 +648,711 @@ void NanoMenu::drasticCheatsFolderSelect(const std::string& path) {
+@@ -626,6 +664,711 @@ void NanoMenu::drasticCheatsFolderSelect(const std::string& path) {
      drasticFolderSelect("persist.gammaos.drastic.cheats_dir", "DraStic cheats folder", path);
  }
  
