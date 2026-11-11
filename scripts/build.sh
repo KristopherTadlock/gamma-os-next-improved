@@ -16,6 +16,10 @@
 # (scripts/patch_vendor_boot.py). That needs fsck.erofs, mkfs.erofs,
 # unpack_bootimg, lz4 and avbtool on PATH, MKBOOTIMG naming mkbootimg (or
 # mkbootimg.py) and AVB_KEY naming AOSP's testkey_rsa4096.pem.
+#
+# odm gets a precompiled SELinux policy matching the system image
+# (scripts/odm_sepolicy.py), so init does not compile one at every boot. That
+# needs secilc (from the AOSP host build) and debugfs on PATH.
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
@@ -47,6 +51,9 @@ fi
 
 for tool in fsck.erofs mkfs.erofs unpack_bootimg lz4 avbtool; do
   command -v "$tool" >/dev/null || { echo "$tool is required (DisplayPort driver patch)" >&2; exit 1; }
+done
+for tool in secilc debugfs; do
+  command -v "$tool" >/dev/null || { echo "$tool is required (precompiled SELinux policy)" >&2; exit 1; }
 done
 mkbootimg="${MKBOOTIMG:-}"; mkbootimg="${mkbootimg%% *}"
 [[ -n "$mkbootimg" && ( -f "$mkbootimg" || -n "$(command -v "$mkbootimg")" ) && -f "${AVB_KEY:-}" ]] || {
@@ -122,6 +129,13 @@ python3 -I "$ROOT/scripts/lptool.py" extract "$super" vendor_dlkm_a "$dlkm"
 python3 -I "$ROOT/scripts/patch_vendor_dlkm.py" "$dlkm" "$dlkm.patched"
 python3 -I "$ROOT/scripts/lptool.py" replace "$super" vendor_dlkm_a "$dlkm.patched"
 rm -f "$dlkm" "$dlkm.patched"
+odm="$WORK/images/odm_a.img"
+vendor="$WORK/images/vendor_a.img"
+python3 -I "$ROOT/scripts/lptool.py" extract "$super" odm_a "$odm"
+python3 -I "$ROOT/scripts/lptool.py" extract "$super" vendor_a "$vendor"
+python3 -I "$ROOT/scripts/odm_sepolicy.py" "$odm" "$system" "$vendor" "$odm.patched"
+python3 -I "$ROOT/scripts/lptool.py" replace "$super" odm_a "$odm.patched"
+rm -f "$odm" "$odm.patched" "$vendor"
 cp "$WORK/pac/$NAME.pac" "$pac.partial"
 python3 -I "$ROOT/scripts/pactool.py" replace "$pac.partial" super_full.img "$super"
 vendor_boot="$WORK/images/vendor_boot.img"

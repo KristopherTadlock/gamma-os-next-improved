@@ -542,11 +542,27 @@ The tools it uses:
 - `scripts/sprd_drm.py` is the patch to the vendor kernel's DisplayPort driver
   (`sprd-drm.ko`). `scripts/patch_vendor_dlkm.py` applies it to the copy the
   kernel loads at boot, in the compressed EROFS `vendor_dlkm` partition, which
-  it rebuilds with every file's owner, mode and SELinux label, the original
-  UUID and build time, and no filesystem feature the original lacks.
-  `scripts/patch_vendor_boot.py` applies it to the copy recovery loads, in
-  `vendor_boot`, then repacks that image and signs it again with the AOSP test
-  key it was signed with.
+  it rebuilds (`scripts/erofs_image.py`) with every file's owner, mode and
+  SELinux label, the original UUID and build time, and no filesystem feature
+  the original lacks. `scripts/patch_vendor_boot.py` applies it to the copy
+  recovery loads, in `vendor_boot`, then repacks that image and signs it again
+  with the AOSP test key it was signed with.
+- `scripts/odm_sepolicy.py` compiles the SELinux policy for the new system,
+  exactly as init would, and stores it on the odm partition with the system's
+  policy hashes. Anbernic's odm carries the policy for the 1.2 system, so
+  without this init compiled the policy at every boot, about a second before
+  anything else could start.
+
+### Boot time
+
+- The image's ART code is compiled for the userfaultfd garbage collector
+  (`PRODUCT_ENABLE_UFFD_GC := true`), the one Android 14 uses on the RG Cube's
+  kernel. Compiled for the other one, it was thrown away and compiled again on
+  the device before the first boot could start, about 23 s of black screen.
+- `phh-prop-handler.sh` restarts audioserver for the Bluetooth audio setting
+  only when the audio setup actually changes. It re-applied the saved value at
+  every boot and restarted audio just after it started; init holds a restart
+  back 5 s, and system_server waited about 2 s for it.
 
 ### External monitors
 
