@@ -1983,7 +1983,7 @@ index dcd7bbaf475..c9e60e71e4d 100644
          char mode[PROPERTY_VALUE_MAX] = {};
          property_get("persist.gammaos.performance_mode", mode, "stock");
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenu.h b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
-index 88e7cae6699..617b27ef7e3 100644
+index 88e7cae6699..c661ecbbc79 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 @@ -61,6 +61,7 @@ static inline void nanoThreadNormalPriority() {
@@ -2228,12 +2228,13 @@ index 88e7cae6699..617b27ef7e3 100644
      };
      bool mPs3Xmb = false;         // persist.gammaos.nano.ps3xmb
      bool mNdsTheme = false;       // persist.gammaos.nano.ndstheme (DSi System Menu theme, takes priority)
-@@ -1593,8 +1673,17 @@ private:
+@@ -1593,8 +1673,18 @@ private:
      // ready / none) and sets *outAR to the native aspect ratio.
      GLuint esdeGameMediaTex(const std::string& romPath, const std::string& imageType, float* outAR);
      std::string esdeGameMediaPath(const std::string& romPath, const std::string& imageType);  // resolved file ("" = none)
 +    void esdeForgetGameMedia(const std::string& romPath);   // re-resolve the game's media on next use
-+    int esdeDeleteGameMedia(const std::string& romPath, int sysIdx);   // every medium of the game; files deleted
++    // Every medium of the game (gone: its other files, also deleted); the number of files deleted.
++    int esdeDeleteGameMedia(const std::string& romPath, int sysIdx, const std::vector<std::string>& gone);
 +    bool esdeMediaLayout(const std::string& romPath, int sysIdx, std::vector<std::string>* sysDirs,
 +                         std::vector<std::string>* names, std::string* canon);
 +    bool esdeMediaStems(const std::string& romPath, int sysIdx, std::string* writeDir,
@@ -2246,7 +2247,7 @@ index 88e7cae6699..617b27ef7e3 100644
      void esdeReloadForSystem(int sysIdx);         // re-parse per-system data (systeminfo/colours) on
                                                    // a settled system change (XML only, no GL reload)
      int  mEsdeSysSel = 0;                         // selected system (system view)
-@@ -1676,6 +1765,102 @@ private:
+@@ -1676,6 +1766,102 @@ private:
          bool installed = false;
      };
      bool         mEsdeMenuActive = false;         // menu open
@@ -2349,7 +2350,7 @@ index 88e7cae6699..617b27ef7e3 100644
      bool         mEsdeMenuClosing = false;        // fade-out in progress
      float        mEsdeMenuAnim = 0.0f;            // 0..1 open ease
      EsdeMenuPage mEsdeMenuPage = ESDE_PG_ROOT;
-@@ -1694,6 +1879,7 @@ private:
+@@ -1694,6 +1880,7 @@ private:
      void esdeMenuCycle(int dir);
      void esdeMenuSelect();
      void esdeMenuBack();
@@ -2357,7 +2358,7 @@ index 88e7cae6699..617b27ef7e3 100644
      void esdeMenuApplyOption(const char* prop, const std::string& value);
      // From the ES-DE start menu's "Nano Settings" row: close the ES-DE menu and open a chooser that
      // reaches the Quick Menu and the full Settings tree (the menus the XMB/DSi/Minima carousels expose
-@@ -1757,6 +1943,13 @@ private:
+@@ -1757,6 +1944,13 @@ private:
      void ensureEsdeTheme();
      void esdeSdcardThemesTick();                  // watch /sdcard/ES-DE/themes for user-dropped themes
      void esdeRebuildSysList();
@@ -2371,7 +2372,7 @@ index 88e7cae6699..617b27ef7e3 100644
      // ES-DE variant triggers (ViewController per-system scan): a system with no matching game
      // media renders with the selected variant's <override useVariant> instead of the variant
      // itself. nano keeps one scraped image per game (the box, reused for the video element), so
-@@ -1781,6 +1974,12 @@ private:
+@@ -1781,6 +1975,12 @@ private:
      void esdeNav(int dx, int dy);
      bool esdeSelect();
      bool esdeBack();
@@ -2384,7 +2385,7 @@ index 88e7cae6699..617b27ef7e3 100644
      bool mPs3BottomClock = false; // persist.gammaos.nano.ps3xmb.bottomclock (PSP clock on the bottom panel, dual-screen XMB)
      // Half Resolution (XMB theme only, three INDEPENDENT Theme Settings toggles). Each renders only its
      // subsystem at half resolution and sharp-linear upscales it; the rest stays full-res. Perf for weak
-@@ -2071,6 +2270,13 @@ private:
+@@ -2071,6 +2271,13 @@ private:
      // boot clock (accumulated clamped mFrameDt, NOT mEffectTime which wraps).
      bool   mPs3BootActive = false;
      bool   mPs3BootWizardAfter = false;  // fresh setup -> show the wizard after the intro
@@ -2398,7 +2399,7 @@ index 88e7cae6699..617b27ef7e3 100644
      double mPs3BootElapsedMs = 0.0;      // monotonic boot clock
      float  mPs3BootLabelReveal = 1.0f;   // category-label fade-in (1 = fully shown)
      float  mPs3BootIconReveal = 1.0f;    // category-icon / item / clock pop-in (1 = shown)
-@@ -2296,6 +2502,7 @@ private:
+@@ -2296,6 +2503,7 @@ private:
      struct VidPending { bool isStream = false; std::string file; std::string url; int w = 0, h = 0;
                          int resumeChoice = -1; double resumeSec = 0.0; int vidIdx = 0; };
      VidPending mVidPending;                         // params captured at vidBeginOpen, applied on adopt
@@ -2406,7 +2407,7 @@ index 88e7cae6699..617b27ef7e3 100644
      void   vidBeginOpen(const VidPending& p);       // render: GL alloc + spawn the open worker
      bool   vidOpenTitleRun();                       // worker: blocking title open (reads mVidPending)
      bool   vidOpenStreamRun();                      // worker: blocking IPTV stream open
-@@ -2427,9 +2634,28 @@ private:
+@@ -2427,9 +2635,28 @@ private:
      std::atomic<bool> mEsdeBgVideoOpenDone{false};
      std::atomic<bool> mEsdeBgVideoOpenOk{false};
      bool   mEsdeBgVideoAdopted = false;
@@ -2437,7 +2438,7 @@ index 88e7cae6699..617b27ef7e3 100644
      // Live hover preview in the Video Wallpaper picker: decode the currently-focused video and draw it
      // into its grid cell. Only ONE decoder runs at a time (the single HW decoder), so the tick stops the
      // video wallpaper while previewing and lets wpVideoTick re-adopt it on leaving the picker. Mirrors
-@@ -2555,6 +2781,9 @@ private:
+@@ -2555,6 +2782,9 @@ private:
      std::string themeButtonText(const char* in);
      bool   mFaceLetters = true;   // Button Prompts: letters (default) vs PlayStation
      bool   mFaceSwapOk  = false;  // OK Button: false = A/Cross, true = B/Circle
@@ -2447,7 +2448,7 @@ index 88e7cae6699..617b27ef7e3 100644
      void   ps3DlgIllustration(int kind, float cx, float cy, float sz, float ap);
      void   ps3FillCircle(float cx, float cy, float rad, float r, float g, float b, float a);
      void   ps3StrokeRing(float cx, float cy, float radX, float radY, float lw,
-@@ -2809,15 +3038,51 @@ private:
+@@ -2809,15 +3039,51 @@ private:
      // performance-mode side-panel chooser, and the kill-apps backend.
      void buildQuickPowerSubmenu(Ps3Level& out);
      void openQuickPowerMenu();   // power-hold (menu visible) -> Quick Menu Power submenu, all themes
@@ -2505,7 +2506,7 @@ index 88e7cae6699..617b27ef7e3 100644
      void buildGamepadSubmenu(Ps3Level& out);         // top-level Gamepad Settings section list
      // Gamepad Settings sub-sections (grouped for readability) + shared row helpers.
      void gpLeaf(Ps3Level& out, const char* label, const char* bindLabel, int icon);
-@@ -2829,6 +3094,9 @@ private:
+@@ -2829,6 +3095,9 @@ private:
      void buildGpRumble(Ps3Level& out);
      void buildGpMapping(Ps3Level& out);
      void buildGpTouch(Ps3Level& out);
@@ -2515,7 +2516,7 @@ index 88e7cae6699..617b27ef7e3 100644
      void gamepadTestOpen();                          // enter the live controller test screen
      void gamepadCalibOpen();                         // enter the analog calibration wizard
      void gpCaptureEvent(int fd, int type, int code, int value); // mirror a raw event -> maps
-@@ -2839,7 +3107,7 @@ private:
+@@ -2839,7 +3108,7 @@ private:
      void gpDialogHeader(const char* title, int iconIdx, float ap); // icon + title + top/bottom dividers
      float gpAxisNorm(int absCode);                   // latest axis value normalised to [-1,1]
      // Full-screen HSV colour picker (all themes) - see the mCp* state block above.
@@ -2524,7 +2525,7 @@ index 88e7cae6699..617b27ef7e3 100644
      void renderColorPicker();                        // draw the Hue/Brightness field + preview + hints
      bool colorPickerHandleKey(int code, int value);  // confirm / cancel / saturation / hold-exit (press edges)
      void colorPickerTick();                          // per-frame cursor move from held d-pad / stick / hat
-@@ -2955,7 +3223,7 @@ private:
+@@ -2955,7 +3224,7 @@ private:
      void buildShaderBrowser(const std::string& path, Ps3Level& out);  // custom-preset file browser
      void shaderOpenBrowserDefault();                  // open the browser at the RetroArch subfolder for the active type (still traversable up)
      void shaderSelectPreset(const std::string& path);                 // point the shader loader at a custom preset (SF reads it in place) + arm meta poll
@@ -2533,7 +2534,7 @@ index 88e7cae6699..617b27ef7e3 100644
      void openShaderOptChooser(const std::string& spec); // discrete-option chooser (key|opts|title)
      std::string shaderOptCurrentLabel(const std::string& spec); // display label of a shader-opt row's current value
      void openShaderParamSlider(int idx);             // live slider for mShaderParams[idx]
-@@ -2965,7 +3233,6 @@ private:
+@@ -2965,7 +3234,6 @@ private:
      void writeShaderParams();                         // rewrite .shader_params from mShaderParams (custom)
      std::string shaderCurType();                      // active shader type ("" when disabled)
      bool isCustomShaderType(const std::string& t);    // true for custom/custom-vk/custom-gl
@@ -2541,7 +2542,7 @@ index 88e7cae6699..617b27ef7e3 100644
      std::string shaderTypeLabel();                    // friendly label of the active shader for the menu row
      void shaderRebuildOpenLevel();                    // rebuild the open GammaShader/Params level in place (keep cursor)
      void shaderMetaTick();                            // per-frame: pick up custom .shader_param_meta once SF publishes it
-@@ -2999,6 +3266,8 @@ private:
+@@ -2999,6 +3267,8 @@ private:
      bool resetSystemToBuiltinDefaults(int sysIdx);  // restore a built-in's config from kXmbSystemDefs
      int mGsEditIdx = -1;   // mXmbSystems index currently open in the editor (for chooser/OSK writeback)
      int mGsRemoveSrcIdx = -1;  // scan-source index awaiting a remove-confirm (dialog theme key 45)
@@ -2550,7 +2551,7 @@ index 88e7cae6699..617b27ef7e3 100644
      float mGsTintOrigR = 1.0f, mGsTintOrigG = 1.0f, mGsTintOrigB = 1.0f;  // exact tint at chooser open (cancel restore)
      int  ps3TopScreenKind() const { return mPs3Stack.empty() ? 0 : mPs3Stack.back().screenKind; }
  
-@@ -3038,10 +3307,41 @@ private:
+@@ -3038,10 +3308,41 @@ private:
      void loadEmuCatalog();                     // parse the bundled Daijishou JSONs once
      void buildEmulatorPicker(Ps3Level& out);   // build the filtered emulator list screen
      void gsOpenEmulatorPicker();               // open the emulator chooser for mGsEditIdx
@@ -2592,7 +2593,7 @@ index 88e7cae6699..617b27ef7e3 100644
  
      // ---- Add / remove custom systems ----
      void gsAddSystem();                        // "Add New System" -> emulator picker in add mode
-@@ -3073,6 +3373,68 @@ private:
+@@ -3073,6 +3374,68 @@ private:
      std::vector<std::string> mountedShareNames() const;
      void gsFolderSelect(const std::string& path); // add a folder as a rawpath scan source
      void drasticDataFolderSelect(const std::string& path); // #90: set persist.gammaos.drastic.data_dir (folder-picker target 5)
@@ -2661,7 +2662,7 @@ index 88e7cae6699..617b27ef7e3 100644
      void drasticCheatsFolderSelect(const std::string& path); // persist.gammaos.drastic.cheats_dir (folder-picker target 8)
      void drasticPerfRestoreCheck();            // put back the global performance mode a per-game one parked
      void mouseModeHomeGuard();                 // gammapad mouse mode off whenever the home is the foreground
-@@ -3081,6 +3443,7 @@ private:
+@@ -3081,6 +3444,7 @@ private:
      void gsRemoveScanSource(int srcIdx);       // drop a scan source from the edited system
      void gsDisableDefaultFolder(const std::string& alias);  // remove a default scan folder (alias) from the edited system
      void gsEnableDefaultFolder(const std::string& alias);   // restore a previously-removed default scan folder
@@ -2669,7 +2670,7 @@ index 88e7cae6699..617b27ef7e3 100644
      void gsAfterScanFolderChange(XmbSystem& sys);           // re-scan + persist + rebuild after a scan-folder edit
      void gsOpenRemoveScanSourceConfirm(int srcIdx);  // Cancel / Remove Folder confirm for a scan source
  
-@@ -3251,7 +3614,7 @@ private:
+@@ -3251,7 +3615,7 @@ private:
          std::string m3uPath;              // non-empty: derived from this .m3u (regenerated on scan);
                                            // empty: user-created (preserved across scans)
      };
@@ -2678,7 +2679,7 @@ index 88e7cae6699..617b27ef7e3 100644
      std::vector<std::string> mMusicFolders;
      std::vector<MusicTrack>  mMusicTracks;
      std::vector<MusicPlaylist> mMusicPlaylists;
-@@ -3303,6 +3666,15 @@ private:
+@@ -3303,6 +3667,15 @@ private:
          // altemulator string enables the altemulator badge when non-empty.
          bool favorite = false, completed = false, kidgame = false, broken = false;
          std::string controller, altemulator;
@@ -2694,7 +2695,7 @@ index 88e7cae6699..617b27ef7e3 100644
      };
      std::unordered_map<std::string, ScrapeEntry> mScrapeIndex;
      bool mScrapeIndexLoaded = false;
-@@ -3310,6 +3682,7 @@ private:
+@@ -3310,6 +3683,7 @@ private:
      void scraperEnsureLoaded();            // lazy-load index.json
      void scraperPollReload();              // per-frame: live-reload index/names on an external token bump
      void loadScrapeIndex();
@@ -2702,7 +2703,7 @@ index 88e7cae6699..617b27ef7e3 100644
      void saveScrapeIndex();
      const ScrapeEntry* scrapeEntryFor(const std::string& romPath);
      const ScrapeEntry* scrapeIndexLookup(const std::string& romPath);   // the manifest entry alone (no cart art)
-@@ -3332,9 +3705,75 @@ private:
+@@ -3332,9 +3706,75 @@ private:
      // scrape store which can differ (e.g. a timezone-shifted release date). Loaded lazily per system
      // and merged with the scrape store's cover paths; absent gamelist.xml -> falls back to the store.
      std::unordered_map<std::string, ScrapeEntry> mEsdeGamelistMeta;  // full romPath -> gamelist metadata
@@ -2779,7 +2780,7 @@ index 88e7cae6699..617b27ef7e3 100644
      // Per-game title override (Rename / Edit Title). A user-typed name that overrides
      // the basename-minus-extension display name everywhere (columns / recents / search /
      // Info) AND becomes the scraper search query so a corrected title can match. Stored
-@@ -3392,38 +3831,41 @@ private:
+@@ -3392,38 +3832,41 @@ private:
      void openHelpPage();                    // Settings > User Guide: scrollable, themed help page
      void scrapeOneSystem(int sysIdx);      // Game Systems editor action
      // One ROM of work, fully snapshotted so the worker never touches mXmbSystems.
@@ -2848,7 +2849,7 @@ index 88e7cae6699..617b27ef7e3 100644
      // scrape worker state
      std::mutex mScrapeMutex;
      bool mScrapeRunning = false;           // worker alive
-@@ -3432,9 +3874,26 @@ private:
+@@ -3432,9 +3875,26 @@ private:
      bool mScrapeDoneFlag = false;          // worker finished -> show summary
      int  mScrapeDone = 0, mScrapeTotal = 0, mScrapeHits = 0, mScrapeFail = 0;
      std::string mScrapeStatus;             // "System / Game" current line (under mutex)
@@ -2876,7 +2877,7 @@ index 88e7cae6699..617b27ef7e3 100644
      // Where scraped covers/fanart + index.json live. Default is internal storage; the Boxart
      // Folder setting (persist.gammaos.scraper.dir) moves it to any browsable folder, typically the
      // SD card. names.json (title overrides) always stays in the default internal dir.
-@@ -3445,10 +3904,14 @@ private:
+@@ -3445,10 +3905,14 @@ private:
      int64_t mScrapeDirPollMs = 0;          // availability probe throttle (once a second, uptime)
      std::string mScrapeMoveSrc, mScrapeMoveDst;   // relocation in flight: old/new folder ("" = none)
      bool mScrapeMoveMode = false;          // the progress modal fronts a relocation (wording), until the next scrape
@@ -2891,7 +2892,7 @@ index 88e7cae6699..617b27ef7e3 100644
      void scrapeMoveThreadFunc(std::vector<std::pair<std::string, ScrapeEntry>> entries,
                                std::string src, std::string dst);
      void gsOpenClearArtConfirm();          // Game Systems editor: Clear Boxart confirm (theme key 49)
-@@ -3457,8 +3920,11 @@ private:
+@@ -3457,8 +3921,11 @@ private:
      // cartridge icon, freed when leaving the Game category and on sleep/occlusion.
      // ar = width/height. pixel = a PICO-8 cart label: 128x128 pixel art uploaded NEAREST, drawn at an
      // integer multiple of its size (cartPixelSize) so every cart pixel stays square.
@@ -2904,7 +2905,7 @@ index 88e7cae6699..617b27ef7e3 100644
      bool mScrapeBoxartOn = false;        // per-frame cache of scraperBoxartEnabled()
      bool mNdsTileIcon = false;           // per-frame cache of persist.gammaos.nano.nds.tileicon (DS Icons On Tiles)
      // Data-loss guards: a loader sets its flag true when the on-disk file EXISTS but could not be
-@@ -4915,6 +5381,9 @@ private:
+@@ -4915,6 +5382,9 @@ private:
      // it red) and beveled into a normal map for the XMB glass relight. Lazily built + cached.
      GLuint mHeartIconTex = 0, mHeartNmapTex = 0;
      void   ensureHeartIcon();               // build mHeartIconTex + mHeartNmapTex once
@@ -2914,7 +2915,7 @@ index 88e7cae6699..617b27ef7e3 100644
      GLuint gpGlassNmap(bool round, float wpx, float hpx);    // cached bevel nmap for a gamepad-tester button shape
      // Resolve a system iconRef (builtin:/retroarch:/core:/file:) to a (colour
      // tex, glass bevel nmap) pair, cached by ref string. See NanoMenuPS3Icons.cpp.
-@@ -4935,11 +5404,14 @@ private:
+@@ -4935,11 +5405,14 @@ private:
          std::vector<std::string> activePaths;
          std::string activePath;
          bool valid;              // true if scan found at least one path
@@ -2929,7 +2930,7 @@ index 88e7cae6699..617b27ef7e3 100644
      void bgScanThreadFunc();                  // the thread entry point
  
      // Settings column. Pinned as the leftmost XMB column at sentinel index -2.
-@@ -5086,6 +5558,7 @@ private:
+@@ -5086,6 +5559,7 @@ private:
      std::string mBtWizInPasskey;              // inbound passkey to display for confirmation
      std::atomic<bool> mBtWizRadioOn{true};    // cached real radio state (dumpsys enabled:)
      std::atomic<bool> mBtWizToggling{false};  // a radio enable/disable is settling
@@ -2937,7 +2938,7 @@ index 88e7cae6699..617b27ef7e3 100644
      float mBtWizManageRefreshT = -999.0f;     // last live-refresh time while sitting on Manage
      void btWizToggleRadioAsync(bool on);      // enable/disable the radio + settle + refresh
  
-@@ -5176,6 +5649,7 @@ private:
+@@ -5176,6 +5650,7 @@ private:
      bool    mCursorVisible = false;             // shown while recently moved/clicked
      int64_t mLastPointerMs = 0;                 // last pointer activity (auto-hide timer)
      bool    mTouchFromPointer = false;          // current touch frame is a mouse click, not a finger
@@ -2945,7 +2946,7 @@ index 88e7cae6699..617b27ef7e3 100644
      bool    mKbdShiftHeld = false;              // physical-keyboard shift state (for OSK typing)
      void    drawPointerCursor();                // draw the mouse cursor overlay (NanoMenuRender.cpp)
      int     kbdCodeToCp(int code, bool shift);  // USB-keyboard keycode -> printable codepoint (0 = none)
-@@ -5400,6 +5874,33 @@ private:
+@@ -5400,6 +5875,33 @@ private:
                                    // globe on black until ready so the one-time texture
                                    // load spike isn't charged against the 360ms fade
      int mTzSelOnOpen = 0;         // mTzSelected when the globe opened (restore on cancel)
@@ -10984,7 +10985,7 @@ index b0e278f3bc0..f082f8b0bb0 100644
          }
          // Restart path (returning from game): readyToRun() saw boot
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp
-index bc837715d76..8ddc1219b20 100644
+index bc837715d76..cac5eefc956 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp
 @@ -21,12 +21,14 @@
@@ -11771,7 +11772,7 @@ index bc837715d76..8ddc1219b20 100644
      if (done) {
          // Worker finished: keep the summary on screen, the modal closes on B/enter.
          mDisplayDirty = true;
-@@ -1354,10 +1495,429 @@ void NanoMenu::scraperDrainResults() {
+@@ -1354,10 +1495,430 @@ void NanoMenu::scraperDrainResults() {
  }
  
  void NanoMenu::scraperCancel() {
@@ -11933,10 +11934,11 @@ index bc837715d76..8ddc1219b20 100644
 +    if (!ok)
 +        snprintf(msg, sizeof(msg), "%s", trDyn("The scrape could not be added to the queue."));
 +    else if (n == 0)
-+        snprintf(msg, sizeof(msg), "%s", trDyn(asked == 1 ? "That game is already in the scrape queue"
-+                                                         : "Those games are already in the scrape queue"));
++        snprintf(msg, sizeof(msg), "%s", trDyn("Those games are already in this scrape"));
 +    else if (n < asked)
-+        snprintf(msg, sizeof(msg), trDyn("Added %d games to the scrape queue (%d were already in it)"), n, asked - n);
++        snprintf(msg, sizeof(msg), n == 1 ? trDyn("Added %d game to the scrape queue (%d were already in this scrape)")
++                                          : trDyn("Added %d games to the scrape queue (%d were already in this scrape)"),
++                 n, asked - n);
 +    else
 +        snprintf(msg, sizeof(msg), n == 1 ? trDyn("Added %d game to the scrape queue")
 +                                          : trDyn("Added %d games to the scrape queue"), n);
@@ -12201,7 +12203,7 @@ index bc837715d76..8ddc1219b20 100644
  // ---------------------------------------------------------------------------
  // Progress / result modal. Centered panel over a dim backdrop. While running it
  // shows the live count + current game; when done a summary. Dismissed by the
-@@ -1368,11 +1928,12 @@ void NanoMenu::renderScrapeProgress() {
+@@ -1368,11 +1929,12 @@ void NanoMenu::renderScrapeProgress() {
      const float W = (float)mWidth, H = (float)mHeight;
      float sf = fminf(W / 1080.0f, H / 720.0f); if (sf < 0.5f) sf = 0.5f;
  
@@ -12216,7 +12218,7 @@ index bc837715d76..8ddc1219b20 100644
      }
  
      // Theme the modal chrome to match the active home instead of always showing the XMB-style
-@@ -1422,17 +1983,28 @@ void NanoMenu::renderScrapeProgress() {
+@@ -1422,17 +1984,28 @@ void NanoMenu::renderScrapeProgress() {
      };
  
      // The same modal fronts a Boxart Folder relocation (files moved instead of games scraped).
@@ -12247,7 +12249,7 @@ index bc837715d76..8ddc1219b20 100644
          } else {
              snprintf(line, sizeof(line),
                       hits == 1 ? trDyn("Done. %d game with art, %d not found.")
-@@ -1440,9 +2012,12 @@ void NanoMenu::renderScrapeProgress() {
+@@ -1440,9 +2013,12 @@ void NanoMenu::renderScrapeProgress() {
                       hits, fail);
              centered(line, py + ph * 0.50f, 1.15f * sf, t1R, t1G, t1B, 1.0f);
          }
@@ -12261,7 +12263,7 @@ index bc837715d76..8ddc1219b20 100644
          centered(line, py + ph * 0.42f, 1.3f * sf, t1R, t1G, t1B, 1.0f);
          // progress bar (accent fill on a dim track), in the theme accent
          const float barW = pw * 0.72f, barH = 6.0f * sf;
-@@ -1450,14 +2025,27 @@ void NanoMenu::renderScrapeProgress() {
+@@ -1450,14 +2026,27 @@ void NanoMenu::renderScrapeProgress() {
          drawRoundedRect(barX, barY, barW, barH, barH * 0.5f, t2R, t2G, t2B, 0.28f);
          float frac = (total > 0) ? (float)done / (float)total : 0.0f;
          if (frac > 0.0f) drawRoundedRect(barX, barY, barW * frac, barH, barH * 0.5f, accR, accG, accB, 1.0f);
@@ -13302,7 +13304,7 @@ index 0fa4e98c671..b776193711b 100644
  static int vidCpDefault() {
      for (int i = 0; i < kVidCpCount; i++) if (!strcmp(kVidCp[i].act, "play")) return i;
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp
-index a0824b29e6e..4b2916fa41c 100644
+index a0824b29e6e..a6f7d49f109 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuXmb.cpp
 @@ -293,6 +293,7 @@ static void sortRomEntriesByDisplayName(std::vector<std::string>& roms,
@@ -13881,7 +13883,7 @@ index a0824b29e6e..4b2916fa41c 100644
      // Written beside the real file and renamed over it, so a power cut mid-write can never leave
      // a truncated list that brings every hidden game back (or a half path that hides nothing).
      const std::string tmp = std::string(kHiddenGamesFile) + ".tmp";
-@@ -2260,6 +2493,203 @@ void NanoMenu::hideGame(const std::string& romPath) {
+@@ -2260,6 +2493,239 @@ void NanoMenu::hideGame(const std::string& romPath) {
      refreshListsAfterHide();
  }
  
@@ -13897,11 +13899,19 @@ index a0824b29e6e..4b2916fa41c 100644
 +    std::string ext = path.substr(dot + 1);
 +    for (auto& c : ext) c = (char)tolower((unsigned char)c);
 +    auto add = [&](std::string name) {
-+        while (!name.empty() && (name.back() == '\r' || name.back() == ' ' || name.back() == '"')) name.pop_back();
-+        while (!name.empty() && (name.front() == ' ' || name.front() == '"')) name.erase(name.begin());
++        if (name.compare(0, 3, "\xef\xbb\xbf") == 0) name.erase(0, 3);   // a UTF-8 BOM
++        while (!name.empty() && strchr("\r\n\t \"", name.back())) name.pop_back();
++        while (!name.empty() && strchr("\t \"", name.front())) name.erase(name.begin());
 +        for (auto& c : name) if (c == '\\') c = '/';
++        while (name.compare(0, 2, "./") == 0) name.erase(0, 2);
 +        // Only beside it or below it.
-+        if (name.empty() || name[0] == '/' || name.find("..") != std::string::npos) return;
++        if (name.empty() || name[0] == '/') return;
++        for (size_t p = 0; p <= name.size();) {
++            size_t q = name.find('/', p);
++            if (q == std::string::npos) q = name.size();
++            if (name.compare(p, q - p, "..") == 0 && q - p == 2) return;
++            p = q + 1;
++        }
 +        const std::string full = dir + "/" + name;
 +        struct stat st;
 +        if (stat(full.c_str(), &st) == 0 && S_ISREG(st.st_mode)) gameFilesOf(full, out, depth + 1);
@@ -13911,12 +13921,15 @@ index a0824b29e6e..4b2916fa41c 100644
 +        for (const char* e : {".img", ".sub"}) add(stem + e);
 +        return;
 +    }
++    if (ext == "m3u8") ext = "m3u";
 +    if (ext != "cue" && ext != "gdi" && ext != "m3u") return;
 +    std::ifstream f(path);
 +    std::string line;
 +    bool first = true;
 +    while (std::getline(f, line)) {
 +        if (ext == "m3u") {
++            if (first && line.compare(0, 3, "\xef\xbb\xbf") == 0) line.erase(0, 3);
++            first = false;
 +            if (!line.empty() && line[0] != '#') add(line);
 +        } else if (ext == "cue") {
 +            size_t p = line.find_first_not_of(" \t");
@@ -13983,20 +13996,7 @@ index a0824b29e6e..4b2916fa41c 100644
 +    const std::string name = (size_t)(ri - sys.roms.begin()) < sys.displayNames.size()
 +                                 ? sys.displayNames[ri - sys.roms.begin()] : romDisplayName(rom);
 +
-+    // The media first, while the game still is in its system (the lookups go by its folder).
-+    int media = 0;
-+    scraperEnsureLoaded();
-+    const ScrapeEntry* se = scrapeEntryFor(rom);
-+    if (withMedia) {
-+        media = esdeDeleteGameMedia(rom, sysIdx);
-+        if (se) {
-+            for (const std::string* f : {&se->box, &se->fan})
-+                if (!f->empty() && *f != rom && unlink(f->c_str()) == 0) media++;
-+        }
-+        for (const char* suffix : {".box.png", ".fan.jpg"})
-+            if (unlink((mScrapeCacheDir + "/" + nanoscraper::cacheKey(rom) + suffix).c_str()) == 0) media++;
-+    }
-+
++    // The game's files first: nothing else goes when it cannot (a read-only card or share).
 +    std::vector<std::string> files;
 +    gameFilesOf(rom, &files);
 +    if (unlink(rom.c_str()) != 0 && errno != ENOENT) {
@@ -14009,65 +14009,103 @@ index a0824b29e6e..4b2916fa41c 100644
 +    int failed = 0;
 +    for (size_t i = 1; i < files.size(); i++)
 +        if (unlink(files[i].c_str()) != 0 && errno != ENOENT) failed++;
-+    // A game in a folder of its own: the folder too, once empty (never a system folder).
++    // A game in a folder of its own: the folder too, once empty. Only one strictly below a system
++    // folder (the scanned ones, or the ones a system lists before its scan).
 +    {
 +        const std::string dir = rom.substr(0, rom.find_last_of('/'));
-+        bool root = false;
-+        for (const auto& ap : sys.activePaths) if (hiddenKey(ap) == hiddenKey(dir)) root = true;
-+        if (!root && !dir.empty()) rmdir(dir.c_str());
++        std::vector<std::string> roots = esdeSystemRoots(sysIdx);
++        roots.insert(roots.end(), sys.activePaths.begin(), sys.activePaths.end());
++        const std::string dk = hiddenKey(dir);
++        bool below = false, isRoot = false;
++        for (const auto& r : roots) {
++            const std::string rk = hiddenKey(r);
++            if (rk.empty()) continue;
++            if (dk == rk) isRoot = true;
++            else if (dk.size() > rk.size() && dk.compare(0, rk.size(), rk) == 0 && dk[rk.size()] == '/') below = true;
++        }
++        if (below && !isRoot) rmdir(dir.c_str());
++    }
++
++    // The media, the lookups going by the game's folder and name (the game is still listed).
++    int media = 0;
++    scraperEnsureLoaded();
++    if (withMedia) {
++        media = esdeDeleteGameMedia(rom, sysIdx, files);
++        // Nano's own cache copies (the cover in the ES-DE folder went above, unless another game has it).
++        for (const auto& f : files) {
++            const ScrapeEntry* se = scrapeEntryFor(f);
++            if (se)
++                for (const std::string* p : {&se->box, &se->fan})
++                    if (!p->empty() && p->compare(0, mScrapeCacheDir.size() + 1, mScrapeCacheDir + "/") == 0
++                        && unlink(p->c_str()) == 0)
++                        media++;
++            for (const char* suffix : {".box.png", ".fan.jpg"})
++                if (unlink((mScrapeCacheDir + "/" + nanoscraper::cacheKey(f) + suffix).c_str()) == 0) media++;
++        }
 +    }
 +    ALOGI("NanoMenu: deleted %s (%zu files, %d media)", rom.c_str(), files.size(), media);
 +
-+    // Its records.
-+    const std::string key = hiddenKey(rom);
-+    if (isFavorite(rom)) toggleFavorite(rom);
-+    {
-+        auto un = std::find(mEsdeUnfavorites.begin(), mEsdeUnfavorites.end(), rom);
-+        if (un != mEsdeUnfavorites.end()) { mEsdeUnfavorites.erase(un); saveFavorites(); }
-+    }
-+    for (size_t c = 0; c < mXmbCollections.size(); c++) {
-+        const auto& cr = mXmbCollections[c].roms;
-+        if (std::any_of(cr.begin(), cr.end(), [&](const std::string& r) { return hiddenKey(r) == key; }))
-+            collectionRemoveRom((int)c, rom);
-+    }
-+    const size_t recents = mXmbRecent.size();
-+    mXmbRecent.erase(std::remove_if(mXmbRecent.begin(), mXmbRecent.end(),
-+                                    [&](const XmbRecentEntry& e) { return hiddenKey(e.romPath) == key; }),
-+                     mXmbRecent.end());
-+    if (mXmbRecent.size() != recents) saveXmbRecent();
-+    if (romNameOverrideFor(rom)) { clearRomNameOverride(rom); saveRomNameOverrides(); }
-+    if (gameEmulatorFor(rom)) setGameEmulator(rom, nullptr);
-+    if (mScrapeIndex.erase(rom)) saveScrapeIndex();
-+    esdeGamelistRemove(rom);
-+    mEsdeGamelistMeta.erase(rom);
-+    esdeForgetGameMedia(rom);
-+
-+    // Out of its system's list (with the discs of a playlist, when they were listed too), its saved
-+    // list, and every open list.
++    // Its records, for each of its files (a playlist's discs may have their own).
++    bool favs = false, recents = false, names = false, index = false;
 +    for (const auto& f : files) {
-+        auto fi = std::find(sys.roms.begin(), sys.roms.end(), f);
-+        if (fi == sys.roms.end()) continue;
-+        const size_t at = fi - sys.roms.begin();
-+        sys.roms.erase(fi);
-+        if (at < sys.displayNames.size()) sys.displayNames.erase(sys.displayNames.begin() + at);
++        const std::string key = hiddenKey(f);
++        if (isFavorite(f)) { toggleFavorite(f); favs = true; }
++        auto un = std::find(mEsdeUnfavorites.begin(), mEsdeUnfavorites.end(), f);
++        if (un != mEsdeUnfavorites.end()) { mEsdeUnfavorites.erase(un); favs = true; }
++        for (size_t c = 0; c < mXmbCollections.size(); c++) {
++            const auto& cr = mXmbCollections[c].roms;
++            if (std::any_of(cr.begin(), cr.end(), [&](const std::string& r) { return hiddenKey(r) == key; }))
++                collectionRemoveRom((int)c, f);
++        }
++        const size_t before = mXmbRecent.size();
++        mXmbRecent.erase(std::remove_if(mXmbRecent.begin(), mXmbRecent.end(),
++                                        [&](const XmbRecentEntry& e) { return hiddenKey(e.romPath) == key; }),
++                         mXmbRecent.end());
++        recents = recents || mXmbRecent.size() != before;
++        if (romNameOverrideFor(f)) { clearRomNameOverride(f); names = true; }
++        if (gameEmulatorFor(f)) setGameEmulator(f, nullptr);
++        if (mScrapeIndex.erase(f)) index = true;
++        esdeGamelistRemove(f);
++        mEsdeGamelistMeta.erase(f);
++        esdeForgetGameMedia(f);
 +    }
-+    sys.pathExists = !sys.roms.empty();
-+    {
-+        const std::string cachePath = xmbCachePath(sys), tmp = cachePath + ".tmp";
++    if (favs) saveFavorites();
++    if (recents) saveXmbRecent();
++    if (names) saveRomNameOverrides();
++    if (index) saveScrapeIndex();
++
++    // Out of every system that lists it (a folder two systems scan), their saved lists, and every
++    // open list.
++    for (size_t s = 0; s < mXmbSystems.size(); s++) {
++        XmbSystem& os = mXmbSystems[s];
++        bool changed = false;
++        for (const auto& f : files) {
++            auto fi = std::find(os.roms.begin(), os.roms.end(), f);
++            if (fi == os.roms.end()) continue;
++            const size_t at = fi - os.roms.begin();
++            os.roms.erase(fi);
++            if (at < os.displayNames.size()) os.displayNames.erase(os.displayNames.begin() + at);
++            changed = true;
++        }
++        if (!changed) continue;
++        os.pathExists = !os.roms.empty();
++        const std::string cachePath = xmbCachePath(os), tmp = cachePath + ".tmp";
 +        const int cfd = open(tmp.c_str(), O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC, 0644);
 +        if (cfd >= 0) {
 +            bool ok = true;
-+            for (const auto& r : sys.roms) {
++            for (const auto& r : os.roms) {
 +                const std::string line = r + "\n";
 +                if (write(cfd, line.c_str(), line.size()) != (ssize_t)line.size()) ok = false;
 +            }
 +            ok = close(cfd) == 0 && ok;
 +            if (!ok || rename(tmp.c_str(), cachePath.c_str()) != 0) unlink(tmp.c_str());
 +        }
++        rebuildOpenRomLevels((int)s, std::string());
++        if (mEsdeSysSel >= 0 && mEsdeSysSel < (int)mEsdeSysList.size() && mEsdeSysList[mEsdeSysSel] == (int)s
++            && mEsdeGameSel >= (int)os.roms.size())
++            mEsdeGameSel = os.roms.empty() ? 0 : (int)os.roms.size() - 1;
 +    }
-+    rebuildOpenRomLevels(sysIdx, std::string());
 +    refreshListsAfterHide();
-+    if (mEsdeGameSel >= (int)sys.roms.size()) mEsdeGameSel = sys.roms.empty() ? 0 : (int)sys.roms.size() - 1;
 +    if (!mPs3Stack.empty() && isGameOptionsLevel(mPs3Stack.back()) && !gameOptResolve()) mPs3Stack.pop_back();
 +
 +    char msg[300];
@@ -14085,7 +14123,7 @@ index a0824b29e6e..4b2916fa41c 100644
  void NanoMenu::unhideGame(const std::string& key) {
      if (!mHiddenGames.erase(key)) return;
      saveHiddenGames();
-@@ -2486,6 +2916,7 @@ void NanoMenu::addXmbRecent(int sysIdx, int gameIdx) {
+@@ -2486,6 +2952,7 @@ void NanoMenu::addXmbRecent(int sysIdx, int gameIdx) {
      if (sysIdx < 0 || sysIdx >= (int)mXmbSystems.size()) return;
      const auto& sys = mXmbSystems[sysIdx];
      if (gameIdx < 0 || gameIdx >= (int)sys.roms.size()) return;
@@ -14093,7 +14131,7 @@ index a0824b29e6e..4b2916fa41c 100644
  
      XmbRecentEntry e;
      // roms[] contains full paths -- use directly, convert for app access
-@@ -2504,6 +2935,12 @@ void NanoMenu::addXmbRecent(int sysIdx, int gameIdx) {
+@@ -2504,6 +2971,12 @@ void NanoMenu::addXmbRecent(int sysIdx, int gameIdx) {
      e.systemName = sys.shortname;
      e.romDir = sys.romDir;
      e.standalone = sys.isStandalone();
@@ -14106,7 +14144,7 @@ index a0824b29e6e..4b2916fa41c 100644
  
      // Remove duplicate if already in list
      for (auto it = mXmbRecent.begin(); it != mXmbRecent.end(); ++it) {
-@@ -2526,9 +2963,14 @@ void NanoMenu::addXmbRecent(int sysIdx, int gameIdx) {
+@@ -2526,9 +2999,14 @@ void NanoMenu::addXmbRecent(int sysIdx, int gameIdx) {
  // ---------------------------------------------------------------------------
  
  void NanoMenu::handleLeft() {
@@ -14122,7 +14160,7 @@ index a0824b29e6e..4b2916fa41c 100644
      if (mOskActive) {
          oskMoveCursor(NavDir::Left);
          return;
-@@ -2564,9 +3006,14 @@ void NanoMenu::handleLeft() {
+@@ -2564,9 +3042,14 @@ void NanoMenu::handleLeft() {
  }
  
  void NanoMenu::handleRight() {
@@ -14138,7 +14176,7 @@ index a0824b29e6e..4b2916fa41c 100644
      if (mOskActive) {
          oskMoveCursor(NavDir::Right);
          return;
-@@ -2602,6 +3049,191 @@ void NanoMenu::handleRight() {
+@@ -2602,6 +3085,191 @@ void NanoMenu::handleRight() {
      }
  }
  
@@ -14330,7 +14368,7 @@ index a0824b29e6e..4b2916fa41c 100644
  void NanoMenu::launchXmbGame() {
      // Overlay: the home exit-to-launch handshake (set launch_* props + exit so the framework starts
      // the app) does not apply to the resident overlay - running it would make the overlay
-@@ -2613,6 +3245,7 @@ void NanoMenu::launchXmbGame() {
+@@ -2613,6 +3281,7 @@ void NanoMenu::launchXmbGame() {
      // first was a dead no-op: once an app is behind it the home runs as the resident overlay, so
      // launching from the overlay or after returning to the theme did nothing.
      if (mOverlayMode) { overlayLaunchGame(); return; }
@@ -14338,7 +14376,7 @@ index a0824b29e6e..4b2916fa41c 100644
      int sysIdx, gameIdx;
  
      // GammaOS Nano: gate the entire XMB launch path until the system
-@@ -2635,6 +3268,12 @@ void NanoMenu::launchXmbGame() {
+@@ -2635,6 +3304,12 @@ void NanoMenu::launchXmbGame() {
          if (mXmbGameIndex < 0 || mXmbGameIndex >= (int)mXmbRecent.size()) return;
          // Take a copy -- the vector reorder below invalidates references.
          XmbRecentEntry re = mXmbRecent[mXmbGameIndex];
@@ -14351,7 +14389,7 @@ index a0824b29e6e..4b2916fa41c 100644
  
          // A recent entry outlives the file it points at (game deleted, card removed). Refuse the
          // launch and drop the dead row rather than starting an emulator that cannot open it.
-@@ -2654,6 +3293,7 @@ void NanoMenu::launchXmbGame() {
+@@ -2654,6 +3329,7 @@ void NanoMenu::launchXmbGame() {
              showEmuMissingMsg(re.displayName, false); return;
          }
  
@@ -14359,7 +14397,7 @@ index a0824b29e6e..4b2916fa41c 100644
          // Move to front of recent list -- only on disk, not in-memory.
          // Modifying the vector causes a visible shuffle during the
          // transition frames before NanoMenu exits.
-@@ -2789,9 +3429,10 @@ void NanoMenu::launchXmbGame() {
+@@ -2789,9 +3465,10 @@ void NanoMenu::launchXmbGame() {
      }
  
      if (mSearchActive) {
@@ -14372,7 +14410,7 @@ index a0824b29e6e..4b2916fa41c 100644
          sysIdx = mSearchResults[mSearchSelectedIndex].sysIdx;
          gameIdx = mSearchResults[mSearchSelectedIndex].gameIdx;
      } else {
-@@ -2800,8 +3441,17 @@ void NanoMenu::launchXmbGame() {
+@@ -2800,8 +3477,17 @@ void NanoMenu::launchXmbGame() {
      }
  
      if (sysIdx < 0 || sysIdx >= (int)mXmbSystems.size()) return;
@@ -14585,10 +14623,10 @@ index d33246ab732..0463ffdafc4 100644
  };
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoScrapeQueue.cpp b/frameworks/base/cmds/gammaos-nano/NanoScrapeQueue.cpp
 new file mode 100644
-index 00000000000..009abd8f70d
+index 00000000000..6ba3027a1a9
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/NanoScrapeQueue.cpp
-@@ -0,0 +1,515 @@
+@@ -0,0 +1,546 @@
 +/*
 + * Copyright (C) 2026 GammaOS
 + *
@@ -14723,30 +14761,65 @@ index 00000000000..009abd8f70d
 +static std::string serializeQueue(const Queue& q);
 +static bool parseQueue(const std::string& text, Queue* q);
 +
-+// "<run>.roms": every game a run was given, one per line ("<rom>\x1f<search name>"; no account).
++Credentials jobCredentials(const QueueJob& j, const Credentials& base) {
++    Credentials c = base;
++    if (!j.ssUser.empty()) c.ssUser = j.ssUser;
++    if (!j.ssPass.empty()) c.ssPass = j.ssPass;
++    if (!j.tgdbKey.empty()) c.tgdbKey = j.tgdbKey;
++    return c;
++}
++
++size_t jobKey(const Queue& q, const QueueJob& j, const Credentials& c) {
++    const size_t account = std::hash<std::string>{}(c.ssUser + '\x1f' + c.ssPass + '\x1f' + c.tgdbKey);
++    std::string k = j.romPath + '\x1f' + j.queryName + '\x1f' + std::to_string(j.engine) + '\x1f' +
++                    std::to_string(account) + '\x1f' +
++                    char('0' + (q.wantBox && j.wantBox)) + char('0' + (q.wantFan && j.wantFan));
++    for (const auto& x : j.extras) k += ',' + std::to_string(x.type);
++    return std::hash<std::string>{}(k);   // a large library keeps 8 bytes a game
++}
++
++// "<run>.roms": the jobs a run was given ("<key>") and the ones that failed since ("-<key>"),
++// one per line (keys only: no account).
 +static std::string ledgerPath(const std::string& run) {
 +    return std::string(kQueueDir) + "/" + run + ".roms";
 +}
 +
++static void ledgerAppend(const std::string& run, const std::string& lines) {
++    if (lines.empty()) return;
++    const int fd = open(ledgerPath(run).c_str(), O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
++    if (fd < 0) return;
++    if (write(fd, lines.data(), lines.size()) != (ssize_t)lines.size()) ALOGW("queue: ledger write failed");
++    close(fd);
++}
++
++void ledgerForget(const std::string& run, size_t key) {
++    ledgerAppend(run, "-" + std::to_string(key) + "\n");
++}
++
 +bool addRequest(Queue& q) {
-+    std::set<std::string> have;
++    std::set<size_t> have;
 +    {
 +        std::string text;
 +        if (readFile(ledgerPath(q.run).c_str(), &text, 64 * 1024 * 1024)) {
 +            for (size_t p = 0; p < text.size();) {
 +                size_t nl = text.find('\n', p);
 +                if (nl == std::string::npos) nl = text.size();
-+                if (nl > p) have.insert(text.substr(p, nl - p));
++                if (nl > p) {
++                    if (text[p] == '-') have.erase(strtoull(text.c_str() + p + 1, nullptr, 10));
++                    else have.insert(strtoull(text.c_str() + p, nullptr, 10));
++                }
 +                p = nl + 1;
 +            }
 +        }
 +    }
++    const Credentials base = globalCredentials();
 +    std::string added;
 +    std::vector<QueueJob> fresh;
 +    for (auto& j : q.jobs) {
-+        const std::string key = j.romPath + '\x1f' + j.queryName;
-+        if (!have.insert(key).second) continue;
-+        added += key + "\n";
++        const size_t key = jobKey(q, j, jobCredentials(j, base));
++        // Only against what the run had before: one game in two systems (one folder) is a job for each.
++        if (q.jobs.size() > 1 && have.count(key)) continue;
++        added += std::to_string(key) + "\n";
 +        fresh.push_back(std::move(j));
 +    }
 +    q.jobs = std::move(fresh);
@@ -14758,11 +14831,7 @@ index 00000000000..009abd8f70d
 +             (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec, q.run.c_str(), q.jobs.size());
 +    const std::string path = std::string(kQueueDir) + "/" + name;
 +    if (!writeFileAtomic(path.c_str(), serializeQueue(q))) return false;
-+    const int fd = open(ledgerPath(q.run).c_str(), O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
-+    if (fd >= 0) {
-+        if (write(fd, added.data(), added.size()) != (ssize_t)added.size()) ALOGW("queue: ledger write failed");
-+        close(fd);
-+    }
++    ledgerAppend(q.run, added);
 +    return true;
 +}
 +
@@ -15106,10 +15175,10 @@ index 00000000000..009abd8f70d
 +} // namespace android
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoScrapeQueue.h b/frameworks/base/cmds/gammaos-nano/NanoScrapeQueue.h
 new file mode 100644
-index 00000000000..f423fb488ac
+index 00000000000..89373046289
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/NanoScrapeQueue.h
-@@ -0,0 +1,148 @@
+@@ -0,0 +1,154 @@
 +/*
 + * Copyright (C) 2026 GammaOS
 + *
@@ -15194,9 +15263,15 @@ index 00000000000..f423fb488ac
 +
 +// With the lock held: add a request (to run q.run), claim the run's oldest (set aside so nothing
 +// else takes it; "" when none is left), drop the run's, drop every other run's.
-+// addRequest leaves out the games the run already has (waiting, being scraped or done; a game
-+// searched under another name counts as another), so q.jobs is what was added: none is no request.
++// addRequest leaves out the jobs the run already has (waiting, being scraped or done and not
++// failed: the same game, search name, service, account and media), so q.jobs is what was added
++// (none: no request). A request of one game always goes in: one game is asked for on purpose.
 +bool addRequest(Queue& q);
++// A job's account (the system's own, else the shared one) and what makes two jobs the same scrape.
++Credentials jobCredentials(const QueueJob& j, const Credentials& base);
++size_t jobKey(const Queue& q, const QueueJob& j, const Credentials& c);
++// The worker, for a job that failed: queued again, it is tried again.
++void ledgerForget(const std::string& run, size_t key);
 +std::string claimRequest(const std::string& run);
 +void clearRequests(const std::string& run);
 +void clearOtherRequests(const std::string& keep);
@@ -15260,10 +15335,10 @@ index 00000000000..f423fb488ac
 +#endif // GAMMAOS_NANO_SCRAPE_QUEUE_H
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoScrapeWorker.cpp b/frameworks/base/cmds/gammaos-nano/NanoScrapeWorker.cpp
 new file mode 100644
-index 00000000000..d02c6551eba
+index 00000000000..0c3273bad7e
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/NanoScrapeWorker.cpp
-@@ -0,0 +1,447 @@
+@@ -0,0 +1,440 @@
 +/*
 + * Copyright (C) 2026 GammaOS
 + *
@@ -15344,14 +15419,7 @@ index 00000000000..d02c6551eba
 +
 +    // A game asked for the same way again (the same system queued twice) is scraped once; one
 +    // that failed, or is asked for another way (another service or account), is scraped again.
-+    size_t scrapeKey(const QueueJob& j, const Credentials& c) const {
-+        const size_t account = std::hash<std::string>{}(c.ssUser + '\x1f' + c.ssPass + '\x1f' + c.tgdbKey);
-+        std::string k = j.romPath + '\x1f' + j.queryName + '\x1f' + std::to_string(j.engine) + '\x1f' +
-+                        std::to_string(account) + '\x1f' +
-+                        char('0' + (q.wantBox && j.wantBox)) + char('0' + (q.wantFan && j.wantFan));
-+        for (const auto& x : j.extras) k += ',' + std::to_string(x.type);
-+        return std::hash<std::string>{}(k);   // a large library keeps 8 bytes a game
-+    }
++    size_t scrapeKey(const QueueJob& j, const Credentials& c) const { return jobKey(q, j, c); }
 +
 +    // Takes the request's games (under m), without the ones the run already had, and works out
 +    // each game's account.
@@ -15361,10 +15429,7 @@ index 00000000000..d02c6551eba
 +        creds.clear();
 +        keys.clear();
 +        for (auto& j : q.jobs) {
-+            Credentials c = base;
-+            if (!j.ssUser.empty()) c.ssUser = j.ssUser;   // the system's own account
-+            if (!j.ssPass.empty()) c.ssPass = j.ssPass;
-+            if (!j.tgdbKey.empty()) c.tgdbKey = j.tgdbKey;
++            Credentials c = jobCredentials(j, base);   // the system's own account, else the shared one
 +            const size_t key = scrapeKey(j, c);
 +            if (q.jobs.size() > 1 && seen.count(key)) continue;   // one game is asked for on purpose
 +            jobs.push_back(std::move(j));
@@ -15519,7 +15584,10 @@ index 00000000000..d02c6551eba
 +            p.fail++;
 +        }
 +        if (!ok && r.networkFail && !stopped && p.error.empty()) p.error = r.error;
-+        if (p.fail != failedBefore) seen.erase(keys[i]);   // queued again, it is tried again
++        if (p.fail != failedBefore) {   // queued again, it is tried again
++            seen.erase(keys[i]);
++            ledgerForget(token, keys[i]);
++        }
 +        // Only the counts are needed from here on: a large library keeps nothing per game.
 +        w.r = ScrapeOutcome();
 +        std::vector<ExtraMediaJob>().swap(w.extras);
@@ -15712,7 +15780,7 @@ index 00000000000..d02c6551eba
 +    return 0;
 +}
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoScraper.cpp b/frameworks/base/cmds/gammaos-nano/NanoScraper.cpp
-index f80b74c26f9..41185c0c943 100644
+index f80b74c26f9..31bfac6863b 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoScraper.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoScraper.cpp
 @@ -25,10 +25,15 @@
@@ -15928,13 +15996,13 @@ index f80b74c26f9..41185c0c943 100644
      // Arcade
      {"arcade",75,23}, {"mame",75,23}, {"fbneo",75,23}, {"fba",75,23}, {"cps1",75,23},
 -    {"cps2",75,23}, {"cps3",75,23},
-+    {"cps2",75,23}, {"cps3",75,23}, {"varcade",75,23}, {"atomiswave",53,23}, {"model3",55,23},
++    {"cps2",75,23}, {"cps3",75,23}, {"varcade",75,23}, {"atomiswave",53,23},
 +    // Anbernic stock folder names, and the emulator catalog's platform names
-+    {"ps",57,10}, {"fc",3,7}, {"master",2,35}, {"genesismsu",1,36}, {"snesmsu1",4,6},
++    {"ps",57,10}, {"fc",3,7}, {"master",2,35}, {"genesismsu",1,36}, {"snesmsu1",210,6},
 +    {"tgcd",114,4955}, {"jaguarcd",171,29}, {"ndsi",15,8}, {"wiiware",16,9}, {"switch",225,4971},
-+    {"gw",52,4950}, {"ngage",30,-1}, {"megaduck",90,-1}, {"supervision",207,4959},
-+    {"appleii",86,4942}, {"bbcmicro",37,-1}, {"cdi",133,4917}, {"vic20",73,4945}, {"zx81",77,-1},
-+    {"plus4",99,-1}, {"pc88",221,4933}, {"pc98",208,4934}, {"x1",220,4977}, {"windows",138,1},
++    {"gw",52,4950}, {"ngage",30,4938}, {"megaduck",90,4948}, {"supervision",207,4959},
++    {"appleii",86,4942}, {"bbcmicro",37,5013}, {"cdi",133,4917}, {"vic20",73,4945}, {"zx81",77,5010},
++    {"plus4",99,5007}, {"pc88",221,4933}, {"pc98",208,4934}, {"x1",220,4977}, {"windows",138,1},
 +    {"xbox",32,14}, {"xbox360",33,15}, {"arduboy",263,-1}, {"tic80",222,-1}, {"uzebox",216,-1},
  };
  
@@ -16000,29 +16068,32 @@ index f80b74c26f9..41185c0c943 100644
  // ---------------------------------------------------------------------------
  // Region preference + media selection
  // ---------------------------------------------------------------------------
-@@ -338,6 +516,30 @@ static const off_t kHashMaxBytes = 128LL * 1024 * 1024;
+@@ -338,6 +516,33 @@ static const off_t kHashMaxBytes = 128LL * 1024 * 1024;
  // ---------------------------------------------------------------------------
  // ScreenScraper.fr
  // ---------------------------------------------------------------------------
-+// ScreenScraper's plain-text errors are in French: the known ones in the user's language, others as sent.
-+static std::string ssErrorText(const std::string& body) {
++// ScreenScraper's plain-text errors are in French: the known ones in the user's language, others as
++// sent. *gameOnly: about this game's request alone (not the service or the account).
++static std::string ssErrorText(const std::string& body, bool* gameOnly) {
 +    std::string low;
 +    for (unsigned char c : body) low += (char)tolower(c);
-+    static const std::pair<const char*, const char*> kKnown[] = {
-+        {"systemid obligatoire", "ScreenScraper needs this game's system or a CRC to find it."},
-+        {"identifiants d\xc3\xa9veloppeur", "ScreenScraper did not accept the developer login."},
-+        {"identifiants developpeur", "ScreenScraper did not accept the developer login."},
-+        {"erreur de login", "ScreenScraper did not accept the login. Check the user name and password."},
-+        {"quota", "ScreenScraper's daily scrape limit for this account is used up. Try again tomorrow."},
-+        {"threads", "ScreenScraper is busy for this account (too many scrapes at once). Try again shortly."},
-+        {"blacklist", "ScreenScraper has blocked this app."},
-+        {"api ferm", "ScreenScraper's API is closed right now. Try again later."},
-+        {"api closed", "ScreenScraper's API is closed right now. Try again later."},
-+        {"crc, md5 ou sha1", "ScreenScraper rejected this game's checksum."},
-+        {"nom du fichier", "ScreenScraper rejected this game's file name."},
++    static const struct { const char* match; const char* text; bool game; } kKnown[] = {
++        {"systemid obligatoire", "ScreenScraper needs this game's system or a CRC to find it.", true},
++        {"crc, md5 ou sha1", "ScreenScraper rejected this game's checksum.", true},
++        {"nom du fichier", "ScreenScraper rejected this game's file name.", true},
++        {"identifiants d\xc3\xa9veloppeur", "ScreenScraper did not accept the developer login.", false},
++        {"identifiants developpeur", "ScreenScraper did not accept the developer login.", false},
++        {"erreur de login", "ScreenScraper did not accept the login. Check the user name and password.", false},
++        {"faite du tri", "ScreenScraper has had too many unknown games from this account today. Try again tomorrow.", false},
++        {"quota de scrape", "ScreenScraper's daily scrape limit for this account is used up. Try again tomorrow.", false},
++        {"threads", "ScreenScraper is busy for this account (too many scrapes at once). Try again shortly.", false},
++        {"blacklist", "ScreenScraper has blocked this app.", false},
++        {"api ferm", "ScreenScraper's API is closed right now. Try again later.", false},
++        {"api closed", "ScreenScraper's API is closed right now. Try again later.", false},
 +    };
++    *gameOnly = false;
 +    for (const auto& k : kKnown)
-+        if (low.find(k.first) != std::string::npos) return trDyn(k.second);
++        if (low.find(k.match) != std::string::npos) { *gameOnly = k.game; return trDyn(k.text); }
 +    std::string t = body.size() > 120 ? body.substr(0, 120) : body;
 +    while (!t.empty() && (t.back() == '\n' || t.back() == '\r' || t.back() == ' ')) t.pop_back();
 +    return std::string(trDyn("ScreenScraper: ")) + t;
@@ -16031,7 +16102,7 @@ index f80b74c26f9..41185c0c943 100644
  static ScrapeOutcome scrapeScreenScraper(const Credentials& cred,
                                           const std::string& romPath,
                                           const std::string& displayName,
-@@ -346,7 +548,9 @@ static ScrapeOutcome scrapeScreenScraper(const Credentials& cred,
+@@ -346,7 +551,9 @@ static ScrapeOutcome scrapeScreenScraper(const Credentials& cred,
                                           const std::string& cacheDir,
                                           const std::string& tmpTag,
                                           const std::string& queryName,
@@ -16042,7 +16113,7 @@ index f80b74c26f9..41185c0c943 100644
      ScrapeOutcome r;
      if (cred.ssDevId.empty() || cred.ssDevPw.empty()) {
          r.credMissing = true;
-@@ -358,40 +562,82 @@ static ScrapeOutcome scrapeScreenScraper(const Credentials& cred,
+@@ -358,40 +565,83 @@ static ScrapeOutcome scrapeScreenScraper(const Credentials& cred,
      // A user title override drives romnom (crc + size still sent); otherwise the raw
      // filename as before.
      const std::string romnom = queryName.empty() ? baseName(romPath) : queryName;
@@ -16095,8 +16166,9 @@ index f80b74c26f9..41185c0c943 100644
 +            r.notFound = true;
              r.error = "No match";
 +        } else {
-+            r.networkFail = true;
-+            r.error = ssErrorText(body);
++            bool gameOnly = false;
++            r.error = ssErrorText(body, &gameOnly);
++            r.networkFail = !gameOnly;   // a request this game alone could not make is no outage
          }
          return r;
      }
@@ -16139,7 +16211,7 @@ index f80b74c26f9..41185c0c943 100644
  
      std::vector<std::string> regs = regionOrder(cred.region);
  
-@@ -477,35 +723,39 @@ static ScrapeOutcome scrapeScreenScraper(const Credentials& cred,
+@@ -477,35 +727,39 @@ static ScrapeOutcome scrapeScreenScraper(const Credentials& cred,
      htmlUnescape(r.synopsis); htmlUnescape(r.genre); htmlUnescape(r.players);
      htmlUnescape(r.developer); htmlUnescape(r.publisher); htmlUnescape(r.releaseDate);
  
@@ -16188,7 +16260,7 @@ index f80b74c26f9..41185c0c943 100644
          if (!looksLikeImage(tmp)) { unlink(tmp.c_str()); return false; }
          if (rename(tmp.c_str(), destFinal.c_str()) != 0) { unlink(tmp.c_str()); return false; }
          return true;
-@@ -514,16 +764,40 @@ static ScrapeOutcome scrapeScreenScraper(const Credentials& cred,
+@@ -514,16 +768,40 @@ static ScrapeOutcome scrapeScreenScraper(const Credentials& cred,
      if (wantBox) {
          // Cover = box-2D (es-de media_cover); 3D box is the fallback.
          std::string u = pick({"box-2D", "box-3D"});
@@ -16232,7 +16304,7 @@ index f80b74c26f9..41185c0c943 100644
      return r;
  }
  
-@@ -532,7 +806,7 @@ static ScrapeOutcome scrapeScreenScraper(const Credentials& cred,
+@@ -532,7 +810,7 @@ static ScrapeOutcome scrapeScreenScraper(const Credentials& cred,
  // records reference these by numeric id; the names live in three separate static
  // lists. We fetch them ONCE per scrape (the first TheGamesDB game), cache them in
  // a file-static, and free them when the worker finishes (freeTgdbResources, called
@@ -16241,7 +16313,7 @@ index f80b74c26f9..41185c0c943 100644
  // runs at a time, so no locking is needed. Nothing is held at idle.
  // ---------------------------------------------------------------------------
  namespace {
-@@ -544,12 +818,12 @@ TgdbResMaps gTgdbRes;
+@@ -544,12 +822,12 @@ TgdbResMaps gTgdbRes;
  
  // Fetch one resource endpoint (Genres/Developers/Publishers) and fold its
  // {idstr:{id,name}} object into id->name.
@@ -16257,7 +16329,7 @@ index f80b74c26f9..41185c0c943 100644
      std::string body = readFile(resp, 4 * 1024 * 1024);
      unlink(resp.c_str());
      njson::Value root;
-@@ -564,12 +838,12 @@ void loadTgdbResMap(const char* curl, const std::string& key, const char* endpoi
+@@ -564,12 +842,12 @@ void loadTgdbResMap(const char* curl, const std::string& key, const char* endpoi
      }
  }
  
@@ -16274,7 +16346,7 @@ index f80b74c26f9..41185c0c943 100644
  }
  
  // Map the first known id in a game's int-array field to its resource name.
-@@ -606,7 +880,9 @@ static ScrapeOutcome scrapeTheGamesDb(const Credentials& cred,
+@@ -606,7 +884,9 @@ static ScrapeOutcome scrapeTheGamesDb(const Credentials& cred,
                                        const std::string& cacheDir,
                                        const std::string& tmpTag,
                                        const std::string& queryName,
@@ -16285,7 +16357,7 @@ index f80b74c26f9..41185c0c943 100644
      ScrapeOutcome r;
      if (cred.tgdbKey.empty()) {
          r.credMissing = true;
-@@ -629,7 +905,7 @@ static ScrapeOutcome scrapeTheGamesDb(const Credentials& cred,
+@@ -629,7 +909,7 @@ static ScrapeOutcome scrapeTheGamesDb(const Credentials& cred,
          {"name", qname},
      };
      if (plat.tgdb > 0) q.push_back({"filter[platform]", std::to_string(plat.tgdb)});
@@ -16294,7 +16366,7 @@ index f80b74c26f9..41185c0c943 100644
          r.networkFail = true; r.error = trDyn("TheGamesDB request failed"); return r;
      }
      std::string body = readFile(resp, 2 * 1024 * 1024);
-@@ -641,7 +917,7 @@ static ScrapeOutcome scrapeTheGamesDb(const Credentials& cred,
+@@ -641,7 +921,7 @@ static ScrapeOutcome scrapeTheGamesDb(const Credentials& cred,
  
      const njson::Value* data = root.find("data");
      const njson::Value* games = data ? data->find("games") : nullptr;
@@ -16303,7 +16375,7 @@ index f80b74c26f9..41185c0c943 100644
  
      int gameId = -1;
      // Prefer a game on the requested platform; otherwise the first result.
-@@ -662,7 +938,7 @@ static ScrapeOutcome scrapeTheGamesDb(const Credentials& cred,
+@@ -662,7 +942,7 @@ static ScrapeOutcome scrapeTheGamesDb(const Credentials& cred,
      r.rating = gsel->getString("rating");
      r.releaseDate = gsel->getString("release_date");
      if (r.releaseDate.size() > 10) r.releaseDate = r.releaseDate.substr(0, 10);
@@ -16312,7 +16384,7 @@ index f80b74c26f9..41185c0c943 100644
      r.genre     = firstResName(gsel, "genres",     gTgdbRes.genre);
      r.developer = firstResName(gsel, "developers", gTgdbRes.developer);
      r.publisher = firstResName(gsel, "publishers", gTgdbRes.publisher);
-@@ -675,7 +951,7 @@ static ScrapeOutcome scrapeTheGamesDb(const Credentials& cred,
+@@ -675,7 +955,7 @@ static ScrapeOutcome scrapeTheGamesDb(const Credentials& cred,
      std::vector<std::pair<std::string, std::string>> q2 = {
          {"apikey", cred.tgdbKey}, {"games_id", std::to_string(gameId)},
      };
@@ -16321,7 +16393,7 @@ index f80b74c26f9..41185c0c943 100644
          r.networkFail = true; r.error = trDyn("TheGamesDB images request failed"); return r;
      }
      std::string body2 = readFile(resp, 2 * 1024 * 1024);
-@@ -698,6 +974,7 @@ static ScrapeOutcome scrapeTheGamesDb(const Credentials& cred,
+@@ -698,6 +978,7 @@ static ScrapeOutcome scrapeTheGamesDb(const Credentials& cred,
          if (byId && byId->isArray()) arr = byId;
          else if (!images->obj.empty() && images->obj[0].second.isArray()) arr = &images->obj[0].second;
      }
@@ -16329,7 +16401,7 @@ index f80b74c26f9..41185c0c943 100644
      if (base.empty() || !arr) { r.error = "No media"; return r; }
  
      auto findImg = [&](const char* type, const char* sidePref) -> std::string {
-@@ -712,11 +989,12 @@ static ScrapeOutcome scrapeTheGamesDb(const Credentials& cred,
+@@ -712,11 +993,12 @@ static ScrapeOutcome scrapeTheGamesDb(const Credentials& cred,
          return anyType;
      };
  
@@ -16344,7 +16416,7 @@ index f80b74c26f9..41185c0c943 100644
          if (!looksLikeImage(tmp)) { unlink(tmp.c_str()); return false; }
          if (rename(tmp.c_str(), destFinal.c_str()) != 0) { unlink(tmp.c_str()); return false; }
          return true;
-@@ -724,30 +1002,91 @@ static ScrapeOutcome scrapeTheGamesDb(const Credentials& cred,
+@@ -724,30 +1006,91 @@ static ScrapeOutcome scrapeTheGamesDb(const Credentials& cred,
  
      if (wantBox) {
          std::string u = findImg("boxart", "front");
@@ -16578,7 +16650,7 @@ index 7b4e9412c26..6c42e1edbfe 100644
  
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoSdMove.cpp b/frameworks/base/cmds/gammaos-nano/NanoSdMove.cpp
 new file mode 100644
-index 00000000000..62c4d73eab5
+index 00000000000..e491c6a3c1c
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/NanoSdMove.cpp
 @@ -0,0 +1,1102 @@
@@ -17224,8 +17296,8 @@ index 00000000000..62c4d73eab5
 +    const size_t b = prefs.find("</string>", a);
 +    if (b == std::string::npos) return std::string();
 +    std::string v = prefs.substr(a + key.size(), b - a - key.size());
-+    for (const auto& e : {std::make_pair("&amp;", "&"), std::make_pair("&lt;", "<"), std::make_pair("&gt;", ">"),
-+                          std::make_pair("&quot;", "\""), std::make_pair("&apos;", "'")})
++    for (const auto& e : {std::make_pair("&lt;", "<"), std::make_pair("&gt;", ">"), std::make_pair("&quot;", "\""),
++                          std::make_pair("&apos;", "'"), std::make_pair("&amp;", "&")})   // &amp; last
 +        for (size_t p = v.find(e.first); p != std::string::npos; p = v.find(e.first, p + 1)) v.replace(p, strlen(e.first), e.second);
 +    return v;
 +}
@@ -17685,7 +17757,7 @@ index 00000000000..62c4d73eab5
 +
 +}  // namespace android
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoThemeEngine.cpp b/frameworks/base/cmds/gammaos-nano/NanoThemeEngine.cpp
-index 857edadb1e6..c9f719c9619 100644
+index 857edadb1e6..2d1737aec7e 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoThemeEngine.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoThemeEngine.cpp
 @@ -14,6 +14,7 @@
@@ -17909,7 +17981,7 @@ index 857edadb1e6..c9f719c9619 100644
  // Resolve a game's media for an ES-DE imageType from the shared ES-DE downloaded_media tree
  // (downloaded_media/<system>/<subdir>/<rom-basename>.<ext>), the same files real ES-DE draws, so a
  // gamelist element that asks for a screenshot/marquee/titlescreen shows that instead of nano's single
-@@ -904,6 +1001,182 @@ NanoMenu::EsdeSvg NanoMenu::esdeArtTex(const std::string& path, int boxW, int bo
+@@ -904,6 +1001,185 @@ NanoMenu::EsdeSvg NanoMenu::esdeArtTex(const std::string& path, int boxW, int bo
  // Resolve the on-disk media file for a rom + ES-DE imageType (or "" if none exists), caching the
  // result per rom+type so the extension probe runs once. Shared by esdeGameMediaTex (to load the
  // texture) and the <gameselector> pick (to prefer a game that actually has the requested media).
@@ -18049,14 +18121,17 @@ index 857edadb1e6..c9f719c9619 100644
 +// Delete Game's media: every file the media lookups would find for the game (each media folder,
 +// each of its system folders and names, every media type and file type), unless another game of
 +// the system has the same media name (two files of one game title share their media).
-+int NanoMenu::esdeDeleteGameMedia(const std::string& romPath, int sysIdx) {
++int NanoMenu::esdeDeleteGameMedia(const std::string& romPath, int sysIdx, const std::vector<std::string>& gone) {
 +    std::vector<std::string> sysDirs, names;
 +    if (!esdeMediaLayout(romPath, sysIdx, &sysDirs, &names, nullptr) || names.empty()) return 0;
 +    if (sysIdx >= 0 && sysIdx < (int)mXmbSystems.size()) {
-+        for (const auto& other : mXmbSystems[sysIdx].roms) {
-+            if (other == romPath) continue;
++        std::vector<std::string> others = mXmbSystems[sysIdx].roms;
++        for (const auto& kv : mHiddenGames) others.push_back(kv.second);   // a hidden game keeps its media
++        for (const auto& other : others) {
++            if (other == romPath || std::find(gone.begin(), gone.end(), other) != gone.end()) continue;
 +            std::vector<std::string> od, on;
 +            if (!esdeMediaLayout(other, sysIdx, &od, &on, nullptr)) continue;
++            if (std::find(od.begin(), od.end(), sysDirs[0]) == od.end()) continue;   // another system folder
 +            for (const auto& n : on)
 +                names.erase(std::remove(names.begin(), names.end(), n), names.end());
 +        }
@@ -18092,7 +18167,7 @@ index 857edadb1e6..c9f719c9619 100644
  std::string NanoMenu::esdeGameMediaPath(const std::string& romPath, const std::string& imageType) {
      if (romPath.empty()) return std::string();
      // ES-DE imageType -> downloaded_media subdirectory. "image" defaults to the miximage.
-@@ -913,41 +1186,37 @@ std::string NanoMenu::esdeGameMediaPath(const std::string& romPath, const std::s
+@@ -913,41 +1189,37 @@ std::string NanoMenu::esdeGameMediaPath(const std::string& romPath, const std::s
          {"screenshot", "screenshots"}, {"titlescreen", "titlescreens"},
          {"marquee", "marquees"},       {"3dbox", "3dboxes"},
          {"physicalmedia", "physicalmedia"}, {"fanart", "fanart"},
@@ -18157,7 +18232,7 @@ index 857edadb1e6..c9f719c9619 100644
      auto tokens = imageType;
      size_t start = 0;
      while (start <= tokens.size() && found.empty()) {
-@@ -958,11 +1227,17 @@ std::string NanoMenu::esdeGameMediaPath(const std::string& romPath, const std::s
+@@ -958,11 +1230,17 @@ std::string NanoMenu::esdeGameMediaPath(const std::string& romPath, const std::s
          while (!tok.empty() && (tok.back() == ' ')) tok.pop_back();
          auto it = kSub.find(tok);
          if (it != kSub.end()) {
@@ -18180,7 +18255,7 @@ index 857edadb1e6..c9f719c9619 100644
                  }
                  if (!found.empty()) break;
              }
-@@ -974,23 +1249,6 @@ std::string NanoMenu::esdeGameMediaPath(const std::string& romPath, const std::s
+@@ -974,23 +1252,6 @@ std::string NanoMenu::esdeGameMediaPath(const std::string& romPath, const std::s
      return found;
  }
  
@@ -18204,7 +18279,7 @@ index 857edadb1e6..c9f719c9619 100644
  GLuint NanoMenu::esdeGameMediaTex(const std::string& romPath, const std::string& imageType, float* outAR) {
      if (outAR) *outAR = 1.0f;
      if (romPath.empty()) return 0;
-@@ -1030,6 +1288,7 @@ GLuint NanoMenu::esdeGameMediaTex(const std::string& romPath, const std::string&
+@@ -1030,6 +1291,7 @@ GLuint NanoMenu::esdeGameMediaTex(const std::string& romPath, const std::string&
              if (tok == "fanart" && se && !se->fan.empty()) {
                  EsdeSvg fa = esdeArtTex(se->fan, mWidth, mHeight);
                  if (fa.tex) {
@@ -18212,7 +18287,7 @@ index 857edadb1e6..c9f719c9619 100644
                      auto fd = mEsdePngDims.find(se->fan);
                      if (fd != mEsdePngDims.end() && fd->second.second > 0 && outAR)
                          *outAR = (float)fd->second.first / (float)fd->second.second;
-@@ -1042,6 +1301,7 @@ GLuint NanoMenu::esdeGameMediaTex(const std::string& romPath, const std::string&
+@@ -1042,6 +1304,7 @@ GLuint NanoMenu::esdeGameMediaTex(const std::string& romPath, const std::string&
      }
      EsdeSvg a = esdeArtTex(found, mWidth, mHeight);           // load + cache (decode-budgeted)
      if (!a.tex) return 0;
@@ -18220,7 +18295,7 @@ index 857edadb1e6..c9f719c9619 100644
      auto dit = mEsdePngDims.find(found);
      if (dit != mEsdePngDims.end() && dit->second.second > 0 && outAR)
          *outAR = (float)dit->second.first / (float)dit->second.second;
-@@ -1057,21 +1317,93 @@ GLuint NanoMenu::esdeGameMediaTex(const std::string& romPath, const std::string&
+@@ -1057,21 +1320,93 @@ GLuint NanoMenu::esdeGameMediaTex(const std::string& romPath, const std::string&
  // and esdeMetaFor falls back to the scrape store, so nano still works with no ES-DE data present.
  void NanoMenu::esdeEnsureGamelistLoaded(int sysIdx) {
      if (sysIdx < 0 || sysIdx >= (int)mXmbSystems.size()) return;
@@ -18322,7 +18397,7 @@ index 857edadb1e6..c9f719c9619 100644
      }
      auto childText = [](tinyxml2::XMLElement* g, const char* k) -> std::string {
          tinyxml2::XMLElement* c = g->FirstChildElement(k);
-@@ -1081,10 +1413,14 @@ void NanoMenu::esdeEnsureGamelistLoaded(int sysIdx) {
+@@ -1081,10 +1416,14 @@ void NanoMenu::esdeEnsureGamelistLoaded(int sysIdx) {
      for (tinyxml2::XMLElement* g = root->FirstChildElement("game"); g; g = g->NextSiblingElement("game")) {
          std::string p = childText(g, "path");
          if (p.empty()) continue;
@@ -18341,7 +18416,7 @@ index 857edadb1e6..c9f719c9619 100644
          ScrapeEntry e;
          if (const ScrapeEntry* s = scrapeEntryFor(bi->second)) { e.box = s->box; e.fan = s->fan; }
          e.title      = childText(g, "name");
-@@ -1112,10 +1448,72 @@ void NanoMenu::esdeEnsureGamelistLoaded(int sysIdx) {
+@@ -1112,10 +1451,72 @@ void NanoMenu::esdeEnsureGamelistLoaded(int sysIdx) {
  
  const NanoMenu::ScrapeEntry* NanoMenu::esdeMetaFor(const std::string& romPath) {
      auto it = mEsdeGamelistMeta.find(romPath);
@@ -18415,7 +18490,7 @@ index 857edadb1e6..c9f719c9619 100644
  // ES-DE lastplayed: a <datetime metadata="lastplayed"> auto-enables displayRelative, so a set time
  // reads the relative age "N days/hours/minutes/seconds ago" (DateTimeComponent::getDisplayString).
  // The gamelist value is ISO basic YYYYMMDDThhmmss; parse it as UTC (timegm) and compare to now so the
-@@ -1218,6 +1616,7 @@ std::string NanoMenu::esdeDefaultStarPath(bool filled) {
+@@ -1218,6 +1619,7 @@ std::string NanoMenu::esdeDefaultStarPath(bool filled) {
  void NanoMenu::renderEsde() {
      ensureEsdeTheme();
      esdeRebuildSysList();
@@ -18423,7 +18498,7 @@ index 857edadb1e6..c9f719c9619 100644
  
      // Clear the deferred menu-help cache each frame; esdeDrawHelp re-sets it if a helpsystem
      // matching the current view exists, so a theme without one leaves renderEsdeMenu no stale
-@@ -1548,7 +1947,7 @@ void NanoMenu::renderEsde() {
+@@ -1548,7 +1950,7 @@ void NanoMenu::renderEsde() {
                  // shows it (GamelistBase), never the carousel/grid, and never in a favourites
                  // collection (nano has none). The star renders through nano's FA fallback face.
                  if (haveRom && !isCarousel && !isGrid &&
@@ -18432,7 +18507,7 @@ index 857edadb1e6..c9f719c9619 100644
                      std::string ind = primary->getS("indicators", std::string("symbols"));
                      if (ind == "ascii")     nm = "* " + nm;
                      else if (ind != "none") nm = "\xEF\x80\x85  " + nm;   // U+F005 + two spaces
-@@ -3115,7 +3514,7 @@ void NanoMenu::renderEsde() {
+@@ -3115,7 +3517,7 @@ void NanoMenu::renderEsde() {
                  // metadata, so the counter matches the control and the textlist star indicator.
                  for (const auto& r : sys.roms) {
                      const ScrapeEntry* se = esdeMetaFor(r);
@@ -18441,7 +18516,7 @@ index 857edadb1e6..c9f719c9619 100644
                  }
                  s = "\xEF\x84\x9B " + std::to_string(total) +      // U+F11B controller
                      "  \xEF\x80\x85 " + std::to_string(favs);      // U+F005 star
-@@ -3200,7 +3599,7 @@ void NanoMenu::renderEsde() {
+@@ -3200,7 +3602,7 @@ void NanoMenu::renderEsde() {
                      int favs = 0;
                      for (const auto& r : sys.roms) {
                          const ScrapeEntry* se = esdeMetaFor(r);
@@ -18450,7 +18525,7 @@ index 857edadb1e6..c9f719c9619 100644
                      }
                      auto plural = [](int n, const char* one, const char* many) {
                          return std::to_string(n) + " " + (n == 1 ? one : many);
-@@ -3418,16 +3817,19 @@ void NanoMenu::renderEsde() {
+@@ -3418,16 +3820,19 @@ void NanoMenu::renderEsde() {
              if (noImageType) {
                  float vsx = e->getPair("size", 0, 0.0f), vsy = e->getPair("size", 1, 0.0f);
                  if (vsx * vsy >= 0.2f) {
@@ -18477,7 +18552,7 @@ index 857edadb1e6..c9f719c9619 100644
                      }
                  }
              }
-@@ -3476,11 +3878,6 @@ void NanoMenu::renderEsde() {
+@@ -3476,11 +3881,6 @@ void NanoMenu::renderEsde() {
              // than standing in with the scraped cover, matching what the control shows when a game
              // has no video (aura/xmb-menu/ps5-menu game-video regions). A mixed list keeps its
              // cover-family fallback below; only the whole-string "none" is suppressed.
@@ -18489,7 +18564,7 @@ index 857edadb1e6..c9f719c9619 100644
              std::string vRom = curRom;
              if (vRom.empty()) {
                  std::string gs = e->getS("gameselector", std::string());
-@@ -3491,7 +3888,69 @@ void NanoMenu::renderEsde() {
+@@ -3491,7 +3891,69 @@ void NanoMenu::renderEsde() {
              const bool fullBg = (boxW <= 1.0f || boxH <= 1.0f);
              if (fullBg) { boxW = (float)mWidth; boxH = (float)mHeight; }
              bool drewVideo = false;
@@ -18560,7 +18635,7 @@ index 857edadb1e6..c9f719c9619 100644
                  float ar = 1.0f;
                  GLuint tex = esdeGameMediaTex(vRom, vImgType, &ar);
                  if (tex && ar > 0.0f) {
-@@ -3811,12 +4270,12 @@ void NanoMenu::renderEsde() {
+@@ -3811,12 +4273,12 @@ void NanoMenu::renderEsde() {
              std::vector<ActiveBadge> active;
              for (auto& slot : slots) {
                  bool on = false; std::string ctrl;
@@ -18575,7 +18650,7 @@ index 857edadb1e6..c9f719c9619 100644
                  else if (slot == "controller") { if (meta && !meta->controller.empty()) { on = true; ctrl = meta->controller; } }
                  // folder / collection: nano's ES-DE gamelist has no folder entries or collection
                  // editing, so those slots never activate (matches an empty-metadata game).
-@@ -3991,6 +4450,7 @@ std::string NanoMenu::esdeHelpIconPath(const std::string& id) {
+@@ -3991,6 +4453,7 @@ std::string NanoMenu::esdeHelpIconPath(const std::string& id) {
          {"x", "button_x_XBOX.svg"}, {"y", "button_y_XBOX.svg"},
          {"start", "button_start_XBOX.svg"}, {"back", "button_back_XBOX.svg"},
          {"left/right", "dpad_leftright.svg"}, {"up/down", "dpad_updown.svg"},
@@ -18583,7 +18658,7 @@ index 857edadb1e6..c9f719c9619 100644
          {"up/down/left/right", "dpad_all.svg"}, {"lr", "button_lr.svg"},
          {"ltrt", "button_ltrt.svg"}, {"l", "button_l.svg"}, {"r", "button_r.svg"},
          {"lt", "button_lt.svg"}, {"rt", "button_rt.svg"}, {"thumbstickclick", "thumbstick.svg"},
-@@ -4030,6 +4490,7 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
+@@ -4030,6 +4493,7 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
      // theme's <entries> list then selects which of these actually show (ABN trims the gamelist
      // bar to back,start,a = OPTIONS MENU SELECT); "all"/absent keeps every prompt.
      std::vector<std::pair<std::string, std::string>> prompts;
@@ -18591,7 +18666,7 @@ index 857edadb1e6..c9f719c9619 100644
      // When the ES-DE options menu is open its help bar replaces the view's, exactly as ES-DE's
      // HelpComponent shows the top GUI's prompts. Build the menu prompts (per focused row) and render
      // them through this same glyph + helpsystem-style path so the menu legend matches the control.
-@@ -4054,10 +4515,10 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
+@@ -4054,10 +4518,10 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
          prompts.push_back({"a", "select"});
          prompts.push_back({"b", "back"});
          prompts.push_back({"x", "view media"});
@@ -18604,7 +18679,7 @@ index 857edadb1e6..c9f719c9619 100644
      } else {
          // The "choose" icon tracks the system view's primary: a vertical carousel or a textlist
          // navigates up/down, a horizontal carousel left/right, a grid all four directions.
-@@ -4072,14 +4533,9 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
+@@ -4072,14 +4536,9 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
          }
          prompts.push_back({chooseIcon, "choose"});
          prompts.push_back({"a", "select"});
@@ -18622,7 +18697,7 @@ index 857edadb1e6..c9f719c9619 100644
      }
  
      // Apply the helpsystem's <entries> allow-list (icon ids, whitespace or comma separated). The
-@@ -4134,6 +4590,19 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
+@@ -4134,6 +4593,19 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
          }
          prompts.swap(dd);
      }
@@ -18642,7 +18717,7 @@ index 857edadb1e6..c9f719c9619 100644
      if (prompts.empty()) return;
  
      float fs = e->getF("fontSize", 0.035f);
-@@ -4165,15 +4634,23 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
+@@ -4165,15 +4637,23 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
  
      struct Ent { GLuint tex; float iw, ih; std::string label; float lw; };
      std::vector<Ent> ents; ents.reserve(prompts.size());
@@ -18668,7 +18743,7 @@ index 857edadb1e6..c9f719c9619 100644
          if (!path.empty()) {
              EsdeSvg a = esdeArtTex(path, (int)iconBox, (int)iconBox);
              en.tex = a.tex; en.iw = (float)a.w; en.ih = (float)a.h;
-@@ -4251,9 +4728,16 @@ void NanoMenu::esdeDrawSystemStatus(const nanoesde::Element* e) {
+@@ -4251,9 +4731,16 @@ void NanoMenu::esdeDrawSystemStatus(const nanoesde::Element* e) {
      };
  
      // Assemble items left-to-right in ES-DE's order: bluetooth, wifi, battery icon, battery percent.
@@ -18686,7 +18761,7 @@ index 857edadb1e6..c9f719c9619 100644
      auto addIcon = [&](const std::string& path) {
          if (path.empty()) return;
          EsdeSvg a = esdeArtTex(path, (int)iconBox, (int)iconBox);
-@@ -4313,7 +4797,7 @@ void NanoMenu::esdeDrawSystemStatus(const nanoesde::Element* e) {
+@@ -4313,7 +4800,7 @@ void NanoMenu::esdeDrawSystemStatus(const nanoesde::Element* e) {
          } else {
              drawText(it.text.c_str(), cx, yTop + (rowH - glyphH) * 0.5f, sc,
                       col[0], col[1], col[2], col[3], statusFace);
@@ -18695,7 +18770,7 @@ index 857edadb1e6..c9f719c9619 100644
          }
      }
  }
-@@ -4448,8 +4932,11 @@ bool NanoMenu::esdeSelect() {
+@@ -4448,8 +4935,11 @@ bool NanoMenu::esdeSelect() {
      if (mEsdeGameSel >= 0 && mEsdeGameSel < (int)sys.roms.size()) {
          mXmbSystemIndex = mEsdeSysList[mEsdeSysSel];
          mXmbGameIndex = mEsdeGameSel;
@@ -18707,7 +18782,7 @@ index 857edadb1e6..c9f719c9619 100644
      }
      return true;
  }
-@@ -4460,6 +4947,106 @@ bool NanoMenu::esdeBack() {
+@@ -4460,6 +4950,106 @@ bool NanoMenu::esdeBack() {
      return false;   // at system root: let the caller handle (e.g. nothing / exit gesture)
  }
  
@@ -20832,10 +20907,10 @@ index a164106f4c2..601e8e0b2bd 100644
      shared_libs: [
 diff --git a/frameworks/native/services/gammapad/BrowserMode.cpp b/frameworks/native/services/gammapad/BrowserMode.cpp
 new file mode 100644
-index 00000000000..320de0efa36
+index 00000000000..7fa355d1232
 --- /dev/null
 +++ b/frameworks/native/services/gammapad/BrowserMode.cpp
-@@ -0,0 +1,532 @@
+@@ -0,0 +1,546 @@
 +#define LOG_TAG "gammapad"
 +
 +#include "BrowserMode.h"
@@ -20985,7 +21060,7 @@ index 00000000000..320de0efa36
 +    mPadDown.clear();
 +    mSelectHeld = mStartHeld = mChord = mModeHeld = false;
 +    mLX = mLY = mRX = mRY = mHatX = mHatY = mDpadBtns = 0;
-+    mLtBtn = mRtBtn = mLtAxis = mRtAxis = mCursorA = mCursorX = false;
++    mLtBtn = mRtBtn = mLtAxis = mRtAxis = mCursorA = mCursorX = mLtBlock = mRtBlock = false;
 +    mAccX = mAccY = mScrollX = mScrollY = 0;
 +}
 +
@@ -21030,11 +21105,23 @@ index 00000000000..320de0efa36
 +            if (ev.value != 2 && pressed != mModeHeld) {
 +                if (pressed) {
 +                    mModeHeld = true;
-+                    if (!mChord) releaseOutputs();
++                    if (!mChord) {
++                        mLtBlock = mLtBlock || mLtAxis;   // a trigger held from before is the hotkey's too
++                        mRtBlock = mRtBlock || mRtAxis;
++                        releaseOutputs();
++                        mSelectHeld = mStartHeld = mSelectUsed = false;   // their releases are not seen
++                    }
 +                    mRelease.clear();
 +                } else {
 +                    mModeHeld = false;
-+                    if (!mChord) endChord();
++                    if (!mChord) {
++                        // What is still held from the hotkey stays the pad's until it is let go.
++                        mHatX = mHatY = 0;
++                        mLtBlock = mLtBlock || mLtAxis;
++                        mRtBlock = mRtBlock || mRtAxis;
++                        mLtAxis = mRtAxis = false;
++                        endChord();
++                    }
 +                }
 +            }
 +            return false;
@@ -21240,9 +21327,11 @@ index 00000000000..320de0efa36
 +            mHatSince = std::chrono::steady_clock::now();
 +        }
 +    } else if (code == mLtCode) {
-+        mLtAxis = value > (mLtAxis ? TRIGGER_RELEASE : TRIGGER_PRESS);
++        if (mLtBlock) mLtBlock = value >= TRIGGER_RELEASE;
++        else mLtAxis = value > (mLtAxis ? TRIGGER_RELEASE : TRIGGER_PRESS);
 +    } else if (code == mRtCode) {
-+        mRtAxis = value > (mRtAxis ? TRIGGER_RELEASE : TRIGGER_PRESS);
++        if (mRtBlock) mRtBlock = value >= TRIGGER_RELEASE;
++        else mRtAxis = value > (mRtAxis ? TRIGGER_RELEASE : TRIGGER_PRESS);
 +    }
 +}
 +
@@ -21268,7 +21357,7 @@ index 00000000000..320de0efa36
 +// The D-pad is the arrow keys (Android repeats them while held) unless Select is held (it
 +// scrolls) or cursor mode is on (it moves the cursor); both of those run in tick().
 +void BrowserMode::refreshArrows() {
-+    bool arrows = !mSelectHeld && !mCursorMode && !mChord;
++    bool arrows = !mSelectHeld && !mCursorMode && !mChord && !mModeHeld;
 +    int x = arrows ? mHatX : 0, y = arrows ? mHatY : 0;
 +    if (x != mArrowX) {
 +        if (mArrowX) mKeyboard->emitKey(mArrowX < 0 ? KEY_LEFT : KEY_RIGHT, false);
@@ -21311,7 +21400,7 @@ index 00000000000..320de0efa36
 +void BrowserMode::tick() {
 +    uint64_t expirations;
 +    if (read(mTimerFd, &expirations, sizeof(expirations)) < 0) return;
-+    if (!mActive || mChord) return;
++    if (!mActive || mChord || mModeHeld) return;
 +
 +    float dx = 0, dy = 0, sx = 0, sy = 0;
 +
@@ -21370,10 +21459,10 @@ index 00000000000..320de0efa36
 +} // namespace gammapad
 diff --git a/frameworks/native/services/gammapad/BrowserMode.h b/frameworks/native/services/gammapad/BrowserMode.h
 new file mode 100644
-index 00000000000..44fbd217c52
+index 00000000000..ddc4a98d701
 --- /dev/null
 +++ b/frameworks/native/services/gammapad/BrowserMode.h
-@@ -0,0 +1,119 @@
+@@ -0,0 +1,120 @@
 +#pragma once
 +
 +#include "VirtualKeyboard.h"
@@ -21480,6 +21569,7 @@ index 00000000000..44fbd217c52
 +    bool mStartHeld = false;
 +    bool mChord = false;
 +    bool mModeHeld = false;   // the Anbernic button: the buttons pressed with it are its hotkeys
++    bool mLtBlock = false, mRtBlock = false;   // a trigger held through an Anbernic hotkey, until let go
 +
 +    int mLX = 0, mLY = 0, mRX = 0, mRY = 0;
 +    int mHatX = 0, mHatY = 0;
