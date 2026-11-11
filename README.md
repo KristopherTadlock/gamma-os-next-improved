@@ -563,6 +563,9 @@ The tools it uses:
   only when the audio setup actually changes. It re-applied the saved value at
   every boot and restarted audio just after it started; init holds a restart
   back 5 s, and system_server waited about 2 s for it.
+- Nano sets up the USB mode (MTP and the rest) once boot has completed. With a
+  cable in at boot it started its helper, a Java process, twice while the
+  system was still starting, and both attempts failed.
 
 ### External monitors
 

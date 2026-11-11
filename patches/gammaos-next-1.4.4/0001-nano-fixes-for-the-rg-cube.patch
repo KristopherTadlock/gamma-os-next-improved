@@ -2054,7 +2054,7 @@ index dcd7bbaf475..c9e60e71e4d 100644
          char mode[PROPERTY_VALUE_MAX] = {};
          property_get("persist.gammaos.performance_mode", mode, "stock");
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenu.h b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
-index 88e7cae6699..376ec72b572 100644
+index 88e7cae6699..d4692c71d2b 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 @@ -61,6 +61,7 @@ static inline void nanoThreadNormalPriority() {
@@ -2904,7 +2904,7 @@ index 88e7cae6699..376ec72b572 100644
      // Per-game title override (Rename / Edit Title). A user-typed name that overrides
      // the basename-minus-extension display name everywhere (columns / recents / search /
      // Info) AND becomes the scraper search query so a corrected title can match. Stored
-@@ -3392,38 +3864,41 @@ private:
+@@ -3392,38 +3864,42 @@ private:
      void openHelpPage();                    // Settings > User Guide: scrollable, themed help page
      void scrapeOneSystem(int sysIdx);      // Game Systems editor action
      // One ROM of work, fully snapshotted so the worker never touches mXmbSystems.
@@ -2966,6 +2966,7 @@ index 88e7cae6699..376ec72b572 100644
 +    std::atomic<int64_t> mUsbLastApplyMs{0};  // last apply attempt, 0 = apply at the next tick
 +    std::atomic<int>  mUsbPlugGen{0};         // bumps on every plug change
 +    bool mUsbSeen = false;                 // the first tick has read the cable state
++    bool mUsbBootDone = false;             // sys.boot_completed seen: the USB helper can run
 +    int64_t mUsbLastPollMs = 0, mUsbLastWatchMs = 0;   // wall-clock pacing of usbModeTick
      int  mMtpMissCount = 0;                // consecutive watchdog checks with no host process
 -    std::mutex mMtpMutex;
@@ -2973,7 +2974,7 @@ index 88e7cae6699..376ec72b572 100644
      // scrape worker state
      std::mutex mScrapeMutex;
      bool mScrapeRunning = false;           // worker alive
-@@ -3432,9 +3907,26 @@ private:
+@@ -3432,9 +3908,26 @@ private:
      bool mScrapeDoneFlag = false;          // worker finished -> show summary
      int  mScrapeDone = 0, mScrapeTotal = 0, mScrapeHits = 0, mScrapeFail = 0;
      std::string mScrapeStatus;             // "System / Game" current line (under mutex)
@@ -3001,7 +3002,7 @@ index 88e7cae6699..376ec72b572 100644
      // Where scraped covers/fanart + index.json live. Default is internal storage; the Boxart
      // Folder setting (persist.gammaos.scraper.dir) moves it to any browsable folder, typically the
      // SD card. names.json (title overrides) always stays in the default internal dir.
-@@ -3445,10 +3937,14 @@ private:
+@@ -3445,10 +3938,14 @@ private:
      int64_t mScrapeDirPollMs = 0;          // availability probe throttle (once a second, uptime)
      std::string mScrapeMoveSrc, mScrapeMoveDst;   // relocation in flight: old/new folder ("" = none)
      bool mScrapeMoveMode = false;          // the progress modal fronts a relocation (wording), until the next scrape
@@ -3016,7 +3017,7 @@ index 88e7cae6699..376ec72b572 100644
      void scrapeMoveThreadFunc(std::vector<std::pair<std::string, ScrapeEntry>> entries,
                                std::string src, std::string dst);
      void gsOpenClearArtConfirm();          // Game Systems editor: Clear Boxart confirm (theme key 49)
-@@ -3457,8 +3953,11 @@ private:
+@@ -3457,8 +3954,11 @@ private:
      // cartridge icon, freed when leaving the Game category and on sleep/occlusion.
      // ar = width/height. pixel = a PICO-8 cart label: 128x128 pixel art uploaded NEAREST, drawn at an
      // integer multiple of its size (cartPixelSize) so every cart pixel stays square.
@@ -3029,7 +3030,7 @@ index 88e7cae6699..376ec72b572 100644
      bool mScrapeBoxartOn = false;        // per-frame cache of scraperBoxartEnabled()
      bool mNdsTileIcon = false;           // per-frame cache of persist.gammaos.nano.nds.tileicon (DS Icons On Tiles)
      // Data-loss guards: a loader sets its flag true when the on-disk file EXISTS but could not be
-@@ -4915,6 +5414,9 @@ private:
+@@ -4915,6 +5415,9 @@ private:
      // it red) and beveled into a normal map for the XMB glass relight. Lazily built + cached.
      GLuint mHeartIconTex = 0, mHeartNmapTex = 0;
      void   ensureHeartIcon();               // build mHeartIconTex + mHeartNmapTex once
@@ -3039,7 +3040,7 @@ index 88e7cae6699..376ec72b572 100644
      GLuint gpGlassNmap(bool round, float wpx, float hpx);    // cached bevel nmap for a gamepad-tester button shape
      // Resolve a system iconRef (builtin:/retroarch:/core:/file:) to a (colour
      // tex, glass bevel nmap) pair, cached by ref string. See NanoMenuPS3Icons.cpp.
-@@ -4935,11 +5437,14 @@ private:
+@@ -4935,11 +5438,14 @@ private:
          std::vector<std::string> activePaths;
          std::string activePath;
          bool valid;              // true if scan found at least one path
@@ -3054,7 +3055,7 @@ index 88e7cae6699..376ec72b572 100644
      void bgScanThreadFunc();                  // the thread entry point
  
      // Settings column. Pinned as the leftmost XMB column at sentinel index -2.
-@@ -5086,6 +5591,7 @@ private:
+@@ -5086,6 +5592,7 @@ private:
      std::string mBtWizInPasskey;              // inbound passkey to display for confirmation
      std::atomic<bool> mBtWizRadioOn{true};    // cached real radio state (dumpsys enabled:)
      std::atomic<bool> mBtWizToggling{false};  // a radio enable/disable is settling
@@ -3062,7 +3063,7 @@ index 88e7cae6699..376ec72b572 100644
      float mBtWizManageRefreshT = -999.0f;     // last live-refresh time while sitting on Manage
      void btWizToggleRadioAsync(bool on);      // enable/disable the radio + settle + refresh
  
-@@ -5176,6 +5682,7 @@ private:
+@@ -5176,6 +5683,7 @@ private:
      bool    mCursorVisible = false;             // shown while recently moved/clicked
      int64_t mLastPointerMs = 0;                 // last pointer activity (auto-hide timer)
      bool    mTouchFromPointer = false;          // current touch frame is a mouse click, not a finger
@@ -3070,7 +3071,7 @@ index 88e7cae6699..376ec72b572 100644
      bool    mKbdShiftHeld = false;              // physical-keyboard shift state (for OSK typing)
      void    drawPointerCursor();                // draw the mouse cursor overlay (NanoMenuRender.cpp)
      int     kbdCodeToCp(int code, bool shift);  // USB-keyboard keycode -> printable codepoint (0 = none)
-@@ -5400,6 +5907,33 @@ private:
+@@ -5400,6 +5908,33 @@ private:
                                    // globe on black until ready so the one-time texture
                                    // load spike isn't charged against the 360ms fade
      int mTzSelOnOpen = 0;         // mTzSelected when the globe opened (restore on cancel)
@@ -5700,7 +5701,7 @@ index 38089f122b6..9b9b9c55bf0 100644
          if (!lines[i].empty()) drawText(lines[i].c_str(), bodyLeft, ly, bodyFs, 0.90f, 0.90f, 0.92f, ap);
          ly += lineH;
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuMtp.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuMtp.cpp
-index 8c9eff8851b..8cc02e6e293 100644
+index 8c9eff8851b..978540c3546 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuMtp.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuMtp.cpp
 @@ -1,21 +1,28 @@
@@ -5760,7 +5761,7 @@ index 8c9eff8851b..8cc02e6e293 100644
          std::string p = std::string("/config/usb_gadget/g1/configs/b.1/") + e->d_name;
          char tgt[256]; ssize_t n = readlink(p.c_str(), tgt, sizeof(tgt) - 1);
          if (n > 0) { tgt[n] = 0; if (strstr(tgt, "ffs.mtp")) { linked = true; break; } }
-@@ -108,183 +116,132 @@ void mtpSetMediaModuleAdj(int pid, int adj) {
+@@ -108,183 +116,140 @@ void mtpSetMediaModuleAdj(int pid, int adj) {
      writeSmallFile(p, v);
  }
  
@@ -5920,6 +5921,14 @@ index 8c9eff8851b..8cc02e6e293 100644
 -    mMtpPollFrames++;   // 4 Hz counter, drives the spinner dots
 +    if (now - mUsbLastPollMs < 250) return;
 +    mUsbLastPollMs = now;
++    // The helper is a Java process and the USB service is not up before boot completes: started
++    // earlier (a charging cable in at boot) it only failed and retried, taking CPU from the boot.
++    if (!mUsbBootDone) {
++        char bc[PROPERTY_VALUE_MAX] = {};
++        property_get("sys.boot_completed", bc, "0");
++        if (bc[0] != '1') return;
++        mUsbBootDone = true;
++    }
      const bool on = mtpUsbOnline();
 -    if (on != mMtpUsbConnected) {
 -        mMtpUsbConnected = on;
