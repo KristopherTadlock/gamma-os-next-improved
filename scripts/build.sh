@@ -134,6 +134,10 @@ for _ in $(seq 120); do
 done
 [[ -z "$(sudo losetup -j "$system")" ]] || { echo "the system image is still in use after unmounting" >&2; exit 1; }
 e2fsck -fn "$system"
+# Deleted and replaced files leave their old contents in the free blocks, which
+# the PAC carries and 7-Zip compresses (about 500 MB of the download). Discard
+# punches them out of the image file, so they read back as zeros.
+e2fsck -fp -E discard "$system" >/dev/null
 python3 -I "$ROOT/scripts/check_image_files.py" "$system" "$written"
 
 pac="$OUT/RG_Cube_Thimsy_OS_v$VERSION$VARIANT.pac"
