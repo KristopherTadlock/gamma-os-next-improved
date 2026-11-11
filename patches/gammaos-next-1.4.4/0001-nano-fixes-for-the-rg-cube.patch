@@ -10984,7 +10984,7 @@ index b0e278f3bc0..f082f8b0bb0 100644
          }
          // Restart path (returning from game): readyToRun() saw boot
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp
-index bc837715d76..03499189947 100644
+index bc837715d76..8ddc1219b20 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuScraper.cpp
 @@ -21,12 +21,14 @@
@@ -11771,7 +11771,7 @@ index bc837715d76..03499189947 100644
      if (done) {
          // Worker finished: keep the summary on screen, the modal closes on B/enter.
          mDisplayDirty = true;
-@@ -1354,10 +1495,422 @@ void NanoMenu::scraperDrainResults() {
+@@ -1354,10 +1495,429 @@ void NanoMenu::scraperDrainResults() {
  }
  
  void NanoMenu::scraperCancel() {
@@ -11920,19 +11920,26 @@ index bc837715d76..03499189947 100644
 +    }
 +    // The service writes its end with the lock held: until then it takes this request too.
 +    if (have && !p.running) return QueueAdd::Ended;
-+    const int n = (int)jobs.size();
++    const int asked = (int)jobs.size();
 +    nanoscraper::Queue q;
 +    q.run = mBgScrapeRun;
 +    q.cacheDir = mScrapeCacheDir;
 +    q.wantBox = wantBox;
 +    q.wantFan = wantFan;
 +    q.jobs = std::move(jobs);
-+    char msg[160];
-+    if (nanoscraper::addRequest(q))
++    const bool ok = nanoscraper::addRequest(q);   // leaves out the games the scrape already has
++    const int n = (int)q.jobs.size();
++    char msg[200];
++    if (!ok)
++        snprintf(msg, sizeof(msg), "%s", trDyn("The scrape could not be added to the queue."));
++    else if (n == 0)
++        snprintf(msg, sizeof(msg), "%s", trDyn(asked == 1 ? "That game is already in the scrape queue"
++                                                         : "Those games are already in the scrape queue"));
++    else if (n < asked)
++        snprintf(msg, sizeof(msg), trDyn("Added %d games to the scrape queue (%d were already in it)"), n, asked - n);
++    else
 +        snprintf(msg, sizeof(msg), n == 1 ? trDyn("Added %d game to the scrape queue")
 +                                          : trDyn("Added %d games to the scrape queue"), n);
-+    else
-+        snprintf(msg, sizeof(msg), "%s", trDyn("The scrape could not be added to the queue."));
 +    photoShowBanner(msg);
 +    ALOGI("scraper: queued %d games on run %s", n, mBgScrapeRun.c_str());
 +    return QueueAdd::Done;
@@ -12194,7 +12201,7 @@ index bc837715d76..03499189947 100644
  // ---------------------------------------------------------------------------
  // Progress / result modal. Centered panel over a dim backdrop. While running it
  // shows the live count + current game; when done a summary. Dismissed by the
-@@ -1368,11 +1921,12 @@ void NanoMenu::renderScrapeProgress() {
+@@ -1368,11 +1928,12 @@ void NanoMenu::renderScrapeProgress() {
      const float W = (float)mWidth, H = (float)mHeight;
      float sf = fminf(W / 1080.0f, H / 720.0f); if (sf < 0.5f) sf = 0.5f;
  
@@ -12209,7 +12216,7 @@ index bc837715d76..03499189947 100644
      }
  
      // Theme the modal chrome to match the active home instead of always showing the XMB-style
-@@ -1422,17 +1976,28 @@ void NanoMenu::renderScrapeProgress() {
+@@ -1422,17 +1983,28 @@ void NanoMenu::renderScrapeProgress() {
      };
  
      // The same modal fronts a Boxart Folder relocation (files moved instead of games scraped).
@@ -12240,7 +12247,7 @@ index bc837715d76..03499189947 100644
          } else {
              snprintf(line, sizeof(line),
                       hits == 1 ? trDyn("Done. %d game with art, %d not found.")
-@@ -1440,9 +2005,12 @@ void NanoMenu::renderScrapeProgress() {
+@@ -1440,9 +2012,12 @@ void NanoMenu::renderScrapeProgress() {
                       hits, fail);
              centered(line, py + ph * 0.50f, 1.15f * sf, t1R, t1G, t1B, 1.0f);
          }
@@ -12254,7 +12261,7 @@ index bc837715d76..03499189947 100644
          centered(line, py + ph * 0.42f, 1.3f * sf, t1R, t1G, t1B, 1.0f);
          // progress bar (accent fill on a dim track), in the theme accent
          const float barW = pw * 0.72f, barH = 6.0f * sf;
-@@ -1450,14 +2018,27 @@ void NanoMenu::renderScrapeProgress() {
+@@ -1450,14 +2025,27 @@ void NanoMenu::renderScrapeProgress() {
          drawRoundedRect(barX, barY, barW, barH, barH * 0.5f, t2R, t2G, t2B, 0.28f);
          float frac = (total > 0) ? (float)done / (float)total : 0.0f;
          if (frac > 0.0f) drawRoundedRect(barX, barY, barW * frac, barH, barH * 0.5f, accR, accG, accB, 1.0f);
@@ -14578,10 +14585,10 @@ index d33246ab732..0463ffdafc4 100644
  };
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoScrapeQueue.cpp b/frameworks/base/cmds/gammaos-nano/NanoScrapeQueue.cpp
 new file mode 100644
-index 00000000000..31bc2a3ec66
+index 00000000000..009abd8f70d
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/NanoScrapeQueue.cpp
-@@ -0,0 +1,481 @@
+@@ -0,0 +1,515 @@
 +/*
 + * Copyright (C) 2026 GammaOS
 + *
@@ -14608,6 +14615,7 @@ index 00000000000..31bc2a3ec66
 +#include <cstdlib>
 +#include <cstring>
 +#include <ctime>
++#include <set>
 +#include <dirent.h>
 +#include <fcntl.h>
 +#include <strings.h>
@@ -14715,14 +14723,47 @@ index 00000000000..31bc2a3ec66
 +static std::string serializeQueue(const Queue& q);
 +static bool parseQueue(const std::string& text, Queue* q);
 +
-+bool addRequest(const Queue& q) {
++// "<run>.roms": every game a run was given, one per line ("<rom>\x1f<search name>"; no account).
++static std::string ledgerPath(const std::string& run) {
++    return std::string(kQueueDir) + "/" + run + ".roms";
++}
++
++bool addRequest(Queue& q) {
++    std::set<std::string> have;
++    {
++        std::string text;
++        if (readFile(ledgerPath(q.run).c_str(), &text, 64 * 1024 * 1024)) {
++            for (size_t p = 0; p < text.size();) {
++                size_t nl = text.find('\n', p);
++                if (nl == std::string::npos) nl = text.size();
++                if (nl > p) have.insert(text.substr(p, nl - p));
++                p = nl + 1;
++            }
++        }
++    }
++    std::string added;
++    std::vector<QueueJob> fresh;
++    for (auto& j : q.jobs) {
++        const std::string key = j.romPath + '\x1f' + j.queryName;
++        if (!have.insert(key).second) continue;
++        added += key + "\n";
++        fresh.push_back(std::move(j));
++    }
++    q.jobs = std::move(fresh);
++    if (q.jobs.empty()) return true;
 +    struct timespec ts;
 +    clock_gettime(CLOCK_BOOTTIME, &ts);
 +    char name[96];
 +    snprintf(name, sizeof(name), "%020lld-%s-%zu.json",
 +             (long long)ts.tv_sec * 1000000000LL + ts.tv_nsec, q.run.c_str(), q.jobs.size());
 +    const std::string path = std::string(kQueueDir) + "/" + name;
-+    return writeFileAtomic(path.c_str(), serializeQueue(q));
++    if (!writeFileAtomic(path.c_str(), serializeQueue(q))) return false;
++    const int fd = open(ledgerPath(q.run).c_str(), O_WRONLY | O_CREAT | O_APPEND | O_CLOEXEC, 0600);
++    if (fd >= 0) {
++        if (write(fd, added.data(), added.size()) != (ssize_t)added.size()) ALOGW("queue: ledger write failed");
++        close(fd);
++    }
++    return true;
 +}
 +
 +std::string claimRequest(const std::string& run) {
@@ -14750,7 +14791,7 @@ index 00000000000..31bc2a3ec66
 +        while (struct dirent* e = readdir(d)) {
 +            if (e->d_name[0] == '.') continue;
 +            RequestName r;
-+            const bool ofRun = parseRequestName(e->d_name, &r) && r.run == run;
++            const bool ofRun = (parseRequestName(e->d_name, &r) && r.run == run) || e->d_name == run + ".roms";
 +            if (ofRun != keep) unlinkat(dirfd(d), e->d_name, 0);
 +        }
 +        closedir(d);
@@ -15065,10 +15106,10 @@ index 00000000000..31bc2a3ec66
 +} // namespace android
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoScrapeQueue.h b/frameworks/base/cmds/gammaos-nano/NanoScrapeQueue.h
 new file mode 100644
-index 00000000000..8c8901f41c6
+index 00000000000..f423fb488ac
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/NanoScrapeQueue.h
-@@ -0,0 +1,146 @@
+@@ -0,0 +1,148 @@
 +/*
 + * Copyright (C) 2026 GammaOS
 + *
@@ -15153,7 +15194,9 @@ index 00000000000..8c8901f41c6
 +
 +// With the lock held: add a request (to run q.run), claim the run's oldest (set aside so nothing
 +// else takes it; "" when none is left), drop the run's, drop every other run's.
-+bool addRequest(const Queue& q);
++// addRequest leaves out the games the run already has (waiting, being scraped or done; a game
++// searched under another name counts as another), so q.jobs is what was added: none is no request.
++bool addRequest(Queue& q);
 +std::string claimRequest(const std::string& run);
 +void clearRequests(const std::string& run);
 +void clearOtherRequests(const std::string& keep);
