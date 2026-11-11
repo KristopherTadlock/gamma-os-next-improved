@@ -383,16 +383,27 @@ It also changes Nano:
   every emulator GammaOS ships, and the saves and states kept with them, to
   `emulator_config/<emulator>` on the card and points each emulator there:
   RetroArch, PPSSPP, Flycast, DraStic (its whole system folder), M64Plus FZ (its
-  game data, which it copies in and out around each game) and the built-in DS
-  emulator. They reach the card by plain folder paths, which GammaOS's
-  MediaProvider allows every app. GammaOS keeps RetroArch's saves and states
-  next to the ROMs, so those stay where they are. Emulators you install that
-  only change their folder themselves (Dolphin, Azahar, WatermelonDS, ARMSX2,
-  hakuX, Vita3K, ScummVM) keep theirs.
+  game data, which it copies in and out around each game), the built-in DS
+  emulator, ARMSX2 (its data folder, without the BIOS and caches), ScummVM (its
+  saves), Vita3K (its whole memory card and system, installed games included)
+  and Azahar (its folder, without caches). They reach the card by plain folder
+  paths, which GammaOS's MediaProvider allows every app. Azahar only takes a
+  folder picked in Android's folder picker, so Nano gives it the card's folder
+  that way, through system_server. Dolphin (`Config`, `GameSettings`,
+  `StateSaves`, `GC`, `Wii`) and hakuX (its `native` folder: hard disk, save
+  states, caches) have no setting for these folders, so each moved folder is
+  replaced by a link to the card; apps reach `Android/data` and their own
+  folder directly here, not through FUSE, so they follow it. GammaOS keeps
+  RetroArch's and WatermelonDS's saves next to the ROMs, so those stay where
+  they are. An emulator that keeps its files on the card needs the card in to
+  start.
 - Both moves ask first, show their progress and never overwrite what is already
   on the card. Internal copies of files the card already had go to
   `Internal storage/Nano Backup`, and you choose: keep them there as a backup,
   delete them, or overwrite the card's copies with them.
+- **Storage access:** every emulator GammaOS ships is granted its storage
+  permissions at boot and when it is installed, all-files access included for
+  the ones that ask for it (Azahar, ARMSX2, Vita3K), so none of them prompts.
 - **Background scraping:** a box-art scrape runs in its own small service
   (`gammaos-nano-scrape`), so it carries on while you browse, start a game and
   come back, from either Nano home. Circle closes the progress window and the

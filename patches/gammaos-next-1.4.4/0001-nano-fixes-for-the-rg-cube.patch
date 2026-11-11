@@ -2054,7 +2054,7 @@ index dcd7bbaf475..c9e60e71e4d 100644
          char mode[PROPERTY_VALUE_MAX] = {};
          property_get("persist.gammaos.performance_mode", mode, "stock");
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenu.h b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
-index 88e7cae6699..d4692c71d2b 100644
+index 88e7cae6699..63b5242d5cb 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 @@ -61,6 +61,7 @@ static inline void nanoThreadNormalPriority() {
@@ -2718,7 +2718,7 @@ index 88e7cae6699..d4692c71d2b 100644
  
      // ---- Add / remove custom systems ----
      void gsAddSystem();                        // "Add New System" -> emulator picker in add mode
-@@ -3073,6 +3407,67 @@ private:
+@@ -3073,6 +3407,68 @@ private:
      std::vector<std::string> mountedShareNames() const;
      void gsFolderSelect(const std::string& path); // add a folder as a rawpath scan source
      void drasticDataFolderSelect(const std::string& path); // #90: set persist.gammaos.drastic.data_dir (folder-picker target 5)
@@ -2753,6 +2753,7 @@ index 88e7cae6699..d4692c71d2b 100644
 +        std::string mergedInto;              // where merged's data waits (same relative paths): an original goes once that has
 +        std::vector<std::string> skipDirs;   // folders under src left out (another pair moves them)
 +        int group = -1;
++        std::string linkTo;                  // a move: a link to here replaces src (its program has no setting for it)
 +    };
 +    struct FileConflict { std::string backup, dst; bool sameJob = false; };   // sameJob: the card's copy came from this move
 +    std::vector<FileConflict> mFileJobConflicts;           // the last move's (render thread once it ended)
@@ -2769,7 +2770,7 @@ index 88e7cae6699..d4692c71d2b 100644
 +    void emuMoveOffer();
 +    void emuMoveStart();
 +    void sdMoveFinish(int kind, bool cancelled, int failed);
-+    void sdMoveConflictDialog(int kind, const std::string& problem);   // a move whose backup or deletion stopped part way (under mScrapeMutex)
++    void sdMoveConflictDialog(int kind, const std::string& problem);   // the clashes of a move, and what to do with them
 +    void sdMoveConflictChoice(int sel);
 +    void openConfirmDialog(int key, const char* title, const std::string& body, const char* yes);
 +    void retroarchMovePairs(const std::string& to, const std::string& backup, int group, std::vector<FileCopyPair>* pairs);
@@ -2786,7 +2787,7 @@ index 88e7cae6699..d4692c71d2b 100644
      void drasticCheatsFolderSelect(const std::string& path); // persist.gammaos.drastic.cheats_dir (folder-picker target 8)
      void drasticPerfRestoreCheck();            // put back the global performance mode a per-game one parked
      void mouseModeHomeGuard();                 // gammapad mouse mode off whenever the home is the foreground
-@@ -3081,6 +3476,7 @@ private:
+@@ -3081,6 +3477,7 @@ private:
      void gsRemoveScanSource(int srcIdx);       // drop a scan source from the edited system
      void gsDisableDefaultFolder(const std::string& alias);  // remove a default scan folder (alias) from the edited system
      void gsEnableDefaultFolder(const std::string& alias);   // restore a previously-removed default scan folder
@@ -2794,7 +2795,7 @@ index 88e7cae6699..d4692c71d2b 100644
      void gsAfterScanFolderChange(XmbSystem& sys);           // re-scan + persist + rebuild after a scan-folder edit
      void gsOpenRemoveScanSourceConfirm(int srcIdx);  // Cancel / Remove Folder confirm for a scan source
  
-@@ -3251,7 +3647,7 @@ private:
+@@ -3251,7 +3648,7 @@ private:
          std::string m3uPath;              // non-empty: derived from this .m3u (regenerated on scan);
                                            // empty: user-created (preserved across scans)
      };
@@ -2803,7 +2804,7 @@ index 88e7cae6699..d4692c71d2b 100644
      std::vector<std::string> mMusicFolders;
      std::vector<MusicTrack>  mMusicTracks;
      std::vector<MusicPlaylist> mMusicPlaylists;
-@@ -3303,6 +3699,15 @@ private:
+@@ -3303,6 +3700,15 @@ private:
          // altemulator string enables the altemulator badge when non-empty.
          bool favorite = false, completed = false, kidgame = false, broken = false;
          std::string controller, altemulator;
@@ -2819,7 +2820,7 @@ index 88e7cae6699..d4692c71d2b 100644
      };
      std::unordered_map<std::string, ScrapeEntry> mScrapeIndex;
      bool mScrapeIndexLoaded = false;
-@@ -3310,6 +3715,7 @@ private:
+@@ -3310,6 +3716,7 @@ private:
      void scraperEnsureLoaded();            // lazy-load index.json
      void scraperPollReload();              // per-frame: live-reload index/names on an external token bump
      void loadScrapeIndex();
@@ -2827,7 +2828,7 @@ index 88e7cae6699..d4692c71d2b 100644
      void saveScrapeIndex();
      const ScrapeEntry* scrapeEntryFor(const std::string& romPath);
      const ScrapeEntry* scrapeIndexLookup(const std::string& romPath);   // the manifest entry alone (no cart art)
-@@ -3332,9 +3738,75 @@ private:
+@@ -3332,9 +3739,75 @@ private:
      // scrape store which can differ (e.g. a timezone-shifted release date). Loaded lazily per system
      // and merged with the scrape store's cover paths; absent gamelist.xml -> falls back to the store.
      std::unordered_map<std::string, ScrapeEntry> mEsdeGamelistMeta;  // full romPath -> gamelist metadata
@@ -2904,7 +2905,7 @@ index 88e7cae6699..d4692c71d2b 100644
      // Per-game title override (Rename / Edit Title). A user-typed name that overrides
      // the basename-minus-extension display name everywhere (columns / recents / search /
      // Info) AND becomes the scraper search query so a corrected title can match. Stored
-@@ -3392,38 +3864,42 @@ private:
+@@ -3392,38 +3865,42 @@ private:
      void openHelpPage();                    // Settings > User Guide: scrollable, themed help page
      void scrapeOneSystem(int sysIdx);      // Game Systems editor action
      // One ROM of work, fully snapshotted so the worker never touches mXmbSystems.
@@ -2974,7 +2975,7 @@ index 88e7cae6699..d4692c71d2b 100644
      // scrape worker state
      std::mutex mScrapeMutex;
      bool mScrapeRunning = false;           // worker alive
-@@ -3432,9 +3908,26 @@ private:
+@@ -3432,9 +3909,26 @@ private:
      bool mScrapeDoneFlag = false;          // worker finished -> show summary
      int  mScrapeDone = 0, mScrapeTotal = 0, mScrapeHits = 0, mScrapeFail = 0;
      std::string mScrapeStatus;             // "System / Game" current line (under mutex)
@@ -3002,7 +3003,7 @@ index 88e7cae6699..d4692c71d2b 100644
      // Where scraped covers/fanart + index.json live. Default is internal storage; the Boxart
      // Folder setting (persist.gammaos.scraper.dir) moves it to any browsable folder, typically the
      // SD card. names.json (title overrides) always stays in the default internal dir.
-@@ -3445,10 +3938,14 @@ private:
+@@ -3445,10 +3939,14 @@ private:
      int64_t mScrapeDirPollMs = 0;          // availability probe throttle (once a second, uptime)
      std::string mScrapeMoveSrc, mScrapeMoveDst;   // relocation in flight: old/new folder ("" = none)
      bool mScrapeMoveMode = false;          // the progress modal fronts a relocation (wording), until the next scrape
@@ -3017,7 +3018,7 @@ index 88e7cae6699..d4692c71d2b 100644
      void scrapeMoveThreadFunc(std::vector<std::pair<std::string, ScrapeEntry>> entries,
                                std::string src, std::string dst);
      void gsOpenClearArtConfirm();          // Game Systems editor: Clear Boxart confirm (theme key 49)
-@@ -3457,8 +3954,11 @@ private:
+@@ -3457,8 +3955,11 @@ private:
      // cartridge icon, freed when leaving the Game category and on sleep/occlusion.
      // ar = width/height. pixel = a PICO-8 cart label: 128x128 pixel art uploaded NEAREST, drawn at an
      // integer multiple of its size (cartPixelSize) so every cart pixel stays square.
@@ -3030,7 +3031,7 @@ index 88e7cae6699..d4692c71d2b 100644
      bool mScrapeBoxartOn = false;        // per-frame cache of scraperBoxartEnabled()
      bool mNdsTileIcon = false;           // per-frame cache of persist.gammaos.nano.nds.tileicon (DS Icons On Tiles)
      // Data-loss guards: a loader sets its flag true when the on-disk file EXISTS but could not be
-@@ -4915,6 +5415,9 @@ private:
+@@ -4915,6 +5416,9 @@ private:
      // it red) and beveled into a normal map for the XMB glass relight. Lazily built + cached.
      GLuint mHeartIconTex = 0, mHeartNmapTex = 0;
      void   ensureHeartIcon();               // build mHeartIconTex + mHeartNmapTex once
@@ -3040,7 +3041,7 @@ index 88e7cae6699..d4692c71d2b 100644
      GLuint gpGlassNmap(bool round, float wpx, float hpx);    // cached bevel nmap for a gamepad-tester button shape
      // Resolve a system iconRef (builtin:/retroarch:/core:/file:) to a (colour
      // tex, glass bevel nmap) pair, cached by ref string. See NanoMenuPS3Icons.cpp.
-@@ -4935,11 +5438,14 @@ private:
+@@ -4935,11 +5439,14 @@ private:
          std::vector<std::string> activePaths;
          std::string activePath;
          bool valid;              // true if scan found at least one path
@@ -3055,7 +3056,7 @@ index 88e7cae6699..d4692c71d2b 100644
      void bgScanThreadFunc();                  // the thread entry point
  
      // Settings column. Pinned as the leftmost XMB column at sentinel index -2.
-@@ -5086,6 +5592,7 @@ private:
+@@ -5086,6 +5593,7 @@ private:
      std::string mBtWizInPasskey;              // inbound passkey to display for confirmation
      std::atomic<bool> mBtWizRadioOn{true};    // cached real radio state (dumpsys enabled:)
      std::atomic<bool> mBtWizToggling{false};  // a radio enable/disable is settling
@@ -3063,7 +3064,7 @@ index 88e7cae6699..d4692c71d2b 100644
      float mBtWizManageRefreshT = -999.0f;     // last live-refresh time while sitting on Manage
      void btWizToggleRadioAsync(bool on);      // enable/disable the radio + settle + refresh
  
-@@ -5176,6 +5683,7 @@ private:
+@@ -5176,6 +5684,7 @@ private:
      bool    mCursorVisible = false;             // shown while recently moved/clicked
      int64_t mLastPointerMs = 0;                 // last pointer activity (auto-hide timer)
      bool    mTouchFromPointer = false;          // current touch frame is a mouse click, not a finger
@@ -3071,7 +3072,7 @@ index 88e7cae6699..d4692c71d2b 100644
      bool    mKbdShiftHeld = false;              // physical-keyboard shift state (for OSK typing)
      void    drawPointerCursor();                // draw the mouse cursor overlay (NanoMenuRender.cpp)
      int     kbdCodeToCp(int code, bool shift);  // USB-keyboard keycode -> printable codepoint (0 = none)
-@@ -5400,6 +5908,33 @@ private:
+@@ -5400,6 +5909,33 @@ private:
                                    // globe on black until ready so the one-time texture
                                    // load spike isn't charged against the 360ms fade
      int mTzSelOnOpen = 0;         // mTzSelected when the globe opened (restore on cancel)
@@ -6624,7 +6625,7 @@ index 95933cb3497..f832d7eea67 100644
              drawText(pr, cxp - tw * 0.5f, Y(182.0f), fs, ink3, ink3, ink3, pulse);
          }
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Data.h b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Data.h
-index 166225b4864..f3ff63c5b01 100644
+index 166225b4864..8eb93018f4a 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Data.h
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Data.h
 @@ -46,6 +46,18 @@ namespace android {
@@ -6662,7 +6663,7 @@ index 166225b4864..f3ff63c5b01 100644
    {"DraStic Data Folder",62,"Where the DS core keeps your saves, save states and shader overrides. Default is drastic-nano on internal storage; pick any folder on internal storage, the SD card, removable media or a network share and DS games will read and write there. Existing files are not moved. Applies to the next game launch. Pick Use Default Folder to reset.","Default",1,nullptr,0},
    {"DraStic Cheats Folder",62,"Where you can add your own DS cheat databases (usrcheat.dat files). Every file in this folder is merged with the built-in cheats when a DS game starts, and the in-game Cheats page can show built-in and custom cheats separately. Default is the cheats folder inside the DraStic data folder. Pick Use Default Folder to reset.","Default",1,nullptr,0},
 +  {"Move ES-DE to microSD",62,"Moves your ES-DE folder and everything Nano keeps about your games (gamelists, collections, favourites, hidden games, titles, box art and other media) to the ES-DE folder on the microSD card, which then holds the only copy. A device running ES-DE can use the card as it is. Files already on the card are kept.",nullptr,1,nullptr,0},
-+  {"Move Emulator Settings to microSD",62,"Moves your emulators' settings, saves and save states to emulator_config on the microSD card and sets each emulator to use them there. Emulators that choose their own folder, such as Dolphin, ARMSX2 and hakuX, keep theirs. Files already on the card are kept.",nullptr,1,nullptr,0},
++  {"Move Emulator Settings to microSD",62,"Moves your emulators' settings, saves and save states to emulator_config on the microSD card and sets each emulator to use them there. Vita3K's installed games go with its saves, and WatermelonDS keeps its saves beside the games. Files already on the card are kept.",nullptr,1,nullptr,0},
    {"Boxart Scraper",25,"Downloads box art and background art for your games and replaces the game icons.",nullptr,0,PS3CH(kScraperSettingsCh)},
  };
  static const Ps3DataItem kVideoSettingsCh[] = {
@@ -7076,7 +7077,7 @@ index d1b72700c49..c4416073fcd 100644
 +
  } // namespace android
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Folder.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Folder.cpp
-index b3221c1d5d6..5f32789558a 100644
+index b3221c1d5d6..2e4883dc467 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Folder.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuPS3Folder.cpp
 @@ -25,6 +25,10 @@
@@ -7267,7 +7268,7 @@ index b3221c1d5d6..5f32789558a 100644
      saveSystemsConfig();
      // Pop the browser, refresh the scan-folders screen + the Game category.
      if (!mPs3Stack.empty() && mPs3Stack.back().screenKind == GS_FOLDERBROWSE) mPs3Stack.pop_back();
-@@ -626,6 +663,658 @@ void NanoMenu::drasticCheatsFolderSelect(const std::string& path) {
+@@ -626,6 +663,709 @@ void NanoMenu::drasticCheatsFolderSelect(const std::string& path) {
      drasticFolderSelect("persist.gammaos.drastic.cheats_dir", "DraStic cheats folder", path);
  }
  
@@ -7453,6 +7454,38 @@ index b3221c1d5d6..5f32789558a 100644
 +    return same;
 +}
 +
++// A move's original folder set aside as <folder>.nanomove (where the job then empties it) and a link
++// to its copy in its place, owned like its parent; *path becomes the folder set aside.
++static bool nanoLinkFolder(std::string* path, const std::string& linkTo) {
++    const std::string src = *path;
++    std::string aside = src + ".nanomove";
++    struct stat st, pst;
++    for (int n = 2; lstat(aside.c_str(), &st) == 0; n++) aside = src + ".nanomove." + std::to_string(n);   // an earlier one's
++    const bool had = lstat(src.c_str(), &st) == 0;
++    if ((had && !S_ISDIR(st.st_mode)) || stat(src.substr(0, src.find_last_of('/')).c_str(), &pst) != 0) {
++        ALOGW("ps3menu: move: %s is not a folder to link", src.c_str());
++        return false;
++    }
++    nanoMkdirs(linkTo);
++    if (stat(linkTo.c_str(), &st) != 0 || !S_ISDIR(st.st_mode)) {   // the card went
++        ALOGW("ps3menu: move: %s is not there to link to", linkTo.c_str());
++        return false;
++    }
++    if (had && rename(src.c_str(), aside.c_str()) != 0) {
++        ALOGW("ps3menu: move: %s could not be set aside: %s", src.c_str(), strerror(errno));
++        return false;
++    }
++    if (symlink(linkTo.c_str(), src.c_str()) != 0) {
++        ALOGW("ps3menu: move: link %s -> %s failed: %s", src.c_str(), linkTo.c_str(), strerror(errno));
++        if (had) rename(aside.c_str(), src.c_str());
++        return false;
++    }
++    if (lchown(src.c_str(), pst.st_uid, pst.st_gid) != 0) ALOGW("ps3menu: move: chown %s failed", src.c_str());
++    system(("restorecon '" + src + "' >/dev/null 2>&1").c_str());
++    if (had) *path = aside;
++    return true;
++}
++
 +void NanoMenu::fileCopyThreadFunc(std::vector<FileCopyPair> pairs) {
 +    // The programs whose files move are closed first (they write their settings when they close).
 +    std::vector<std::string> stopPkgs;
@@ -7590,7 +7623,25 @@ index b3221c1d5d6..5f32789558a 100644
 +        for (const auto& p : pairs) if (p.group >= 0) groups.insert(p.group);
 +        for (int g : groups) {
 +            { std::lock_guard<std::mutex> lk(mScrapeMutex); mScrapeStatus = trDyn("Updating settings..."); }
-+            if (!fileJobRelocate(g)) failedGroups.push_back(g);
++            if (!fileJobRelocate(g)) { failedGroups.push_back(g); continue; }
++            // A folder its program has no setting for: set aside (emptied below like any original) and
++            // replaced by a link to its copy. Any of the group's links failing puts them all back.
++            std::vector<std::pair<size_t, std::string>> linked;   // pair, its original's own path
++            bool ok = true;
++            for (size_t i = 0; i < pairs.size() && ok; i++) {
++                if (pairs[i].group != g || pairs[i].linkTo.empty()) continue;
++                const std::string src = pairs[i].src;
++                ok = nanoLinkFolder(&pairs[i].src, pairs[i].linkTo);
++                if (ok) linked.emplace_back(i, src);
++            }
++            if (!ok) {
++                for (const auto& l : linked) {
++                    unlink(l.second.c_str());
++                    if (pairs[l.first].src != l.second) rename(pairs[l.first].src.c_str(), l.second.c_str());
++                    pairs[l.first].src = l.second;
++                }
++                failedGroups.push_back(g);
++            }
 +        }
 +        // A group left where it was: what this job put on the card for it goes, or a later move
 +        // would keep it over newer originals.
@@ -7665,7 +7716,8 @@ index b3221c1d5d6..5f32789558a 100644
 +        for (const auto& pr : pairs) {
 +            struct stat st;
 +            if (pr.move && std::find(failedGroups.begin(), failedGroups.end(), pr.group) == failedGroups.end()
-+                && stat(pr.src.c_str(), &st) == 0 && S_ISDIR(st.st_mode))
++                && (pr.linkTo.empty() ? stat(pr.src.c_str(), &st) : lstat(pr.src.c_str(), &st)) == 0
++                && S_ISDIR(st.st_mode))   // a folder linked without one before is the link now: not into the card
 +                prune(pr.src);
 +        }
 +    }
@@ -12677,7 +12729,7 @@ index 6a4a89c92ff..b937449ab6b 100644
              Ps3Item it; it.kind = PS3_RADIO_STATION; it.label = r.label; it.payloadStr = r.payload;
              list.push_back(it);
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuSettings.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuSettings.cpp
-index f9a33380b54..de1c6c18109 100644
+index f9a33380b54..b588a017227 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuSettings.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuSettings.cpp
 @@ -65,8 +65,17 @@ std::mutex& netHelperMutex() {
@@ -12698,7 +12750,47 @@ index f9a33380b54..de1c6c18109 100644
      std::string result;
      result.reserve(4096);
      std::string full = cmdline;
-@@ -2030,6 +2039,7 @@ void NanoMenu::btWizRefreshBondedAsync() {
+@@ -102,6 +111,8 @@ std::string runCmd(const std::string& cmdline, int timeoutSecs = 3) {
+     return result;
+ }
+ 
++}  // namespace
++
+ // Is the resident NanoNetBridge live? (published at least one generation, and not disabled).
+ bool nanoNetBridgeUp() {
+     if (!property_get_bool("persist.gammaos.net_bridge", true)) return false;
+@@ -113,22 +124,23 @@ bool nanoNetBridgeUp() {
+ // Send a command to NanoNetBridge (system_server) via sys.gammaos.nano.net_cmd =
+ // "<seq>|<verb>|<arg>". The bridge polls the prop, dedups by strictly-increasing seq, and
+ // drives the live WifiManager/BluetoothAdapter; results come back through the published
+-// state/list files. Returns true if the bridge is live (command sent) so callers can fall
+-// back to the legacy cmd/gammaos-net path when it is not.
++// state/list files. Returns true if the bridge is live and the command was sent, so callers can
++// fall back to the legacy cmd/gammaos-net path when it is not.
+ bool nanoNetBridgeCmd(const char* verb, const std::string& arg) {
+     if (!nanoNetBridgeUp()) return false;
+     static std::atomic<long long> sLast{0};
+     long long ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+             std::chrono::steady_clock::now().time_since_epoch()).count();
+-    long long prev = sLast.load();
+-    long long seq = (ms > prev) ? ms : prev + 1;   // strictly increasing, survives ms collisions
+-    sLast.store(seq);
++    long long prev = sLast.load(), seq;
++    do seq = (ms > prev) ? ms : prev + 1;   // strictly increasing, survives ms collisions and threads
++    while (!sLast.compare_exchange_weak(prev, seq));
+     std::string v = std::to_string(seq) + "|" + verb;
+     if (!arg.empty()) { v += "|"; v += arg; }
+-    property_set("sys.gammaos.nano.net_cmd", v.c_str());
+-    return true;
++    return property_set("sys.gammaos.nano.net_cmd", v.c_str()) == 0;
+ }
+ 
++namespace {
++
+ // POSIX single-quote wrap with escape for embedded single quotes.
+ // Used for SSID / password values that may contain shell metacharacters.
+ std::string shellQuote(const std::string& s) {
+@@ -2030,6 +2042,7 @@ void NanoMenu::btWizRefreshBondedAsync() {
          std::string txt = on ? runCmd("gammaos-net bt list-bonded", 12) : std::string();
          auto devs = parseBondedDevices(txt);
          { std::lock_guard<std::mutex> lk(mBtWizMutex); mBtWizBonded.swap(devs); }
@@ -12706,7 +12798,7 @@ index f9a33380b54..de1c6c18109 100644
          mDisplayDirty = true;
      }).detach();
  }
-@@ -2056,6 +2066,7 @@ void NanoMenu::btWizToggleRadioAsync(bool on) {
+@@ -2056,6 +2069,7 @@ void NanoMenu::btWizToggleRadioAsync(bool on) {
          std::string txt = realOn ? runCmd("gammaos-net bt list-bonded", 12) : std::string();
          auto devs = parseBondedDevices(txt);
          { std::lock_guard<std::mutex> lk(mBtWizMutex); mBtWizBonded.swap(devs); }
@@ -12714,7 +12806,7 @@ index f9a33380b54..de1c6c18109 100644
          mBtWizToggling = false;
          mDisplayDirty = true;
      }).detach();
-@@ -2129,27 +2140,52 @@ void NanoMenu::btWizScanAsync() {
+@@ -2129,27 +2143,52 @@ void NanoMenu::btWizScanAsync() {
  }
  
  void NanoMenu::btWizPairAsync(const std::string& addr, const std::string& pin) {
@@ -17032,10 +17124,10 @@ index 7b4e9412c26..6c42e1edbfe 100644
  
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoSdMove.cpp b/frameworks/base/cmds/gammaos-nano/NanoSdMove.cpp
 new file mode 100644
-index 00000000000..acac3a5a236
+index 00000000000..d7a1008657c
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/NanoSdMove.cpp
-@@ -0,0 +1,1067 @@
+@@ -0,0 +1,1429 @@
 +/*
 + * Copyright (C) 2026 GammaOS
 + *
@@ -17062,7 +17154,8 @@ index 00000000000..acac3a5a236
 +//   <card>/ES-DE                         the ES-DE folder (NanoEsdeStore.cpp): ES-DE's own files,
 +//                                        Nano's favourites/hidden games/titles/metadata in its
 +//                                        gamelists, its collections, its covers and fan art
-+//   <card>/emulator_config/<emulator>    RetroArch, PPSSPP, Flycast and the DS emulator
++//   <card>/emulator_config/<emulator>    each emulator's settings, saves and states. Dolphin and hakuX
++//                                        have no setting for their folders: links to the card replace them.
 +
 +#define LOG_TAG "NanoMenu"
 +
@@ -17074,8 +17167,10 @@ index 00000000000..acac3a5a236
 +
 +#include <cutils/properties.h>
 +#include <dirent.h>
++#include <errno.h>
 +#include <fcntl.h>
 +#include <log/log.h>
++#include <string.h>
 +#include <sys/stat.h>
 +#include <tinyxml2.h>
 +#include <unistd.h>
@@ -17103,8 +17198,27 @@ index 00000000000..acac3a5a236
 +static const char* const kMupenPkg = "org.mupen64plusae.v3.fzurita";
 +static const char* const kMupenPrefs = "/data/data/org.mupen64plusae.v3.fzurita/shared_prefs/org.mupen64plusae.v3.fzurita_preferences.xml";
 +static const char* const kMupenInternalData = "/data/data/org.mupen64plusae.v3.fzurita/files/GameData";
++static const char* const kArmsx2Pkg = "com.armsx2";
++static const char* const kArmsx2Prefs = "/data/data/com.armsx2/shared_prefs/ARMSX2.xml";
++static const char* const kArmsx2DefDir = "/storage/emulated/0/Android/data/com.armsx2/files";
++static const char* const kScummvmPkg = "org.scummvm.scummvm";
++static const char* const kScummvmIni = "/data/data/org.scummvm.scummvm/files/scummvm.ini";
++static const char* const kScummvmDefSaves = "/data/data/org.scummvm.scummvm/files/saves";
++static const char* const kVita3kPkg = "org.vita3k.emulator";
++static const char* const kVita3kConfig = "/data/media/0/Android/data/org.vita3k.emulator/files/config.yml";
++static const char* const kVita3kDefPref = "/storage/emulated/0/Android/data/org.vita3k.emulator/files/vita";
++static const char* const kDolphinPkg = "org.dolphinemu.dolphinemu";
++static const char* const kDolphinUserDir = "/data/media/0/Android/data/org.dolphinemu.dolphinemu/files";
++static const char* const kAzaharPkg = "org.azahar_emu.azahar";
++static const char* const kAzaharPrefs = "/data/data/org.azahar_emu.azahar/shared_prefs/org.azahar_emu.azahar_preferences.xml";
++static const char* const kHakuxPkg = "com.rfandango.haku_x";
++static const char* const kHakuxNative = "/data/data/com.rfandango.haku_x/files/native";
++static const char* const kExternalStorageTree = "content://com.android.externalstorage.documents/tree/";
 +
-+enum { kGroupRetroArch = 0, kGroupDrasticNano, kGroupPpsspp, kGroupFlycast, kGroupEsde, kGroupDrastic, kGroupMupen };
++enum { kGroupRetroArch = 0, kGroupDrasticNano, kGroupPpsspp, kGroupFlycast, kGroupEsde, kGroupDrastic, kGroupMupen,
++       kGroupArmsx2, kGroupScummvm, kGroupVita3k, kGroupDolphin, kGroupAzahar, kGroupHakux };
++
++bool nanoNetBridgeCmd(const char* verb, const std::string& arg);   // NanoMenuSettings.cpp
 +
 +// A path as its raw folder (/data/media/0, /mnt/media_rw/<volume>), links resolved.
 +static std::string sdCanon(const std::string& p) {
@@ -17236,11 +17350,17 @@ index 00000000000..acac3a5a236
 +    if (fchown(fd, dst.st_uid, dst.st_gid) != 0) { ALOGW("sdmove: chown %s failed", path.c_str()); ok = false; }
 +    if (fchmod(fd, had ? (old.st_mode & 0777) : 0600) != 0) ok = false;
 +    ok = close(fd) == 0 && ok;
-+    unlink((path + ".bak").c_str());   // SharedPreferences would read its backup instead
 +    if (!ok || rename(tmp.c_str(), path.c_str()) != 0) { unlink(tmp.c_str()); return false; }
++    unlink((path + ".bak").c_str());   // SharedPreferences would restore its backup over it
 +    const std::string cmd = "restorecon '" + path + "' >/dev/null 2>&1";
 +    if (system(cmd.c_str()) != 0) ALOGW("sdmove: restorecon %s failed", path.c_str());
 +    return true;
++}
++
++// An app's SharedPreferences file as the app would load it: its backup when there is one (the
++// file itself was being written when the app stopped).
++static bool sdReadPrefs(const std::string& path, std::string* out) {
++    return access((path + ".bak").c_str(), F_OK) == 0 ? sdReadFile(path + ".bak", out) : sdReadFile(path, out);
 +}
 +
 +static std::string sdShown(const std::string& path) {   // a path as the user knows it
@@ -17646,7 +17766,7 @@ index 00000000000..acac3a5a236
 +
 +// Flycast's home folder: home_directory in its settings.
 +static std::string flycastHome(std::string* prefs) {
-+    if (!sdReadFile(kFlycastPrefs, prefs)) return kFlycastDefHome;
++    if (!sdReadPrefs(kFlycastPrefs, prefs)) return kFlycastDefHome;
 +    const std::string key = "<string name=\"home_directory\">";
 +    const size_t a = prefs->find(key);
 +    if (a == std::string::npos) return kFlycastDefHome;
@@ -17696,7 +17816,7 @@ index 00000000000..acac3a5a236
 +// ("/ss..." is one picked through Android, a content:// address: "" then). Its app folder when unset.
 +static std::string drasticSystemDir() {
 +    std::string prefs;
-+    if (!sdReadFile(kDrasticFsPrefs, &prefs)) return kDrasticDefDir;
++    if (!sdReadPrefs(kDrasticFsPrefs, &prefs)) return kDrasticDefDir;
 +    const std::string v = sdPrefsGet(prefs, "_SystemPath");
 +    if (v.empty()) return kDrasticDefDir;
 +    if (v.compare(0, 3, "/fp") != 0) return std::string();
@@ -17714,27 +17834,32 @@ index 00000000000..acac3a5a236
 +    return "/fp" + std::to_string(parent.size()) + parent + dir.substr(sl);
 +}
 +
++static std::string sdUriDecode(const std::string& s) {
++    std::string out;
++    for (size_t i = 0; i < s.size(); i++) {
++        if (s[i] == '%' && i + 2 < s.size() && isxdigit((unsigned char)s[i + 1]) && isxdigit((unsigned char)s[i + 2])) {
++            out += (char)strtol(s.substr(i + 1, 2).c_str(), nullptr, 16);
++            i += 2;
++        } else {
++            out += s[i];
++        }
++    }
++    return out;
++}
++
 +// M64Plus FZ keeps game data in its app folder and, set to external storage, copies each game's
 +// data from and back to <folder>/GameData around play. The folder: gameDataStoragePath, a file://
 +// address ("" = a content:// one picked through Android, or internal storage when *internal).
 +static std::string mupenDataDir(bool* internal) {
 +    std::string prefs;
-+    sdReadFile(kMupenPrefs, &prefs);
++    sdReadPrefs(kMupenPrefs, &prefs);
 +    const std::string type = sdPrefsGet(prefs, "gameDataStorageType");
 +    std::string path = sdPrefsGet(prefs, "gameDataStoragePath");
 +    *internal = type == "internal";
 +    if (*internal) return std::string();
 +    if (path.empty()) return "/storage/emulated/0/M64Plus";   // its default (made at its next start)
 +    if (path.compare(0, 7, "file://") != 0) return std::string();
-+    std::string dir;
-+    for (size_t i = 7; i < path.size(); i++) {
-+        if (path[i] == '%' && i + 2 < path.size() && isxdigit((unsigned char)path[i + 1]) && isxdigit((unsigned char)path[i + 2])) {
-+            dir += (char)strtol(path.substr(i + 1, 2).c_str(), nullptr, 16);
-+            i += 2;
-+        } else {
-+            dir += path[i];
-+        }
-+    }
++    std::string dir = sdUriDecode(path.substr(7));
 +    while (dir.size() > 1 && dir.back() == '/') dir.pop_back();
 +    return !dir.empty() && dir[0] == '/' ? dir : std::string();
 +}
@@ -17749,14 +17874,179 @@ index 00000000000..acac3a5a236
 +    return u;
 +}
 +
++// Removes a <string> from SharedPreferences text.
++static void sdPrefsRemove(std::string* prefs, const std::string& name) {
++    const size_t a = prefs->find("<string name=\"" + name + "\">");
++    if (a == std::string::npos) return;
++    const size_t b = prefs->find("</string>", a);
++    if (b == std::string::npos) return;
++    size_t from = a, to = b + 9;
++    while (from > 0 && ((*prefs)[from - 1] == ' ' || (*prefs)[from - 1] == '\t')) from--;
++    if (to < prefs->size() && (*prefs)[to] == '\n') to++;
++    prefs->erase(from, to - from);
++}
++
++static std::string sdTrimDir(std::string d) {   // no quotes, spaces or trailing slash; /sdcard as /storage/emulated/0
++    while (!d.empty() && (d.back() == ' ' || d.back() == '\r' || d.back() == '\t')) d.pop_back();
++    while (!d.empty() && (d[0] == ' ' || d[0] == '\t')) d.erase(0, 1);
++    if (d.size() >= 2 && (d[0] == '"' || d[0] == '\'') && d.back() == d[0]) d = d.substr(1, d.size() - 2);
++    while (d.size() > 1 && d.back() == '/') d.pop_back();
++    if (d == "/sdcard" || d.compare(0, 8, "/sdcard/") == 0) d = "/storage/emulated/0" + d.substr(7);
++    if (d.compare(0, 13, "/data/user/0/") == 0) d = "/data/data/" + d.substr(13);
++    return d;
++}
++
++// A setting's folder is there (not on a card or drive that is out, say): only then is it moved.
++static bool sdExists(const std::string& dir) {
++    struct stat st;
++    return stat(sdCanon(dir).c_str(), &st) == 0 && S_ISDIR(st.st_mode);
++}
++
++// Vita3K's emulated memory card and system (firmware, installed games, saves): pref-path in its
++// config.yml ("" = not set).
++static std::string vita3kPrefPath(const std::string& cfg) {
++    size_t pos = 0;
++    while (pos < cfg.size()) {
++        size_t end = cfg.find('\n', pos);
++        if (end == std::string::npos) end = cfg.size();
++        const std::string line = cfg.substr(pos, end - pos);
++        if (line.compare(0, 10, "pref-path:") == 0) return sdTrimDir(line.substr(10));
++        pos = end + 1;
++    }
++    return std::string();
++}
++
++static std::string vita3kSetPrefPath(const std::string& cfg, const std::string& dir) {
++    const std::string line = "pref-path: " + dir + "/";
++    std::string out;
++    bool done = false;
++    size_t pos = 0;
++    while (pos < cfg.size()) {
++        size_t end = cfg.find('\n', pos);
++        const bool last = end == std::string::npos;
++        if (last) end = cfg.size();
++        std::string l = cfg.substr(pos, end - pos);
++        if (l.compare(0, 10, "pref-path:") == 0) { l = line; done = true; }
++        else if (!done && (l == "..." || l == "...\r")) { out += line + "\n"; done = true; }   // before the end of the document
++        out += l;
++        if (!last) out += "\n";
++        pos = end + 1;
++    }
++    if (!done) out += std::string(out.empty() || out.back() == '\n' ? "" : "\n") + line + "\n";
++    return out;
++}
++
++static bool sdIniKey(const std::string& line, const char* key, std::string* value) {
++    const size_t eq = line.find('=');
++    if (eq == std::string::npos) return false;
++    std::string k = line.substr(0, eq);
++    while (!k.empty() && (k.back() == ' ' || k.back() == '\t')) k.pop_back();
++    while (!k.empty() && (k[0] == ' ' || k[0] == '\t')) k.erase(0, 1);
++    if (strcasecmp(k.c_str(), key) != 0) return false;
++    *value = sdTrimDir(line.substr(eq + 1));
++    return true;
++}
++
++// ScummVM's save folder: savepath in [scummvm] of its scummvm.ini, else its app folder's saves.
++// "" when it is a folder picked through Android (/saf/...).
++static std::string scummvmSavePath(const std::string& ini) {
++    std::string section, value;
++    size_t pos = 0;
++    while (pos < ini.size()) {
++        size_t end = ini.find('\n', pos);
++        if (end == std::string::npos) end = ini.size();
++        const std::string line = ini.substr(pos, end - pos);
++        pos = end + 1;
++        if (!line.empty() && line[0] == '[') { section = line.substr(1, line.find(']') - 1); continue; }
++        if (strcasecmp(section.c_str(), "scummvm") == 0 && sdIniKey(line, "savepath", &value) && !value.empty())
++            return value.compare(0, 5, "/saf/") == 0 || value[0] != '/' ? std::string() : value;
++    }
++    return kScummvmDefSaves;
++}
++
++// savepath in [scummvm] set to dir, and a game's own savepath in the old folder moved with it.
++static std::string scummvmSetSavePath(const std::string& ini, const std::string& from, const std::string& dir) {
++    std::string out, section, value;
++    bool inMain = false, done = false, haveMain = false;
++    size_t pos = 0;
++    while (pos < ini.size()) {
++        size_t end = ini.find('\n', pos);
++        const bool last = end == std::string::npos;
++        if (last) end = ini.size();
++        std::string line = ini.substr(pos, end - pos);
++        pos = end + 1;
++        if (!line.empty() && line[0] == '[') {
++            if (inMain && !done) { out += "savepath=" + dir + "\n"; done = true; }
++            section = line.substr(1, line.find(']') - 1);
++            inMain = strcasecmp(section.c_str(), "scummvm") == 0;
++            haveMain = haveMain || inMain;
++        } else if (sdIniKey(line, "savepath", &value)) {
++            if (inMain) { line = "savepath=" + dir; done = true; }
++            else if (sdUnder(value, from)) line = "savepath=" + dir + value.substr(from.size());
++        }
++        out += line;
++        if (!last) out += "\n";
++    }
++    if (inMain && !done) out += std::string(out.empty() || out.back() == '\n' ? "" : "\n") + "savepath=" + dir + "\n";
++    if (!haveMain) out = "[scummvm]\nsavepath=" + dir + "\n" + out;
++    return out;
++}
++
++// Azahar's folder: CITRA_DIRECTORY, a folder picked through Android (a tree of the external storage
++// provider: primary:<path> on internal storage, <volume>:<path> on a card). "" when unset or another.
++static std::string azaharDir(const std::string& prefs, std::string* uri) {
++    *uri = sdPrefsGet(prefs, "CITRA_DIRECTORY");
++    const size_t n = strlen(kExternalStorageTree);
++    if (uri->compare(0, n, kExternalStorageTree) != 0) return std::string();
++    std::string id = uri->substr(n);
++    const size_t sl = id.find('/');   // .../tree/<id>/document/<id>
++    id = sdUriDecode(sl == std::string::npos ? id : id.substr(0, sl));
++    const size_t colon = id.find(':');
++    if (colon == std::string::npos || colon == 0) return std::string();
++    const std::string vol = id.substr(0, colon), rel = id.substr(colon + 1);
++    const std::string root = vol == "primary" ? std::string("/storage/emulated/0") : "/storage/" + vol;
++    return sdTrimDir(rel.empty() ? root : root + "/" + rel);
++}
++
++static std::string azaharTreeUri(const std::string& volume, const std::string& rel) {   // as Android writes it
++    static const char kHex[] = "0123456789ABCDEF";
++    std::string u = kExternalStorageTree;
++    for (unsigned char c : volume + ":" + rel) {
++        if (isalnum(c) || strchr("_-!.~'()*", c)) u += (char)c;
++        else { u += '%'; u += kHex[c >> 4]; u += kHex[c & 15]; }
++    }
++    return u;
++}
++
++// Gives pkg a folder on a volume as if it had been picked through Android (NanoNetBridge).
++static bool sdUriGrant(const char* pkg, const std::string& volume, const std::string& rel) {
++    static const char kProp[] = "sys.gammaos.nano.uri_grant";
++    const std::string arg = std::string(pkg) + "|" + volume + "|" + rel;
++    if (arg.size() + 24 >= PROPERTY_VALUE_MAX) {   // "<13-digit sequence>|uri_grant|" ahead of it
++        ALOGW("sdmove: folder grant for %s too long to send (volume %s)", pkg, volume.c_str());
++        return false;
++    }
++    property_set(kProp, "");
++    for (int attempt = 0; attempt < 2; attempt++) {   // a Wi-Fi command sent meanwhile replaces it unread
++        if (!nanoNetBridgeCmd("uri_grant", arg)) return false;
++        for (int i = 0; i < 50; i++) {
++            usleep(100000);
++            char v[PROPERTY_VALUE_MAX] = {};
++            property_get(kProp, v, "");
++            if (v[0]) return std::string(v) == std::string("ok|") + pkg;
++        }
++    }
++    ALOGW("sdmove: no answer to the folder grant for %s", pkg);
++    return false;
++}
++
 +void NanoMenu::emuMoveOffer() {
 +    const std::string sd = sdCardRoot();
 +    if (sd.empty()) { photoShowBanner(trDyn("Insert a microSD card first.")); return; }
 +    mSdMoveRoot = sd;
 +    // Short enough for a 640x480 screen's dialog.
-+    const std::string body = trDyn("Moves emulator settings, saves and states to the microSD card. Dolphin, ARMSX2, "
-+                                   "hakuX and others that pick their own folder keep theirs. Nothing on the card is "
-+                                   "overwritten.");
++    const std::string body = trDyn("Moves emulator settings, saves and states to the microSD card, Vita3K's installed "
++                                   "games with them. Nothing on the card is overwritten.");
 +    openConfirmDialog(64, "Move Emulator Settings to microSD", body, "Move");
 +}
 +
@@ -17788,14 +18078,14 @@ index 00000000000..acac3a5a236
 +        property_get("persist.gammaos.drastic.data_dir", cur, "");
 +        const std::string from = cur[0] == '/' ? std::string(cur) : std::string(kDrasticNanoDefDir);
 +        const std::string to = card + "/drastic-nano";
-+        if (from != to) {
++        if (from != to && (cur[0] != '/' || sdExists(from))) {
 +            FileCopyPair p{from, to};
 +            p.move = true; p.backup = backup + "/drastic-nano"; p.group = kGroupDrasticNano;
 +            pairs.push_back(p);
 +            property_get("persist.gammaos.drastic.cheats_dir", cur, "");
 +            const std::string cheats = cur;
 +            if (cheats.size() > 1 && cheats[0] == '/' && cheats.compare(0, from.size() + 1, from + "/") != 0
-+                && cheats.compare(0, sd.size() + 1, sd + "/") != 0) {
++                && cheats.compare(0, sd.size() + 1, sd + "/") != 0 && sdExists(cheats)) {   // else (a drive that is out) left as it is
 +                FileCopyPair c{cheats, to + "/cheats"};
 +                c.move = true; c.backup = backup + "/drastic-nano/cheats"; c.group = kGroupDrasticNano;
 +                pairs.push_back(c);
@@ -17811,7 +18101,8 @@ index 00000000000..acac3a5a236
 +    if (packageInstalled(kPpssppPkg)) {
 +        const std::string memstick = ppssppMemstick();
 +        const std::string to = card + "/ppsspp";
-+        if (!memstick.empty() && memstick != to) {
++        if (!memstick.empty() && memstick != to
++            && (sdExists(memstick) || memstick == "/storage/emulated/0/Android/data/org.ppsspp.ppsspp/files")) {
 +            // The memory stick holds PSP/ (and PPSSPP's PAUTH/, EXDATA/), or is itself a folder named PSP.
 +            // Named PSP, PPSSPP keeps PAUTH/ and EXDATA/ inside it; they go beside PSP/ on the card.
 +            const size_t sl = memstick.find_last_of('/');
@@ -17833,7 +18124,7 @@ index 00000000000..acac3a5a236
 +        std::string prefs;
 +        const std::string home = flycastHome(&prefs);
 +        const std::string to = card + "/flycast";
-+        if (!home.empty() && home != to) {
++        if (!home.empty() && home != to && (home == kFlycastDefHome || sdExists(home))) {
 +            const bool own = home == kFlycastDefHome;
 +            for (const char* part : own ? std::vector<const char*>{""}
 +                                        : std::vector<const char*>{"emu.cfg", "data", "mappings", "textures"}) {
@@ -17849,7 +18140,7 @@ index 00000000000..acac3a5a236
 +    if (packageInstalled(kDrasticPkg)) {   // DraStic's whole system folder: BIOS, config, saves, states, cheats
 +        const std::string from = drasticSystemDir();
 +        const std::string to = card + "/drastic";
-+        if (!from.empty() && from != to) {
++        if (!from.empty() && from != to && (from == kDrasticDefDir || sdExists(from))) {
 +            FileCopyPair p{rawStoragePath(from), to};
 +            p.move = true; p.backup = backup + "/drastic"; p.group = kGroupDrastic;
 +            pairs.push_back(p);
@@ -17862,13 +18153,130 @@ index 00000000000..acac3a5a236
 +        bool internal = false;
 +        const std::string dir = mupenDataDir(&internal);
 +        const std::string to = card + "/m64plus";
-+        if ((internal || !dir.empty()) && dir != to) {
++        if ((internal || (!dir.empty() && (dir == "/storage/emulated/0/M64Plus" || sdExists(dir)))) && dir != to) {
 +            FileCopyPair p{internal ? std::string(kMupenInternalData) : rawStoragePath(dir + "/GameData"), to + "/GameData"};
 +            p.move = true; p.backup = backup + "/m64plus/GameData"; p.group = kGroupMupen;
 +            pairs.push_back(p);
 +            mSdMoveEmuDirs["m64plus"] = to;
 +            mFileJobStopPkgs.push_back(kMupenPkg);
 +        }
++    }
++
++    if (packageInstalled(kArmsx2Pkg)) {   // its data folder, but for the BIOS (set by its own path) and caches
++        std::string prefs;
++        if (sdReadPrefs(kArmsx2Prefs, &prefs)) {
++            std::string from = sdTrimDir(sdPrefsGet(prefs, "systemDir"));
++            const bool chosen = !from.empty();
++            if (!chosen) from = kArmsx2DefDir;
++            const std::string to = card + "/armsx2";
++            if (from[0] == '/' && from != to && (!chosen || sdExists(from))) {
++                FileCopyPair p{rawStoragePath(from), to};
++                p.move = true; p.backup = backup + "/armsx2"; p.group = kGroupArmsx2;
++                p.skipDirs = {"bios", "cache", "resources", "logs"};
++                pairs.push_back(p);
++                mSdMoveEmuDirs["armsx2"] = to;
++                mFileJobStopPkgs.push_back(kArmsx2Pkg);
++            }
++        }
++    }
++
++    if (packageInstalled(kScummvmPkg)) {   // its saves (its settings file has a fixed place)
++        std::string ini;
++        if (sdReadFile(kScummvmIni, &ini)) {
++            const std::string from = scummvmSavePath(ini);
++            const std::string to = card + "/scummvm/saves";
++            if (!from.empty() && from != to && (from == kScummvmDefSaves || sdExists(from))) {
++                FileCopyPair p{rawStoragePath(from), to};
++                p.move = true; p.backup = backup + "/scummvm/saves"; p.group = kGroupScummvm;
++                pairs.push_back(p);
++                mSdMoveEmuDirs["scummvm"] = to;
++                mSdMoveEmuDirs["scummvm-from"] = from;
++                mFileJobStopPkgs.push_back(kScummvmPkg);
++            }
++        }
++    }
++
++    if (packageInstalled(kVita3kPkg)) {   // its memory card and system: saves, firmware and installed games
++        std::string cfg;
++        if (sdReadFile(kVita3kConfig, &cfg)) {
++            std::string from = vita3kPrefPath(cfg);
++            const bool chosen = !from.empty() && from != kVita3kDefPref;
++            if (from.empty()) from = kVita3kDefPref;
++            const std::string to = card + "/vita3k";
++            if (from[0] == '/' && from != to && (!chosen || sdExists(from))) {
++                FileCopyPair p{rawStoragePath(from), to};
++                p.move = true; p.backup = backup + "/vita3k"; p.group = kGroupVita3k;
++                pairs.push_back(p);
++                mSdMoveEmuDirs["vita3k"] = to;
++                mFileJobStopPkgs.push_back(kVita3kPkg);
++            }
++        }
++    }
++
++    if (packageInstalled(kAzaharPkg)) {   // its whole folder but caches and logs
++        std::string prefs, uri;
++        sdReadPrefs(kAzaharPrefs, &prefs);
++        const std::string from = azaharDir(prefs, &uri);
++        const std::string volume = sd.substr(sd.find_last_of('/') + 1);
++        if (!from.empty() && sdExists(from) && uri != azaharTreeUri(volume, "emulator_config/azahar")) {
++            FileCopyPair p{rawStoragePath(from), card + "/azahar"};
++            p.move = true; p.backup = backup + "/azahar"; p.group = kGroupAzahar;
++            p.skipDirs = {"cache", "log", "shaders"};
++            pairs.push_back(p);
++            mSdMoveEmuDirs["azahar"] = card + "/azahar";
++            mFileJobStopPkgs.push_back(kAzaharPkg);
++        }
++    }
++
++    // No setting for these folders: each is moved, and a link to the card takes its place (linkTo).
++    // Android/data is the storage's own folder to apps here (no FUSE in between), so they follow it.
++    // A folder an earlier move set aside but did not empty (<folder>.nanomove: stopped part way) goes to
++    // the card too, after the folder itself, so the newer files win and its clashes go to the backup.
++    auto addLinked = [&](const std::string& from, const std::string& to, const std::string& bak, int group) {
++        struct stat ls;
++        bool any = false;
++        const bool there = lstat(from.c_str(), &ls) == 0;
++        if (!there || S_ISDIR(ls.st_mode)) {   // a folder, or none yet (the link makes it); a link: moved before
++            FileCopyPair p{from, to};
++            p.move = true; p.backup = bak; p.group = group; p.linkTo = to;
++            pairs.push_back(p);
++            any = true;
++        }
++        const size_t sl = from.find_last_of('/');
++        const std::string parent = from.substr(0, sl), aside = from.substr(sl + 1) + ".nanomove";
++        std::vector<std::string> left;   // <folder>.nanomove, and .nanomove.<n> of a move after one that stopped
++        if (DIR* d = opendir(parent.c_str())) {
++            while (dirent* e = readdir(d)) {
++                const std::string n = e->d_name;
++                if ((n == aside || n.compare(0, aside.size() + 1, aside + ".") == 0)
++                    && lstat((parent + "/" + n).c_str(), &ls) == 0 && S_ISDIR(ls.st_mode))
++                    left.push_back(parent + "/" + n);
++            }
++            closedir(d);
++        }
++        std::sort(left.begin(), left.end());
++        for (const auto& l : left) {
++            FileCopyPair p{l, to};
++            p.move = true; p.backup = bak; p.group = group;
++            pairs.push_back(p);
++            any = true;
++        }
++        return any;
++    };
++    struct stat st;
++    if (packageInstalled(kDolphinPkg) && stat(kDolphinUserDir, &st) == 0 && S_ISDIR(st.st_mode)) {
++        bool any = false;
++        for (const char* part : {"Config", "GameSettings", "StateSaves", "GC", "Wii"})
++            any = addLinked(std::string(kDolphinUserDir) + "/" + part, card + "/dolphin/" + part,
++                            backup + "/dolphin/" + part, kGroupDolphin) || any;
++        if (any) mFileJobStopPkgs.push_back(kDolphinPkg);
++    }
++    if (packageInstalled(kHakuxPkg)
++        && ((lstat(kHakuxNative, &st) == 0 && S_ISDIR(st.st_mode))
++            || access((std::string(kHakuxNative) + ".nanomove").c_str(), F_OK) == 0)) {
++        // The whole folder: its hard disk, save states and caches move between its parts by renaming.
++        if (addLinked(kHakuxNative, card + "/hakux/native", backup + "/hakux/native", kGroupHakux))
++            mFileJobStopPkgs.push_back(kHakuxPkg);
 +    }
 +
 +    if (pairs.empty()) { photoShowBanner(trDyn("The emulator settings are already on the microSD card.")); return; }
@@ -17909,8 +18317,13 @@ index 00000000000..acac3a5a236
 +        case kGroupDrasticNano: {
 +            auto it = mSdMoveEmuDirs.find("drastic-nano");
 +            if (it == mSdMoveEmuDirs.end()) return true;
-+            property_set("persist.gammaos.drastic.data_dir", it->second.c_str());
 +            auto ch = mSdMoveEmuDirs.find("drastic-cheats");
++            if (it->second.size() >= PROPERTY_VALUE_MAX
++                || (ch != mSdMoveEmuDirs.end() && ch->second.size() >= PROPERTY_VALUE_MAX)) {
++                ALOGW("sdmove: the DS emulator's folder is too long a path for its setting");
++                return false;
++            }
++            if (property_set("persist.gammaos.drastic.data_dir", it->second.c_str()) != 0) return false;
 +            if (ch != mSdMoveEmuDirs.end()) property_set("persist.gammaos.drastic.cheats_dir", ch->second.c_str());
 +            return true;
 +        }
@@ -17932,7 +18345,7 @@ index 00000000000..acac3a5a236
 +            system("am force-stop com.flycast.emulator >/dev/null 2>&1");
 +            sdMkdirs(it->second);
 +            std::string prefs;
-+            sdReadFile(kFlycastPrefs, &prefs);
++            sdReadPrefs(kFlycastPrefs, &prefs);
 +            if (!sdPrefsSet(&prefs, "home_directory", it->second + "/") || !sdWriteAppFile(kFlycastPrefs, prefs)) return false;
 +            system("appops set --uid com.flycast.emulator MANAGE_EXTERNAL_STORAGE allow >/dev/null 2>&1");
 +            return true;
@@ -17945,7 +18358,7 @@ index 00000000000..acac3a5a236
 +            system("am force-stop com.dsemu.drastic >/dev/null 2>&1");
 +            sdMkdirs(it->second);
 +            std::string prefs;
-+            sdReadFile(kDrasticFsPrefs, &prefs);
++            sdReadPrefs(kDrasticFsPrefs, &prefs);
 +            return sdPrefsSet(&prefs, "_SystemPath", drasticSystemPathValue(it->second)) && sdWriteAppFile(kDrasticFsPrefs, prefs);
 +        }
 +        case kGroupMupen: {
@@ -17954,10 +18367,50 @@ index 00000000000..acac3a5a236
 +            system("am force-stop org.mupen64plusae.v3.fzurita >/dev/null 2>&1");
 +            sdMkdirs(it->second + "/GameData");
 +            std::string prefs;
-+            sdReadFile(kMupenPrefs, &prefs);
++            sdReadPrefs(kMupenPrefs, &prefs);
 +            return sdPrefsSet(&prefs, "gameDataStorageType", "external")
 +                   && sdPrefsSet(&prefs, "gameDataStoragePath", sdFileUri(it->second))
 +                   && sdWriteAppFile(kMupenPrefs, prefs);
++        }
++        case kGroupArmsx2: {
++            auto it = mSdMoveEmuDirs.find("armsx2");
++            if (it == mSdMoveEmuDirs.end()) return true;
++            system("am force-stop com.armsx2 >/dev/null 2>&1");
++            sdMkdirs(it->second);
++            std::string prefs;
++            sdReadPrefs(kArmsx2Prefs, &prefs);
++            return sdPrefsSet(&prefs, "systemDir", it->second) && sdWriteAppFile(kArmsx2Prefs, prefs);
++        }
++        case kGroupScummvm: {
++            auto it = mSdMoveEmuDirs.find("scummvm");
++            if (it == mSdMoveEmuDirs.end()) return true;
++            system("am force-stop org.scummvm.scummvm >/dev/null 2>&1");
++            sdMkdirs(it->second);
++            std::string ini;
++            if (!sdReadFile(kScummvmIni, &ini)) return false;
++            return sdWriteAppFile(kScummvmIni, scummvmSetSavePath(ini, mSdMoveEmuDirs["scummvm-from"], it->second));
++        }
++        case kGroupVita3k: {
++            auto it = mSdMoveEmuDirs.find("vita3k");
++            if (it == mSdMoveEmuDirs.end()) return true;
++            system("am force-stop org.vita3k.emulator >/dev/null 2>&1");
++            sdMkdirs(it->second);
++            std::string cfg;
++            if (!sdReadFile(kVita3kConfig, &cfg)) return false;
++            return sdWriteAppFile(kVita3kConfig, vita3kSetPrefPath(cfg, it->second));
++        }
++        case kGroupAzahar: {   // only uses a folder picked through Android: given it as if picked
++            auto it = mSdMoveEmuDirs.find("azahar");
++            if (it == mSdMoveEmuDirs.end()) return true;
++            system("am force-stop org.azahar_emu.azahar >/dev/null 2>&1");
++            sdMkdirs(it->second);
++            const std::string volume = mSdMoveRoot.substr(mSdMoveRoot.find_last_of('/') + 1);
++            if (!sdUriGrant(kAzaharPkg, volume, "emulator_config/azahar")) return false;
++            std::string prefs;
++            sdReadPrefs(kAzaharPrefs, &prefs);
++            sdPrefsRemove(&prefs, "LIME3DS_DIRECTORY");   // a different one asks to update the folder
++            return sdPrefsSet(&prefs, "CITRA_DIRECTORY", azaharTreeUri(volume, "emulator_config/azahar"))
++                   && sdWriteAppFile(kAzaharPrefs, prefs);
 +        }
 +    }
 +    return true;
@@ -18074,7 +18527,8 @@ index 00000000000..acac3a5a236
 +                                    == mFileJobFailedGroups.end();
 +        mFileJobStopPkgs.clear();
 +        if (mSdMoveConflictKind == 4)
-+            for (const char* pkg : {"com.retroarch.aarch64", kPpssppPkg, kFlycastPkg, kDrasticPkg, kMupenPkg})
++            for (const char* pkg : {"com.retroarch.aarch64", kPpssppPkg, kFlycastPkg, kDrasticPkg, kMupenPkg, kArmsx2Pkg,
++                                    kScummvmPkg, kVita3kPkg, kDolphinPkg, kAzaharPkg, kHakuxPkg})
 +                mFileJobStopPkgs.push_back(pkg);
 +        else
 +            mFileJobStopPkgs.push_back(kEsdePkg);
@@ -20151,6 +20605,128 @@ index 5e56fab58b1..248a24d063f 100755
                  if (newState != currentState) {
                      currentState = newState;
                      applyState(currentState);
+diff --git a/frameworks/base/services/core/java/com/android/server/gammaos/NanoNetBridge.java b/frameworks/base/services/core/java/com/android/server/gammaos/NanoNetBridge.java
+index b91d1046e25..f60f2d19876 100644
+--- a/frameworks/base/services/core/java/com/android/server/gammaos/NanoNetBridge.java
++++ b/frameworks/base/services/core/java/com/android/server/gammaos/NanoNetBridge.java
+@@ -31,6 +31,7 @@ import android.content.BroadcastReceiver;
+ import android.content.Context;
+ import android.content.Intent;
+ import android.content.IntentFilter;
++import android.net.Uri;
+ import android.net.wifi.ScanResult;
+ import android.net.wifi.WifiConfiguration;
+ import android.net.wifi.WifiInfo;
+@@ -38,8 +39,13 @@ import android.net.wifi.WifiManager;
+ import android.os.Handler;
+ import android.os.HandlerThread;
+ import android.os.SystemProperties;
++import android.os.UserHandle;
++import android.provider.DocumentsContract;
+ import android.util.Slog;
+ 
++import com.android.server.LocalServices;
++import com.android.server.uri.UriGrantsManagerInternal;
++
+ import java.io.File;
+ import java.io.FileWriter;
+ import java.lang.reflect.Method;
+@@ -218,6 +224,29 @@ public final class NanoNetBridge {
+         }
+     };
+ 
++    // "<package>|<volume uuid>|emulator_config/<folder>": the package gets the folder on that
++    // volume as if the user had picked it in the system folder picker (Azahar, which only uses
++    // a folder picked that way). The answer goes to URI_GRANT_PROP as "ok|<package>" or
++    // "fail|<package>".
++    private static final String URI_GRANT_PROP = "sys.gammaos.nano.uri_grant";
++
++    private void uriGrant(String arg) {
++        final String[] p = arg.split("\\|", -1);
++        boolean ok = false;
++        if (p.length == 3 && p[1].matches("[0-9A-Fa-f-]+")
++                && p[2].startsWith("emulator_config/") && !p[2].contains("..")) {
++            final Uri tree = DocumentsContract.buildTreeDocumentUri(
++                    "com.android.externalstorage.documents", p[1] + ":" + p[2]);
++            final UriGrantsManagerInternal ugm =
++                    LocalServices.getService(UriGrantsManagerInternal.class);
++            ok = ugm != null && ugm.grantPersistedUriPermission(p[0], UserHandle.USER_SYSTEM,
++                    tree, Intent.FLAG_GRANT_READ_URI_PERMISSION
++                            | Intent.FLAG_GRANT_WRITE_URI_PERMISSION, true /* prefix */);
++            Slog.i(TAG, "uri_grant " + p[0] + " " + tree + ": " + ok);
++        }
++        SystemProperties.set(URI_GRANT_PROP, (ok ? "ok|" : "fail|") + (p.length > 0 ? p[0] : ""));
++    }
++
+     private static long parseSeq(String v) {
+         if (v == null || v.isEmpty()) return -1;
+         int p = v.indexOf('|');
+@@ -290,6 +319,9 @@ public final class NanoNetBridge {
+                     if (parts.length >= 2) btConfirm(parts[0], "accept".equals(parts[1]));
+                     break;
+                 }
++                case "uri_grant":
++                    uriGrant(arg);
++                    break;
+                 default:
+                     Slog.w(TAG, "unknown cmd verb: " + verb);
+             }
+diff --git a/frameworks/base/services/core/java/com/android/server/gammaos/NanoPermGrantBridge.java b/frameworks/base/services/core/java/com/android/server/gammaos/NanoPermGrantBridge.java
+index 1b40fe50ca4..3bca79937fe 100644
+--- a/frameworks/base/services/core/java/com/android/server/gammaos/NanoPermGrantBridge.java
++++ b/frameworks/base/services/core/java/com/android/server/gammaos/NanoPermGrantBridge.java
+@@ -15,7 +15,7 @@
+  * It pre-grants the storage and microphone runtime permissions (only the ones each app
+  * actually declares in its manifest) to non-system user apps so no prompt ever appears,
+  * and it flips the MANAGE_EXTERNAL_STORAGE app-op to ALLOWED for an emulator/frontend
+- * allowlist (RetroArch by default, extensible via a chunked system property). Grants are
++ * allowlist (every emulator GammaOS ships, extensible via a chunked system property). Grants are
+  * marked GRANTED_BY_DEFAULT (not SYSTEM_FIXED) so the user can still revoke them from
+  * Settings if they want to.
+  *
+@@ -60,8 +60,23 @@ public final class NanoPermGrantBridge {
+     private static final String AUTOGRANT_PROP = "persist.gammaos.perm.autogrant";
+     // Chunked allowlist (base + _0.._4) of packages that may receive all-files access.
+     private static final String MES_ALLOWLIST_PROP = "persist.gammaos.perm.mestorage";
+-    // The exact package nano itself hard-codes for RetroArch; always in the allowlist.
+-    private static final String RETROARCH_PKG = "com.retroarch.aarch64";
++    // Every emulator GammaOS ships; always in the allowlist. Only the ones whose manifest asks
++    // for MANAGE_EXTERNAL_STORAGE get it (Azahar, ARMSX2 and Vita3K do, and otherwise prompt for
++    // it); the others reach shared storage through the patched MediaProvider.
++    private static final String[] PACK_IN_EMULATORS = {
++        "com.retroarch.aarch64",
++        "org.ppsspp.ppsspp",
++        "com.flycast.emulator",
++        "com.dsemu.drastic",
++        "org.mupen64plusae.v3.fzurita",
++        "org.dolphinemu.dolphinemu",
++        "com.armsx2",
++        "org.azahar_emu.azahar",
++        "me.magnum.melondualds",
++        "com.rfandango.haku_x",
++        "org.vita3k.emulator",
++        "org.scummvm.scummvm",
++    };
+ 
+     // Runtime permissions we auto-grant when an app declares them. Mirrors the STORAGE and
+     // MICROPHONE groups in DefaultPermissionGrantPolicy. READ/WRITE_EXTERNAL_STORAGE are
+@@ -262,13 +277,12 @@ public final class NanoPermGrantBridge {
+     }
+ 
+     /**
+-     * Built-in RetroArch package unioned with the chunked prop
++     * The shipped emulators unioned with the chunked prop
+      * persist.gammaos.perm.mestorage (base + _0.._4), parsed like the QS blacklist reader
+-     * so a value can exceed PROP_VALUE_MAX. Empty prop => just the RetroArch default.
++     * so a value can exceed PROP_VALUE_MAX. Empty prop => just the shipped emulators.
+      */
+     private static Set<String> readMesAllowlist() {
+-        final Set<String> out = new HashSet<>();
+-        out.add(RETROARCH_PKG);
++        final Set<String> out = new HashSet<>(Arrays.asList(PACK_IN_EMULATORS));
+         StringBuilder sb = new StringBuilder();
+         String base = SystemProperties.get(MES_ALLOWLIST_PROP, "").trim();
+         if (!base.isEmpty()) {
 diff --git a/frameworks/base/services/core/java/com/android/server/policy/GammaHotkeyController.java b/frameworks/base/services/core/java/com/android/server/policy/GammaHotkeyController.java
 new file mode 100644
 index 00000000000..c88863fc79b
@@ -21015,6 +21591,60 @@ index 0d7e69d0a6b..f460b13f776 100644
                  // GammaOS Nano: in the DRM-home XMB the home nano owns the power
                  // button over evdev (short press = sleep, hold = shutdown), but only
                  // when it grabs input exclusively (persist.gammaos.nano.grab_input),
+diff --git a/frameworks/base/services/core/java/com/android/server/uri/UriGrantsManagerInternal.java b/frameworks/base/services/core/java/com/android/server/uri/UriGrantsManagerInternal.java
+index 195e91cf571..c65991ef7a4 100644
+--- a/frameworks/base/services/core/java/com/android/server/uri/UriGrantsManagerInternal.java
++++ b/frameworks/base/services/core/java/com/android/server/uri/UriGrantsManagerInternal.java
+@@ -144,4 +144,12 @@ public interface UriGrantsManagerInternal {
+             int callingUid, ProviderInfo cpi, int userId, boolean checkUser);
+ 
+     void dump(PrintWriter pw, boolean dumpAll, String dumpPackage);
++
++    /**
++     * GammaOS: gives targetPkg a persisted grant to uri, as if it had been picked in the system
++     * folder picker and taken with ContentResolver.takePersistableUriPermission. False when the
++     * provider or package is not there.
++     */
++    boolean grantPersistedUriPermission(String targetPkg, int userId, Uri uri, int modeFlags,
++            boolean prefix);
+ }
+diff --git a/frameworks/base/services/core/java/com/android/server/uri/UriGrantsManagerService.java b/frameworks/base/services/core/java/com/android/server/uri/UriGrantsManagerService.java
+index 227879041f9..0926c49043f 100644
+--- a/frameworks/base/services/core/java/com/android/server/uri/UriGrantsManagerService.java
++++ b/frameworks/base/services/core/java/com/android/server/uri/UriGrantsManagerService.java
+@@ -1396,6 +1396,32 @@ public class UriGrantsManagerService extends IUriGrantsManager.Stub implements
+     }
+ 
+     private final class LocalService implements UriGrantsManagerInternal {
++        @Override
++        public boolean grantPersistedUriPermission(String targetPkg, int userId, Uri uri,
++                int modeFlags, boolean prefix) {
++            modeFlags &= Intent.FLAG_GRANT_READ_URI_PERMISSION
++                    | Intent.FLAG_GRANT_WRITE_URI_PERMISSION;
++            if (modeFlags == 0 || uri == null || targetPkg == null) return false;
++            final ProviderInfo pi = getProviderInfo(uri.getAuthority(), userId,
++                    MATCH_DIRECT_BOOT_AWARE | MATCH_DIRECT_BOOT_UNAWARE, SYSTEM_UID);
++            final int targetUid = mPmInternal.getPackageUid(
++                    targetPkg, MATCH_UNINSTALLED_PACKAGES, userId);
++            if (pi == null || targetUid == -1) return false;
++            final GrantUri grantUri = new GrantUri(userId, uri,
++                    prefix ? Intent.FLAG_GRANT_PREFIX_URI_PERMISSION : 0);
++            synchronized (mLock) {
++                findOrCreateUriPermissionLocked(pi.packageName, targetPkg, targetUid, grantUri)
++                        .initPersistedModes(modeFlags, System.currentTimeMillis());
++            }
++            mPmInternal.grantImplicitAccess(userId, null /* intent */,
++                    UserHandle.getAppId(targetUid), pi.applicationInfo.uid,
++                    false /* direct */, true /* retainOnUpdate */);
++            // Written now rather than in 10 s: the device may be switched off right after.
++            mH.removeMessages(PERSIST_URI_GRANTS_MSG);
++            mH.sendEmptyMessage(PERSIST_URI_GRANTS_MSG);
++            return true;
++        }
++
+         @Override
+         public void removeUriPermissionIfNeeded(UriPermission perm) {
+             synchronized (mLock) {
 diff --git a/frameworks/base/services/core/java/com/android/server/wm/DisplayContent.java b/frameworks/base/services/core/java/com/android/server/wm/DisplayContent.java
 index 8acaf22efc7..9801f3cfd04 100644
 --- a/frameworks/base/services/core/java/com/android/server/wm/DisplayContent.java
