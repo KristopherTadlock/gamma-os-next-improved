@@ -66,6 +66,17 @@ MiXplorer stays at 6.64.3 because newer builds are only posted on its XDA
 thread. Magisk stays at 30.6, the version the boot image is patched with, and
 can update itself after setup. See `mods/15-update-apps.sh`.
 
+**No Google apps.** Upstream's Full image carries Google Play Store, Play
+Services, Services Framework, Google's setup and its sync adapters; this build
+leaves them all out (`device/phh/treble/lineage_arm64_bgN.mk`). Aurora Store
+installs Play apps without them, though apps that need Play Services (Google
+sign-in, Firebase notifications, some licence checks) won't work. To add Google
+Play yourself: install a Google apps package for Android 14 arm64 that installs
+as a Magisk module (the system partition is read-only, so recovery-flashed
+packages can't write to it), restart, then register the device at
+<https://www.google.com/android/uncertified> with its Google Services Framework
+ID, since this build isn't Play Protect certified.
+
 File Transfer (MTP) is the default USB mode (Developer options → Default USB
 configuration), so a computer sees the device's storage as soon as it's
 plugged in (`mods/25-usb-mtp.sh`).
@@ -224,6 +235,21 @@ It also changes Nano:
     asking **Delete Game** or **Delete Game and Media** (cover, fan art,
     screenshots, videos and the rest). It also leaves Favorites, collections,
     Recently Played and, with the ES-DE folder on the card, its gamelist.
+  - **Set Boxart** offers the game's own pictures (screenshot, title screen,
+    miximage, fan art and the rest), **Browse Files...** for a PNG or JPEG
+    anywhere on the device, the card or a share, and the **Photo Library**.
+  - **Search Games** opens the keyboard over the game's options, which stay
+    open behind it until a result is chosen.
+  - **Information** shows where the game's file is, as ES-DE's metadata editor
+    does: its path in the system folder and the system, `subfolder/Game.zip
+    [SNES]`.
+  - **Touch:** swipe left or right to change system, up to open a system's
+    games and down to go back. Tap a system to open it; tap a game to pick it
+    and tap it again to start it. Drag a game list, the systems or the menu to
+    scroll, and let go while moving to fling. A tap outside the menu closes it.
+  - The clock shows in the system and game views, and Nano's own menus (the
+    Quick Menu, a game's options) show the theme's clock and battery, Wi-Fi and
+    Bluetooth icons, the same as the views.
 - **Game lists** put favourites first, each part in name order.
 - **Scan Folders:** adding a folder to a system asks **This Folder Only** or
   **Include Subfolders** (selected first), and that choice wins over Scan ROM
