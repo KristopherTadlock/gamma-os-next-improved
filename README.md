@@ -431,9 +431,10 @@ It also changes Nano:
   and the connected devices appear as the radio comes up; Off closes it.
 - **Kiosk Mode:** Start opens and closes Applications instead of the ES-DE
   menu.
-- **ES-DE boot:** the cold-boot intro ends in black after the warning instead
-  of revealing the XMB menu, the ES-DE theme loads while the warning is up,
-  and the ES-DE home fades in.
+- **ES-DE boot:** the ES-DE home fades in from black as soon as its theme has
+  loaded. With Boot Animation on, the intro ends in black after the warning
+  instead of revealing the XMB menu, and the theme loads while the warning is
+  up.
 - **ES-DE menu → Applications** no longer locks the console up when it starts
   an app from the boot home: it hands off like every other launch instead of
   starting the app behind the home, which kept the screen and the controls.
@@ -574,9 +575,13 @@ The tools it uses:
   only when the audio setup actually changes. It re-applied the saved value at
   every boot and restarted audio just after it started; init holds a restart
   back 5 s, and system_server waited about 2 s for it.
-- Nano sets up the USB mode (MTP and the rest) once boot has completed. With a
-  cable in at boot it started its helper, a Java process, twice while the
-  system was still starting, and both attempts failed.
+- No boot animation: every theme's home shows as soon as it is ready. The
+  intro and its photosensitivity notice ran 13–17 s over a system that was
+  ready sooner; it still plays before the first setup, and **Boot Animation**
+  (Theme Settings, `persist.gammaos.nano.boot_intro`) brings it back.
+- Nano sets up the USB mode (MTP and the rest) in the background once
+  system_server's USB service is up, with a cable in. Before that its helper,
+  a Java process, could only fail and retry while the system was starting.
 
 ### External monitors
 
