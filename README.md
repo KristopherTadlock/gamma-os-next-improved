@@ -336,6 +336,25 @@ It also changes Nano:
   (comma-separated, a trailing `*` matches by prefix; default
   `com.brave.browser,net.slions.fulguris.*`). Fulguris's bookmark shortcut is
   Ctrl+B rather than Chromium's Ctrl+D, so Y sends that there.
+- **Move ES-DE to microSD** (Game Settings): moves the ES-DE folder and
+  everything Nano keeps about your games to `ES-DE` on the card, in ES-DE's own
+  files: favourites, hidden games, titles, metadata and play counts in
+  `gamelists/<system>/gamelist.xml`, collections in
+  `collections/custom-<name>.cfg`, covers and fan art in
+  `downloaded_media/<system>/covers|fanart`. From then on Nano and mainline
+  ES-DE share that folder (changes in either show in the other), and the card is
+  the only copy. ES-DE asks for its folder the next time it starts: choose ES-DE
+  on the card. A Nano scrape keeps ES-DE's own covers, fan art and metadata
+  unless Overwrite is on, and Clear Boxart leaves ES-DE's pictures alone.
+- **Move Emulator Settings to microSD** (Game Settings): moves the settings,
+  saves and states of RetroArch, PPSSPP, Flycast and the built-in DS emulator to
+  `emulator_config/<emulator>` on the card and points each emulator there.
+  Emulators that only change their folder themselves (DraStic, M64Plus FZ,
+  Dolphin, Azahar, WatermelonDS, ARMSX2, hakuX, Vita3K, ScummVM) keep theirs.
+- Both moves ask first, show their progress and never overwrite what is already
+  on the card. Internal copies of files the card already had go to
+  `Internal storage/Nano Backup`, and you choose: keep them there as a backup,
+  delete them, or overwrite the card's copies with them.
 - **Background scraping:** a box-art scrape runs in its own small service
   (`gammaos-nano-scrape`), so it carries on while you browse, start a game and
   come back, from either Nano home. Circle closes the progress window and the
