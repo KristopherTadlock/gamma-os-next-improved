@@ -341,16 +341,19 @@ It also changes Nano:
   files: favourites, hidden games, titles, metadata and play counts in
   `gamelists/<system>/gamelist.xml`, collections in
   `collections/custom-<name>.cfg`, covers and fan art in
-  `downloaded_media/<system>/covers|fanart`. From then on Nano and mainline
-  ES-DE share that folder (changes in either show in the other), and the card is
-  the only copy. ES-DE asks for its folder the next time it starts: choose ES-DE
-  on the card. A Nano scrape keeps ES-DE's own covers, fan art and metadata
-  unless Overwrite is on, and Clear Boxart leaves ES-DE's pictures alone.
-- **Move Emulator Settings to microSD** (Game Settings): moves the settings,
-  saves and states of RetroArch, PPSSPP, Flycast and the built-in DS emulator to
-  `emulator_config/<emulator>` on the card and points each emulator there.
-  Emulators that only change their folder themselves (DraStic, M64Plus FZ,
-  Dolphin, Azahar, WatermelonDS, ARMSX2, hakuX, Vita3K, ScummVM) keep theirs.
+  `downloaded_media/<system>/covers|fanart`. From then on the card is the only
+  copy, and its `ES-DE` folder is a library mainline ES-DE can use: put the card
+  in a device running ES-DE (or bring one from there) and both see the same
+  games, favourites, collections and media. A Nano scrape keeps covers, fan art
+  and metadata already in the folder (ES-DE's, for example) unless Overwrite is
+  on, and Clear Boxart deletes only pictures Nano downloaded.
+- **Move Emulator Settings to microSD** (Game Settings): moves the settings of
+  RetroArch, PPSSPP, Flycast and the built-in DS emulator, and the saves and
+  states kept with them, to `emulator_config/<emulator>` on the card and points
+  each emulator there. GammaOS keeps RetroArch's saves and states next to the
+  ROMs, so those stay where they are. Emulators that only change their folder
+  themselves (DraStic, M64Plus FZ, Dolphin, Azahar, WatermelonDS, ARMSX2,
+  hakuX, Vita3K, ScummVM) keep theirs.
 - Both moves ask first, show their progress and never overwrite what is already
   on the card. Internal copies of files the card already had go to
   `Internal storage/Nano Backup`, and you choose: keep them there as a backup,
