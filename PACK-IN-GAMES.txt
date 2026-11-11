@@ -1,8 +1,8 @@
 PACK-IN GAMES
 =============
 
-gamma-os-next-improved bundles one game per platform. Each game's rights
-holder explicitly allows it to be redistributed, and none uses another
+Thimsy OS bundles one game per platform. Each game's rights holder
+explicitly allows it to be redistributed, and none uses another
 company's characters, names, or assets. Each game is installed with its
 license notice next to it (<game file>.license.txt, or LICENSE.txt in the
 game's folder): the full license text, or for Creative Commons licenses a

@@ -1,7 +1,7 @@
 #version 450
 
 /*
-   RG Cube 4:3 Cropped, RetroArch's copy of GammaOS Next Improved's 4:3 Cropped shader.
+   RG Cube 4:3 Cropped, RetroArch's copy of Thimsy OS's 4:3 Cropped shader.
    License: Public domain
 
    The core's frame fills a 4:3 projection 10/9 the size of the largest 4:3 area of the output

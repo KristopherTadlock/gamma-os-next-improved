@@ -100,7 +100,7 @@ if grep -qE '^(persist\.(bootanim\.skip_nano|gammaos\.nano\.(ndstheme|esde\.|nav
 fi
 cat >>"$work/build.prop" <<EOF
 
-# gamma-os-next-improved: boot into Nano, with the ES-DE theme engine, Minima's
+# Thimsy OS: boot into Nano, with the ES-DE theme engine, Minima's
 # look on Midnight for the settings, no menu sounds and no slide settings
 persist.bootanim.skip_nano=0
 persist.gammaos.nano.ndstheme=3
@@ -130,7 +130,7 @@ write_through "$work/build.prop" "$SYSTEM/build.prop"
 sudo cat "$SYSTEM/product/etc/build.prop" >"$work/product.prop"
 cat >>"$work/product.prop" <<EOF
 
-# gamma-os-next-improved: the RG Cube's Quick Settings tiles, with the HDMI ones
+# Thimsy OS: the RG Cube's Quick Settings tiles, with the HDMI ones
 persist.gammaos.qs.override_default_tiles=1
 persist.gammaos.qs.override_default_tiles_0=internet,bt,performance,fan,gammashader,gammargb,gammaeq,rotation
 persist.gammaos.qs.override_default_tiles_1=deepsleepmode,externaldocking,externalmirror,externalresize,immersivemode

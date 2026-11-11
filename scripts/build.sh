@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
-# Builds out/RG_Cube_GammaOS_Next_Improved_v1.0.pac from the official release.
+# Builds out/RG_Cube_Thimsy_OS_v1.0.pac from the official release.
 #
 # Needs: curl, 7zz (or 7z), xz, zstd, unzip, e2fsck, resize2fs, setfattr, cc,
 # python3, and sudo for loop-mounting the system image.
 #
 # Set SYSTEM_IMG=/path/to/system.img to use a GammaOS Next 1.4.4 system image
 # built from source instead of the release's 1.2 system (the RG Cube's vendor,
-# kernel and bootloader stay). That builds ..._Improved_v2.0.pac.
+# kernel and bootloader stay). That builds ..._v1.0a.pac.
 #
 # Set ESDE_APK=/path/to/ES-DE.apk to replace Daijisho with ES-DE
 # (mods/37-esde.sh, 1.2 base only); that also needs aapt.
@@ -37,7 +37,7 @@ PASSWORD="f297133b935e68072bd77309645cca86ab24bd26847e42c8080db143157a090a"
 if [[ -n "${SYSTEM_IMG:-}" ]]; then
   [[ -f "$SYSTEM_IMG" ]] || { echo "SYSTEM_IMG: no file $SYSTEM_IMG" >&2; exit 1; }
   SYSTEM_IMG="$(realpath "$SYSTEM_IMG")"
-  VERSION="2.0"
+  VERSION="1.0a"
 else
   VERSION="1.0"
 fi
@@ -45,7 +45,7 @@ fi
 # regular build.
 VARIANT=""
 [[ -n "${ESDE_APK:-}" ]] && VARIANT="_ES-DE"
-export IMPROVED_VERSION="GammaOS_Next_Improved_v$VERSION$VARIANT"
+export IMPROVED_VERSION="Thimsy_OS_v$VERSION$VARIANT"
 SEVENZIP="$(command -v 7zz || command -v 7z || true)"
 [[ -n "$SEVENZIP" ]] || { echo "7-Zip (7zz or 7z) is required" >&2; exit 1; }
 if [[ -n "${ESDE_APK:-}" ]]; then
@@ -136,7 +136,7 @@ done
 e2fsck -fn "$system"
 python3 -I "$ROOT/scripts/check_image_files.py" "$system" "$written"
 
-pac="$OUT/RG_Cube_GammaOS_Next_Improved_v$VERSION$VARIANT.pac"
+pac="$OUT/RG_Cube_Thimsy_OS_v$VERSION$VARIANT.pac"
 echo "writing $pac"
 python3 -I "$ROOT/scripts/lptool.py" replace "$super" system_a "$system"
 dlkm="$WORK/images/vendor_dlkm_a.img"
@@ -169,6 +169,6 @@ if [[ -n "${SYSTEM_IMG:-}" ]]; then
   rm -f "$logo" "$logo.rgba" "$logo.new"
 fi
 python3 -I "$ROOT/scripts/pactool.py" fixcrc "$pac.partial"
-python3 -I "$ROOT/scripts/pactool.py" setinfo "$pac.partial" "Improved_v$VERSION$VARIANT" RG_Cube_GammaOS_Next_Improved
+python3 -I "$ROOT/scripts/pactool.py" setinfo "$pac.partial" "Thimsy_OS_v$VERSION$VARIANT" RG_Cube_Thimsy_OS
 mv "$pac.partial" "$pac"
 rm -f "$super" "$system"

@@ -1,7 +1,7 @@
 #version 450
 
 /*
-   RG Cube 8:7 Cropped, RetroArch's copy of GammaOS Next Improved's 8:7 Cropped shader.
+   RG Cube 8:7 Cropped, RetroArch's copy of Thimsy OS's 8:7 Cropped shader.
    License: Public domain
 
    The core's frame is stretched to a projection as tall as the output's shorter side and 10/9 as
