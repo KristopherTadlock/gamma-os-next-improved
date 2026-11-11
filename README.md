@@ -317,7 +317,7 @@ It also changes Nano:
   | X | Refresh |
   | Y | Bookmark the page |
   | L1 / R1 | Previous / next tab |
-  | L2 / R2 | Left / right click (hold to drag) |
+  | R2 / L2 | Left / right click (hold to drag) |
   | Left stick | Scroll |
   | Right stick | Mouse cursor |
   | D-pad | Arrow keys |

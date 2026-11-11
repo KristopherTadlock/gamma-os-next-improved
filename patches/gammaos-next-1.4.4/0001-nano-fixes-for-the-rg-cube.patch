@@ -20390,10 +20390,10 @@ index a164106f4c2..601e8e0b2bd 100644
      shared_libs: [
 diff --git a/frameworks/native/services/gammapad/BrowserMode.cpp b/frameworks/native/services/gammapad/BrowserMode.cpp
 new file mode 100644
-index 00000000000..28672f3d88b
+index 00000000000..272e3d4f45d
 --- /dev/null
 +++ b/frameworks/native/services/gammapad/BrowserMode.cpp
-@@ -0,0 +1,516 @@
+@@ -0,0 +1,517 @@
 +#define LOG_TAG "gammapad"
 +
 +#include "BrowserMode.h"
@@ -20826,7 +20826,8 @@ index 00000000000..28672f3d88b
 +}
 +
 +void BrowserMode::refreshMouseButtons() {
-+    bool left = mLtBtn || mLtAxis || mCursorA, right = mRtBtn || mRtAxis || mCursorX;
++    // R2 clicks: the same side as the right stick that moves the cursor.
++    bool left = mRtBtn || mRtAxis || mCursorA, right = mLtBtn || mLtAxis || mCursorX;
 +    if (left != mLeftDown) {
 +        if (left) {
 +            mMouse->buttonDown(BTN_LEFT);
