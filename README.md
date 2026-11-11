@@ -219,6 +219,11 @@ It also changes Nano:
     emulator for that game), Rename / Edit Title, Set Boxart, Scrape This Game,
     Favorites, Collections, Information and Search Games. The XMB's game option
     menu gets Emulator for This Game too.
+  - **Delete Game** (under Rename / Edit Title, in both menus) deletes the
+    game's file, and the files a `.cue`, `.gdi`, `.ccd` or `.m3u` uses, after
+    asking **Delete Game** or **Delete Game and Media** (cover, fan art,
+    screenshots, videos and the rest). It also leaves Favorites, collections,
+    Recently Played and, with the ES-DE folder on the card, its gamelist.
 - **Game lists** put favourites first, each part in name order.
 - **Scan Folders:** adding a folder to a system asks **This Folder Only** or
   **Include Subfolders** (selected first), and that choice wins over Scan ROM
