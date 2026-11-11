@@ -346,6 +346,9 @@ It also changes Nano:
   the only copy. ES-DE asks for its folder the next time it starts: choose ES-DE
   on the card. A Nano scrape keeps ES-DE's own covers, fan art and metadata
   unless Overwrite is on, and Clear Boxart leaves ES-DE's pictures alone.
+  Nano and ES-DE take turns with the folder: the Nano home closes ES-DE when it
+  starts, and the in-game overlay saves nothing there while ES-DE is running.
+  ES-DE's Save Metadata setting is kept at Always so closing it loses nothing.
 - **Move Emulator Settings to microSD** (Game Settings): moves the settings,
   saves and states of RetroArch, PPSSPP, Flycast and the built-in DS emulator to
   `emulator_config/<emulator>` on the card and points each emulator there.
