@@ -19,7 +19,10 @@ for TAG in "$@"; do
   if ! gh release download "$TAG" -R "$REPO" -D "$D/dl" -p '*.7z.*' -p 'SHA256SUMS' >/dev/null 2>&1; then
     echo -e "$TAG\tSKIP\tdownload failed" | tee -a "$RESULTS"; rm -rf "$D"; continue
   fi
-  if [ -f "$D/dl/SHA256SUMS" ] && ! (cd "$D/dl" && sha256sum -c --quiet SHA256SUMS); then
+  # SHA256SUMS lists the 7z volumes and, in some releases, the PAC inside
+  # them: check the volumes now and the PAC once extracted.
+  [ -f "$D/dl/SHA256SUMS" ] && mv "$D/dl/SHA256SUMS" "$D/SHA256SUMS"
+  if [ -f "$D/SHA256SUMS" ] && ! (cd "$D/dl" && sha256sum -c --quiet --ignore-missing ../SHA256SUMS); then
     echo -e "$TAG\tFAIL\tpublished files don't match SHA256SUMS" | tee -a "$RESULTS"; rm -rf "$D"; continue
   fi
   first=$(ls "$D/dl"/*.7z.001 2>/dev/null | head -1)
@@ -28,6 +31,10 @@ for TAG in "$@"; do
   rm -rf "$D/dl"
   REF=$(ls "$D/pac"/*.pac | head -1)
   REF_SHA=$(sha256sum "$REF" | cut -d' ' -f1)
+  LISTED=$(awk -v f="$(basename "$REF")" '$2==f {print $1}' "$D/SHA256SUMS" 2>/dev/null)
+  if [ -n "$LISTED" ] && [ "$LISTED" != "$REF_SHA" ]; then
+    echo -e "$TAG\tFAIL\textracted PAC doesn't match SHA256SUMS" | tee -a "$RESULTS"; rm -rf "$D"; continue
+  fi
   if ! "$ENGINE" dev pack --source "$SRC" --reference "$REF" --out "$D/pack" --device rgcube --system-name "thimsy-system-$TAG" > "$D/pack.log" 2>&1; then
     echo -e "$TAG\tFAIL\tpack: $(tail -1 "$D/pack.log")" | tee -a "$RESULTS"; rm -rf "$D"; continue
   fi
