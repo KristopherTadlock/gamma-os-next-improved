@@ -21,8 +21,9 @@
 # (scripts/odm_sepolicy.py), so init does not compile one at every boot. That
 # needs secilc (from the AOSP host build) and debugfs on PATH.
 #
-# With SYSTEM_IMG, the bootloader's boot picture (BootLogo) becomes Nano's boot
-# screen without its status line (scripts/bootlogo.py), so the screen from
+# With SYSTEM_IMG, the bootloader's boot picture (BootLogo, and the fastboot-mode
+# copy Fastboot_Logo) becomes Nano's boot screen without its status line
+# (scripts/bootlogo.py), so the screen from
 # power-on carries straight into Nano's. That needs nano-bootlogo (from the AOSP
 # host build) on PATH; BOOT_LOGO_SVG and BOOT_LOGO_FONT default to the logo and
 # Roboto in the AOSP tree MKBOOTIMG is in (or AOSP=<tree>).
@@ -173,6 +174,8 @@ if [[ -n "${SYSTEM_IMG:-}" ]]; then
   nano-bootlogo "$BOOT_LOGO_SVG" "$BOOT_LOGO_FONT" 720 720 "$logo.rgba"
   python3 -I "$ROOT/scripts/bootlogo.py" "$logo" "$logo.rgba" "$logo.new"
   python3 -I "$ROOT/scripts/pactool.py" replace "$pac.partial" logo.img "$logo.new"
+  # Fastboot mode shows its own copy of the stock pictures (Anbernic's logo); give it the same.
+  python3 -I "$ROOT/scripts/pactool.py" replace "$pac.partial" fbootlogo.img "$logo.new"
   rm -f "$logo" "$logo.rgba" "$logo.new"
 fi
 python3 -I "$ROOT/scripts/pactool.py" fixcrc "$pac.partial"

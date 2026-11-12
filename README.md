@@ -730,7 +730,8 @@ The tools it uses:
   signed, so that can't be changed, and nothing of Thimsy's runs yet. Tapping
   power once pauses the wait and tapping it again ends it at once; one tap
   alone leaves it paused until the next. The boot picture itself shows only
-  the Thimsy title and logo.
+  the Thimsy title and logo, and fastboot mode shows the same picture instead
+  of Anbernic's logo.
 - The boot screen redraws at full rate until the home has settled under it
   (then at 10 fps while it waits only for the startup sound). The ES-DE home's
   idle pacing (one redraw a second when nothing moves) applied to it too, so
