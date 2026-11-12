@@ -20,6 +20,7 @@ Hold the **Anbernic button**, or **Start + Select**, in a game and press another
 - Quit needs a 3 s hold with nothing else pressed, so it can't happen by accident. Any other key during the hold cancels it until every button is let go and the hold starts again.
 - The buttons can be changed under **Settings → Gamepad Settings → Hotkeys**. *Quit Game Button* adds a button chord for quit; it is off by default.
 - The Anbernic button on its own opens the Quick Menu when it is **released**, over a game and in Nano's own menus alike. Start + Select opens the Quick Menu only in Nano's own menus, never in a game.
+- Anbernic + Volume Up / Down changes the screen brightness everywhere. It is not a hotkey, and the Quick Menu does not open on that release.
 - The game still sees Start and Select: they can't be held back without delaying them. Start + Select is not a chord when another pad button is already held (A + B + Start + Select resets many games).
 
 Each emulator has its own hotkeys, or none. A per-emulator **profile** turns the five actions into whatever that emulator understands. Adding an emulator means adding a profile file, with no code change.
@@ -53,6 +54,8 @@ It runs while a game is in front (`app_launched`, overlay down, not in a drastic
    - the button's repeats and key-up are swallowed, even if the Anbernic button is released first.
 
    Buttons with no hotkey are swallowed too, so the game never sees half a chord.
+
+   A Volume key while armed is not swallowed: it changes the brightness (the volume key handler reads the Anbernic button's physical state), and the Quick Menu does not open on release.
 3. **Anbernic up:**
    - after a chord: nothing more;
    - alone, within 3 s: the overlay rises on the Quick Menu.
@@ -66,7 +69,7 @@ It runs while a game is in front (`app_launched`, overlay down, not in a drastic
 7. **Order of presses:** only Anbernic first, then the button, is a chord. A button already held when Anbernic goes down passes through untouched.
 8. **A lost key-up:** if the Anbernic button's key-up goes missing, a later chord checks that it is physically down before acting. Start + Select reads both buttons' physical state.
 
-Nano's own menus follow the same rule. The Quick Menu toggles on release, and a button pressed while the Anbernic button is held cancels it and is ignored. Start and Select act when they are released, so pressing both together toggles the Quick Menu once both are up. A key pressed while either is held cancels its action (Select + Volume is brightness).
+Nano's own menus follow the same rule. The Quick Menu toggles on release, and a button pressed while the Anbernic button is held cancels it and is ignored. Start and Select act when they are released, so pressing both together toggles the Quick Menu once both are up. A key pressed while either is held cancels its action. Anbernic + Volume is brightness, and cancels the Quick Menu like any other chord.
 
 ### GammaHotkeyController (system_server)
 

@@ -1,12 +1,14 @@
 #!/usr/bin/env bash
-# Sets the version Settings > About phone shows to this release, and replaces
-# the build machine's user and host names, which a source build records.
+# Sets the version Settings > About phone shows to this release, records it as
+# ro.thimsy.version for Nano's System Information, and replaces the build
+# machine's user and host names, which a source build records.
 #
 # Usage: 05-version.sh SYSTEM_DIR CACHE_DIR
 set -euo pipefail
 
 PROP="$1/build.prop"
 VERSION="${IMPROVED_VERSION:-Thimsy_OS_v1.0}"
+THIMSY="${THIMSY_VERSION:-1.0}"
 work="$(realpath -m "$2")/version"
 
 mkdir -p "$work"
@@ -19,8 +21,10 @@ sed -i -E \
   -e "s/^(ro\.lineage(\.display)?\.version)=GammaOS_Next_(Full_)?v[0-9.]+$/\1=$VERSION/" \
   -e "s/^ro\.build\.user=.*/ro.build.user=gammaos/" \
   -e "s/^ro\.build\.host=.*/ro.build.host=localhost/" \
+  -e "/^ro\.thimsy\.version=/d" \
   "$work/build.prop"
+echo "ro.thimsy.version=$THIMSY" >>"$work/build.prop"
 # Writing through the existing file keeps its owner, mode, and SELinux label.
 sudo cp --no-preserve=all "$work/build.prop" "$PROP"
 rm -rf "$work"
-echo "version: $VERSION"
+echo "version: $VERSION (ro.thimsy.version=$THIMSY)"

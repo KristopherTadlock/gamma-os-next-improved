@@ -9,6 +9,7 @@ punch them out, but the e2fsck AOSP builds for the host ignores discard on an im
 release build puts that one first on PATH. This reads the free ranges from dumpe2fs and writes
 zeros over them. Run it on an unmounted, clean filesystem.
 """
+import os
 import re
 import subprocess
 import sys
@@ -20,7 +21,8 @@ def main():
     if len(sys.argv) != 2:
         sys.exit(__doc__)
     image = sys.argv[1]
-    out = subprocess.run(["dumpe2fs", image], capture_output=True, text=True, check=True).stdout
+    out = subprocess.run(["dumpe2fs", image], capture_output=True, text=True, check=True,
+                         env={**os.environ, "LC_ALL": "C"}).stdout
     block = int(re.search(r"^Block size:\s+(\d+)", out, re.M).group(1))
     ranges = []
     for line in re.findall(r"^\s+Free blocks: (.+)$", out, re.M):

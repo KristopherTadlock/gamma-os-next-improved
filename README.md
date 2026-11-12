@@ -195,14 +195,20 @@ fixes GammaOS Nano bugs:
 
 It also changes Nano:
 
-- **Quick Menu:** the Quick Settings rows (Wi-Fi, Bluetooth, Fan Speed,
-  GammaRGB, GammaEQ, Deep Sleep Mode and the controller toggles) are in the
-  Quick Menu itself instead of a Quick Settings submenu, ordered with the most
-  used first. Wi-Fi offers On, Off and Scan, and the row under it shows the
-  network you are connected to, with its signal bars. HDMI options are one
-  External Display submenu, the same as in Display Settings. System Settings is
-  renamed Android Settings and sits at the bottom. Close Current App and Screen
-  Orientation only show over a running app.
+- **Quick Menu:** Power, Global Shaders, Notifications, Wi-Fi, Bluetooth,
+  Display (Screen Brightness and the External Display submenu, the same as in
+  Display Settings), Device (Performance Mode, Fan Speed, RGB, EQ, Quick Resume
+  and Deep Sleep Mode), Controller (Controller Bindings, ABXY Swap, DPAD/Analog
+  Swap, Global Sensitivity and stick inversion) and Kiosk Mode. Kiosk Mode is
+  the last row while it is off, and the first, as **Kiosk Mode (ON)**, while it
+  is on. Over a running app, Close Current App follows Power and Display also
+  has Screen Orientation. Wi-Fi offers On, Off and Scan, and the row under it
+  shows the network you are connected to, with its signal bars. Android's own
+  Settings app is in **Settings → System Settings → Android Settings**, and
+  GammaRGB and GammaEQ are named RGB and EQ.
+- **Settings lists:** a setting's name too long for its row wraps onto a second
+  line, and a choice too wide for the side panel is drawn smaller to fit.
+  **System Information** shows the Thimsy release (Thimsy 1.0a).
 - **Anbernic button:** opens the Quick Menu when it is released, on the home
   screen and over a running game (pressing it again, or B, goes back to the
   game). The RG Cube reports it as F10. **Toolbox → Anbernic Button Opens Quick
@@ -389,6 +395,8 @@ It also changes Nano:
   for 3 seconds closes the game; any other button pressed during the hold
   cancels it. This replaces Anbernic + Start (the Quit Game Button is now off
   by default).
+- **Brightness:** hold the Anbernic button and press Volume Up / Down, in
+  Nano's menus and in games alike. Select + Volume is now plain volume.
 - **Browser controls:** with Brave, or [Fulguris](https://github.com/Slion/Fulguris)
   if it is installed, in front, gammapad turns the controller into a mouse and
   the browser's keyboard shortcuts, and the browser's own controller support
@@ -435,7 +443,7 @@ It also changes Nano:
   card's ES-DE ROM folder has games for and Nano does not list yet (Xbox, for
   one) are added; running the move again on a card that already holds ES-DE
   picks them up too.
-- **Move Emulator Settings to microSD** (Game Settings): moves the settings of
+- **Move Emulator Files to microSD** (Game Settings): moves the settings of
   every emulator GammaOS ships, and the saves and states kept with them, to
   `emulator_config/<emulator>` on the card and points each emulator there:
   RetroArch, PPSSPP, Flycast, DraStic (its whole system folder), M64Plus FZ (its
@@ -514,7 +522,7 @@ its own launcher), and **Boot Nano** back. `mods/50-nano.sh` sets it up:
   sets it back to the XMB's, **Background Colour** changes the colour);
 - the menu sounds are off (**Theme Settings → Navigation Sounds** turns them
   on);
-- the stick LEDs are on and follow the screen's colour (GammaRGB);
+- the stick LEDs are on and follow the screen's colour (RGB);
 - the performance mode is Max Performance;
 - Slide Behaviour is hidden, as the RG Cube cannot slide;
 - Quick Settings in Android's shade gets the Force Mirror and Resize to
