@@ -7,7 +7,7 @@
 set -euo pipefail
 
 PROP="$1/build.prop"
-VERSION="${IMPROVED_VERSION:-Thimsy_OS_v1.0}"
+VERSION="${THIMSY_BUILD_VERSION:-Thimsy_OS_v1.0}"
 THIMSY="${THIMSY_VERSION:-1.0}"
 work="$(realpath -m "$2")/version"
 

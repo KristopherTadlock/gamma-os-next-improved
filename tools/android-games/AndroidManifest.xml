@@ -3,7 +3,7 @@
      them from there. Target SDK 25 keeps the package broadcasts (a game
      installed or removed) and plain /sdcard file access. -->
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="org.gammaosnextimproved.androidgames"
+    package="org.thimsy.androidgames"
     android:versionCode="1"
     android:versionName="1.0">
 
@@ -23,7 +23,7 @@
         <receiver android:name=".SyncReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="org.gammaosnextimproved.androidgames.SYNC" />
+                <action android:name="org.thimsy.androidgames.SYNC" />
             </intent-filter>
             <intent-filter>
                 <action android:name="android.intent.action.PACKAGE_ADDED" />

@@ -45,7 +45,7 @@ fi
 # regular build.
 VARIANT=""
 [[ -n "${ESDE_APK:-}" ]] && VARIANT="_ES-DE"
-export IMPROVED_VERSION="Thimsy_OS_v$VERSION$VARIANT"
+export THIMSY_BUILD_VERSION="Thimsy_OS_v$VERSION$VARIANT"
 export THIMSY_VERSION="$VERSION"
 SEVENZIP="$(command -v 7zz || command -v 7z || true)"
 [[ -n "$SEVENZIP" ]] || { echo "7-Zip (7zz or 7z) is required" >&2; exit 1; }

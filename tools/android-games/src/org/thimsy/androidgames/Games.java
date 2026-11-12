@@ -1,4 +1,4 @@
-package org.gammaosnextimproved.androidgames;
+package org.thimsy.androidgames;
 
 import android.content.Context;
 import android.content.Intent;
@@ -268,7 +268,7 @@ final class Games {
     // A tEXt chunk ("Software" = this package) right after the PNG signature (8
     // bytes) and IHDR, which is always the first chunk and 25 bytes long.
     private static final int MARK_AT = 8 + 25;
-    private static final byte[] MARK_CHUNK = textChunk("Software", "org.gammaosnextimproved.androidgames");
+    private static final byte[] MARK_CHUNK = textChunk("Software", "org.thimsy.androidgames");
 
     private static byte[] textChunk(String keyword, String text) {
         byte[] data = (keyword + "\0" + text).getBytes(StandardCharsets.ISO_8859_1);

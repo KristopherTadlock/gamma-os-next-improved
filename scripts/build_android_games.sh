@@ -30,7 +30,7 @@ zipalign -f -p 4 "$work/unsigned.apk" "$work/aligned.apk"
 if [[ ! -f "$keystore" ]]; then
   mkdir -p "$(dirname "$keystore")"
   keytool -genkeypair -keystore "$keystore" -storepass android -alias androidgames \
-    -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=gamma-os-next-improved Android Games" >/dev/null 2>&1
+    -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Thimsy Android Games" >/dev/null 2>&1
 fi
 apksigner sign --ks "$keystore" --ks-pass pass:android --out "$out" "$work/aligned.apk"
 echo "built $out"

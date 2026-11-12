@@ -1,4 +1,4 @@
-package org.gammaosnextimproved.androidgames;
+package org.thimsy.androidgames;
 
 import android.app.Activity;
 import android.net.Uri;

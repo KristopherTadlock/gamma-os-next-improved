@@ -1,4 +1,4 @@
-package org.gammaosnextimproved.androidgames;
+package org.thimsy.androidgames;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;

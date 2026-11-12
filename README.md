@@ -163,7 +163,7 @@ except the Daijisho changes and ES-DE's app: GammaOS Nano replaces Daijisho,
 which is removed, along with Beneath a Steel Sky's Daijisho launch file
 (ScummVM lists the game itself).
 
-Apply `patches/gammaos-next-1.4.4/0001-nano-fixes-for-the-rg-cube.patch` to the
+Apply `patches/thimsy/0001-thimsy.patch` to the
 source tree (`git apply`, from its root) before building the system image. It
 fixes GammaOS Nano bugs:
 
@@ -201,8 +201,9 @@ It also changes Nano:
   and Deep Sleep Mode), Controller (Controller Bindings, ABXY Swap, DPAD/Analog
   Swap, Global Sensitivity and stick inversion) and Kiosk Mode. Kiosk Mode is
   the last row while it is off, and the first, as **Kiosk Mode (ON)**, while it
-  is on. Over a running app, Close Current App follows Power and Display also
-  has Screen Orientation. Wi-Fi offers On, Off and Scan, and the row under it
+  is on. Over a running app, Close Current App comes just after Power (after
+  Resume Audio Player while music plays), and Display also has Screen
+  Orientation. Wi-Fi offers On, Off and Scan, and the row under it
   shows the network you are connected to, with its signal bars. Android's own
   Settings app is in **Settings → System Settings → Android Settings**, and
   GammaRGB and GammaEQ are named RGB and EQ.
@@ -214,19 +215,22 @@ It also changes Nano:
   game). The RG Cube reports it as F10. **Toolbox → Anbernic Button Opens Quick
   Menu** gives the button back to games.
 - **Universal hotkeys:** in a game, hold the Anbernic button and press R1 to
-  save, L1 to load, R2 for fast forward, L2 for rewind, or hold Start to quit,
-  in every emulator that can (**Gamepad Settings → Hotkeys** changes the buttons
+  save, L1 to load, R2 for fast forward, L2 for rewind, or hold it on its own
+  for 3 seconds to quit, in every emulator that can (**Gamepad Settings → Hotkeys** changes the buttons
   and lists what each emulator supports). [HOTKEYS.md](HOTKEYS.md) describes
   it; `mods/55-hotkeys.sh` installs the emulator profiles from `mods/hotkeys`.
-- **Power button:** held for 7 seconds, it shuts the console down.
+- **Power button:** held for 7 seconds, it shuts the console down, on every
+  home. A small service (`nano-powerwatch`) backs that up apart from Android
+  and Nano: held 12 seconds with no shutdown started, it asks init for one, and
+  a shutdown still running a minute later is ended by powering off from the
+  kernel. Only the power chip's own long-press cut-off covers a frozen kernel.
 - **Setup's time zone step:** with an internet connection, the clock is set
   from the internet and the time zone is looked up from the connection's IP
   address (ipapi.co, or ip-api.com if that fails) and selected on the globe,
   to confirm or change. A US time zone defaults to MM/DD/YYYY dates and the
   12-hour clock; elsewhere the defaults stay DD/MM/YYYY and 24-hour.
-- **USB Settings:** the mode you choose (Charging Only, File Transfer (MTP),
-  Photo Transfer (PTP) or USB Ethernet (RNDIS)) stays on and is applied each
-  time a computer is connected, from boot onwards. File Transfer is the default.
+- **USB:** File Transfer (MTP) is applied each time a computer is connected,
+  from boot onwards, and kept up while it stays connected.
 - **ES-DE theme:**
   - **Settings Theme** (Theme Settings) gives the settings screens the Minima
     theme's look while the game menus keep ES-DE's.
@@ -287,8 +291,8 @@ It also changes Nano:
   player. Before, each screen worked out its own layout again for touch, and
   taps could land on the wrong item. In the ES-DE system view a swipe moves
   one system, with no fling. A two-finger tap opens or closes the Quick Menu,
-  as the Anbernic button does, wherever Nano is on screen. In a game it does
-  nothing, so a game's two-thumb touch controls never raise the menu
+  as the Anbernic button does, wherever Nano is on screen. Over a game or app
+  it does nothing, so a game's two-thumb touch controls never raise the menu
   (`persist.gammaos.nano.two_finger_quickmenu=true` turns it on over apps and
   games other than the DS emulator).
 - **Touch on the RG Cube:** its touchscreen is mounted a quarter turn from the
@@ -393,10 +397,31 @@ It also changes Nano:
   off. See [HOTKEYS.md](HOTKEYS.md).
 - **Hold to quit:** holding the Anbernic button, or Start + Select, on its own
   for 3 seconds closes the game; any other button pressed during the hold
-  cancels it. This replaces Anbernic + Start (the Quit Game Button is now off
-  by default).
+  cancels it. The optional Quit Game Button is off by default, and Start and
+  Select cannot be it (Anbernic + Start opens Applications).
 - **Brightness:** hold the Anbernic button and press Volume Up / Down, in
   Nano's menus and in games alike. Select + Volume is now plain volume.
+- **Shader on / off:** hold the Anbernic button and press Select to turn the
+  display shader on or off, in Nano's menus, in games and in the DS emulator.
+  The selected shader is kept. This replaces Power + Select, which only turned
+  it off; Power is plain Power again.
+- **Applications:** hold the Anbernic button and press Start to open the
+  Applications view, and again (or Start alone) to close it. Over a game the
+  overlay rises on it, and closing it, or B, returns to the game. It does
+  nothing in the DS emulator. Start and Select can no longer be hotkey buttons.
+- **Minima Applications grid:** in the Minima theme, and in the ES-DE theme
+  when its Settings Theme is Minima (the ES-DE menu's Applications, Kiosk
+  Mode's Start and Anbernic + Start), Applications is a launcher grid: five
+  columns of app icons with their names under a search bar that filters as
+  you type (Up from the first row, a tap or Select opens the keyboard; Y
+  clears it). The d-pad or stick moves around the grid, L1 / R1 turn a page,
+  A or a tap starts the app, X or holding a tile opens its options, Y pins
+  it, and a drag scrolls, flinging when let go. The XMB and DSi themes, and
+  ES-DE with the XMB Settings Theme, keep their lists.
+- **Back to the ES-DE home:** when a game or app exits (holding Back or the
+  Anbernic button, Close Current App, or the app closing), the
+  ES-DE theme returns to its home screen, with any Quick Menu, settings
+  screen, Applications or ES-DE menu left open before the launch closed.
 - **Browser controls:** with Brave, or [Fulguris](https://github.com/Slion/Fulguris)
   if it is installed, in front, gammapad turns the controller into a mouse and
   the browser's keyboard shortcuts, and the browser's own controller support

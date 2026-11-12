@@ -1,6 +1,6 @@
 # Universal hotkeys
 
-Applies to the GammaOS Next 1.4.4 build for the RG Cube (branch `nano-144`).
+Applies to Thimsy OS built from GammaOS Next 1.4.4 source for the RG Cube (branch `nano-144`).
 
 Status: implemented. The per-emulator bindings come from each emulator's source code and are not yet tested on a device (see [Testing](#testing)).
 
@@ -21,7 +21,10 @@ Hold the **Anbernic button**, or **Start + Select**, in a game and press another
 - The buttons can be changed under **Settings → Gamepad Settings → Hotkeys**. *Quit Game Button* adds a button chord for quit; it is off by default.
 - The Anbernic button on its own opens the Quick Menu when it is **released**, over a game and in Nano's own menus alike. Start + Select opens the Quick Menu only in Nano's own menus, never in a game.
 - Anbernic + Volume Up / Down changes the screen brightness everywhere. It is not a hotkey, and the Quick Menu does not open on that release.
-- The game still sees Start and Select: they can't be held back without delaying them. Start + Select is not a chord when another pad button is already held (A + B + Start + Select resets many games).
+- Anbernic + Select turns the display shader on or off everywhere: Nano's menus, apps and games, and drastic-nano. The selected shader is kept (CRT Simple if none was ever chosen), so a shader that makes the screen unreadable can be turned off without seeing it. It replaces Power + Select, which is plain Power again.
+- Anbernic + Start opens the Applications view, and closes it again. Over a game the overlay rises on it, and closing it (Anbernic + Start, Start or B) returns to the game. In drastic-nano it does nothing: Nano's overlay can't show during a DS session.
+- Neither is a hotkey: both work with Universal Hotkeys off, the Quick Menu does not open on that release, and the game never sees that Start or Select. Start and Select can't be hotkey buttons.
+- With Start + Select, the game still sees Start and Select: they can't be held back without delaying them. Start + Select is not a chord when another pad button is already held (A + B + Start + Select resets many games).
 
 Each emulator has its own hotkeys, or none. A per-emulator **profile** turns the five actions into whatever that emulator understands. Adding an emulator means adding a profile file, with no code change.
 
@@ -31,7 +34,7 @@ Each emulator has its own hotkeys, or none. A per-emulator **profile** turns the
  pad --> PhoneWindowManager.interceptKeyBeforeQueueing
             |  chord detector (Anbernic held + button)
             v
-         GammaHotkeyController (system_server)
+         ThimsyHotkeyController (system_server)
             |  foreground package --> profile --> driver
             +--> inject a keyboard key (InputManager)
             +--> RetroArch network command (UDP 127.0.0.1:55355)
@@ -56,6 +59,8 @@ It runs while a game is in front (`app_launched`, overlay down, not in a drastic
    Buttons with no hotkey are swallowed too, so the game never sees half a chord.
 
    A Volume key while armed is not swallowed: it changes the brightness (the volume key handler reads the Anbernic button's physical state), and the Quick Menu does not open on release.
+
+   Select or Start pressed while the Anbernic button is physically held comes before the hotkeys: Select flips `persist.gammaos.shader.enable`, and Start sets `sys.gammaos.nano.qs_summon=2` with `show_overlay=1`, so Nano rises on the Applications view. The button's repeats and key-up are swallowed. Select works even with the Anbernic button given back to apps (Toolbox); Start needs it to be Nano's.
 3. **Anbernic up:**
    - after a chord: nothing more;
    - alone, within 3 s: the overlay rises on the Quick Menu.
@@ -69,11 +74,11 @@ It runs while a game is in front (`app_launched`, overlay down, not in a drastic
 7. **Order of presses:** only Anbernic first, then the button, is a chord. A button already held when Anbernic goes down passes through untouched.
 8. **A lost key-up:** if the Anbernic button's key-up goes missing, a later chord checks that it is physically down before acting. Start + Select reads both buttons' physical state.
 
-Nano's own menus follow the same rule. The Quick Menu toggles on release, and a button pressed while the Anbernic button is held cancels it and is ignored. Start and Select act when they are released, so pressing both together toggles the Quick Menu once both are up. A key pressed while either is held cancels its action. Anbernic + Volume is brightness, and cancels the Quick Menu like any other chord.
+Nano's own menus follow the same rule. The Quick Menu toggles on release, and a button pressed while the Anbernic button is held cancels it and is ignored. Start and Select act when they are released, so pressing both together toggles the Quick Menu once both are up. A key pressed while either is held cancels its action. Anbernic + Volume is brightness, and cancels the Quick Menu like any other chord. Anbernic + Select (shader) and Anbernic + Start (Applications) act on the press and are not a Start + Select chord; Select's search and Start's own action don't run. Applications closes back to where it was opened from, and Start on its own closes it too.
 
-### GammaHotkeyController (system_server)
+### ThimsyHotkeyController (system_server)
 
-`frameworks/base/services/core/java/com/android/server/policy/GammaHotkeyController.java`. It:
+`frameworks/base/services/core/java/com/android/server/policy/ThimsyHotkeyController.java`. It:
 
 - finds the foreground package and its profile, falling back to the `"*"` profile;
 - runs the action's driver;
@@ -185,7 +190,7 @@ The user's own bindings are never replaced in `add` mode: a hotkey whose setting
 | Hold to Quit | `persist.gammaos.hotkeys.quithold` | On |
 | Emulator Support | read-only: each profile, what works and its note | — |
 
-- A button can be A, B, X, Y, L1, R1, L2, R2, L3, R3, Start, Select, a D-pad direction, or Off. A D-pad direction works only in drastic-nano: the D-pad reaches Android as a hat axis, which `PhoneWindowManager` never sees.
+- A button can be A, B, X, Y, L1, R1, L2, R2, L3, R3, a D-pad direction, or Off. Start and Select are reserved for Anbernic + Start and Anbernic + Select; a hotkey set to one of them earlier is turned Off. A D-pad direction works only in drastic-nano: the D-pad reaches Android as a hat axis, which `PhoneWindowManager` never sees.
 - Two hotkeys can't share a button: choosing a button another hotkey has swaps the two.
 - **Controller Bindings** in the Quick Menu (`sys.gammaos.bindings.enabled`, On at every boot) set to Off turns off Start + Select's hotkeys and its hold to quit, in apps and in drastic-nano, along with the other controller bindings (the browser controls, mouse mode and its combo). The Anbernic button's hotkeys stay.
 
@@ -201,7 +206,7 @@ drastic-nano reads the pad itself, so PhoneWindowManager leaves the Anbernic but
 | Quit | Its exit, after the hold; it saves slot 9 for Quick Resume |
 | Rewind | Nothing; it has no rewind |
 
-A Menu binding on the Anbernic button doesn't fire after a chord.
+A Menu binding on the Anbernic button doesn't fire after a chord. Anbernic + Select turns the display shader on or off there too; on the DRM path drastic-nano draws the panel itself (with its own shaders), so the change shows once the game ends. Anbernic + Start does nothing there, since Nano's overlay can't show while drastic-nano owns the panel. The game sees neither button.
 
 Nano's libretro player only runs during the Quick Resume preview, so it has no hotkeys.
 
@@ -259,4 +264,6 @@ On the device, for each emulator:
    - Start + Select + R1 saves, and Start + Select released opens nothing in a game;
    - Anbernic + an unmapped button does nothing;
    - the 10 s emergency hold still recovers;
+   - Anbernic + Select turns the shader off and on again, in Nano, in a game and in drastic-nano, and Power on its own sleeps;
+   - Anbernic + Start opens Applications over a game, and Start, B or Anbernic + Start returns to the game;
    - rewind released when the Quick Menu opens.

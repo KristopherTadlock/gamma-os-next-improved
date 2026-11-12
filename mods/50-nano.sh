@@ -28,7 +28,7 @@ THEME="colorful-simplified-es-de"
 THEME_COMMIT="669e7f6a2de57c5ab69fd865e70d1cd357dbabbb"
 THEME_URL="https://github.com/anthonycaccese/$THEME/archive/$THEME_COMMIT.zip"
 THEME_SHA256="b36570e97d9233343872d8079c99bddc4116283c274785d086ca63be6eee3211"
-GAMES_PKG="org.gammaosnextimproved.androidgames"
+GAMES_PKG="org.thimsy.androidgames"
 cache="$(realpath -m "$2")/nano"
 work="$cache/work"
 
