@@ -160,11 +160,11 @@ jobs:
       - uses: actions/download-artifact@v4
         with:
           name: engine-${{ runner.os }}
-          path: dl/engine
+          path: installer/app/dl/engine
       - uses: actions/download-artifact@v4
         with:
           name: tools-${{ runner.os }}
-          path: dl/tools
+          path: installer/app/dl/tools
       - name: Package
         run: |
           VER=$(grep '^version' ../engine/Cargo.toml | head -1 | cut -d'"' -f2)

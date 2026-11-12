@@ -1,3 +1,7 @@
+// The stand-in engine is a POSIX shell script.
+@TestOn('!windows')
+library;
+
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';

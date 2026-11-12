@@ -146,6 +146,15 @@ enum Dev {
         #[arg(long)]
         system_name: String,
     },
+    /// Download and unpack a device's official source firmware.
+    Source {
+        #[arg(long)]
+        device: String,
+        #[arg(long)]
+        workspace: PathBuf,
+        #[arg(long = "import")]
+        import: Vec<PathBuf>,
+    },
     /// Validate a catalog directory.
     CheckCatalog,
     /// Write the English source strings (catalog/i18n/en.yaml).
@@ -402,6 +411,14 @@ fn run(cli: Cli, rep: &Reporter) -> Result<()> {
                     }
                     std::fs::write(&path, body)?;
                     println!("{} strings -> {}", strings.len(), path.display());
+                }
+                Dev::Source {
+                    device,
+                    workspace,
+                    import,
+                } => {
+                    let p = job::prepare_source(&cat, &device, &workspace, &import, rep)?;
+                    println!("{}", p.display());
                 }
                 Dev::CheckCatalog => {
                     println!(

@@ -67,6 +67,13 @@ if s["size"] > 2 * PART - 100_000_000:
         block += f"      - {{ id: {name}, file: {name}, size: {size}, sha256: \"{sha}\", urls: [\"{base}/{name}\"] }}\n"
 else:
     block += f"    urls: [\"{base}/{s['file']}\"]\n"
-cat = re.sub(rf"  - id: {re.escape(s['id'])}\n(    .*\n)+", block, cat)
+pat = rf"  - id: {re.escape(s['id'])}\n(    .*\n)+"
+if re.search(pat, cat):
+    cat = re.sub(pat, lambda _: block, cat)
+else:  # a new system image: add it to the artifacts list
+    cat = re.sub(r"^artifacts:\n", lambda m: m.group(0) + block, cat, count=1, flags=re.M)
+# Point the profile at this system image.
+cat = re.sub(r"^(systems: *\{[^}]*?)\b%s: *[^,}]+" % re.escape(profile), lambda m: m.group(1) + f"{profile}: {s['id']}", cat, flags=re.M)
+cat = re.sub(r"^(systems:\n(?:  .*\n)*?  )%s: .*$" % re.escape(profile), lambda m: m.group(1) + f"{profile}: {s['id']}", cat, flags=re.M)
 open(catalog_yaml, "w").write(cat)
 print("applied", len(pack["artifacts"]), "artifacts,", len(pack["build"]), "steps")

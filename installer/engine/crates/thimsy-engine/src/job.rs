@@ -142,6 +142,72 @@ struct State {
     assembling: bool,
 }
 
+/// The Thimsy build shipped with the installer: a `thimsy-build` folder next
+/// to the engine or one level up (next to the app). Searched before
+/// downloading, like an import folder.
+pub fn bundled_build_dirs() -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if let Ok(dir) = std::env::var("THIMSY_BUILD_DIR") {
+        out.push(PathBuf::from(dir));
+    }
+    if let Some(dir) = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(Path::to_path_buf))
+    {
+        for cand in [
+            dir.join("thimsy-build"),
+            dir.join("..").join("thimsy-build"),
+        ] {
+            if cand.is_dir() {
+                out.push(cand);
+            }
+        }
+    }
+    out
+}
+
+/// Fetches and unpacks a device's official source firmware into `dest`
+/// (maintainer tooling: the input of `dev pack`).
+pub fn prepare_source(
+    cat: &Catalog,
+    device: &str,
+    workspace: &Path,
+    imports: &[PathBuf],
+    rep: &Reporter,
+) -> Result<PathBuf> {
+    let d = cat.device(device)?;
+    let src = d.source.as_ref().context("device has no source firmware")?;
+    let cache = Cache::new(workspace.join("cache"), imports.to_vec())?;
+    let mut parts = Vec::new();
+    for p in &src.parts {
+        parts.push(cache.get(p, rep)?);
+    }
+    let out_dir = workspace.join("source");
+    fs::create_dir_all(&out_dir)?;
+    let out = out_dir.join(&src.contains);
+    if fs::metadata(&out).is_ok_and(|m| m.len() == src.container.size)
+        && util::sha256_file(&out, |_, _| {})? == src.container.sha256
+    {
+        return Ok(out);
+    }
+    let tmp = out.with_extension("partial");
+    archive::extract_one(
+        &parts,
+        src.password.as_deref(),
+        &src.contains,
+        &tmp,
+        &mut |d, t| rep.progress("Unpacking", d, t),
+    )?;
+    if util::sha256_file(&tmp, |_, _| {})? != src.container.sha256 {
+        bail!(
+            "unpacked {} doesn't match the catalog's sha256",
+            src.contains
+        );
+    }
+    fs::rename(&tmp, &out)?;
+    Ok(out)
+}
+
 pub fn job_dir(workspace: &Path, device: &str, profile: &str) -> PathBuf {
     workspace.join("jobs").join(format!("{device}-{profile}"))
 }
@@ -189,7 +255,9 @@ pub fn build(cat: &Catalog, opts: &BuildOptions, rep: &Reporter) -> Result<JobRe
 
     // Disk space: what's still missing must fit, with headroom. Checked
     // before anything is downloaded or written.
-    let cache = Cache::new(opts.workspace.join("cache"), opts.imports.clone())?;
+    let mut imports = opts.imports.clone();
+    imports.extend(bundled_build_dirs());
+    let cache = Cache::new(opts.workspace.join("cache"), imports)?;
     let sc = check_space(
         cat,
         &d.id,
