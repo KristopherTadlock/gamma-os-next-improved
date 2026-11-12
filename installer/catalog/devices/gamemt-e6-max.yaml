@@ -1,0 +1,20 @@
+id: gamemt-e6-max
+name: GameMT E6 MAX
+maker: GameMT
+soc: Allwinner A527
+display: "1280×720"
+status: candidate
+hardware: { android_api: 34, armv82: true, vulkan: true, ram_gb: 4, gpu: "Mali-G57" }
+support:
+  build: candidate
+  boot: candidate
+  install: { windows: untested, linux: none, macos: none, android: none }
+host_message: "{device} is installed with Allwinner's PhoenixSuit, which only runs on Windows. Run Thimsy Installer on a Windows PC to install it."
+notes:
+  - "Planned: Windows only. Not buildable yet."
+guides:
+  unlock:
+    route: automated
+    steps:
+      - title: "Unlock in fastboot"
+        body: "Required before flashing; skipping it can brick the device."

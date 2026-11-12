@@ -1,0 +1,42 @@
+#!/usr/bin/env python3
+"""Stand-in for spd_dump in tests: accepts the same command line, asks for
+"yes" before each write/erase like the real tool, checks the files it's
+given, writes dummy backups for read_part, and logs every command to
+$FAKE_SPD_LOG. Fails if any confirmation is missing."""
+import os, sys
+args = sys.argv[1:]
+log = open(os.environ.get("FAKE_SPD_LOG", os.devnull), "a")
+def confirm(what):
+    sys.stdout.write(f'Answer "yes" to confirm the "{what}" command: ')
+    sys.stdout.flush()
+    line = sys.stdin.readline()
+    if line.strip().lower() != "yes":
+        sys.stderr.write("operation is not confirmed\n"); sys.exit(1)
+i = 0
+while i < len(args):
+    a = args[i]
+    if a in ("--wait", "--verbose", "keep_charge", "timeout", "blk_size"):
+        log.write(f"{a} {args[i+1]}\n"); i += 2
+    elif a == "fdl":
+        f, addr = args[i+1], args[i+2]
+        if not os.path.getsize(f): sys.exit(f"empty {f}")
+        log.write(f"fdl {f} {addr}\n"); print(f"FDL loaded from {f} at {addr}"); i += 3
+    elif a == "read_part":
+        name, off, size, out = args[i+1:i+5]
+        os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
+        with open(out, "wb") as o: o.write(b"\0" * min(int(size, 0), 4096))
+        log.write(f"read_part {name} {size} {out}\n"); i += 5
+    elif a == "write_part":
+        name, f = args[i+1], args[i+2]
+        confirm("write partition")
+        size = os.path.getsize(f)
+        print(f"\nfile size : 0x{size:x}")
+        print(f"load_partition: {name}, target: 0x{size:x}, written: 0x{size:x}")
+        log.write(f"write_part {name} {f} {size}\n"); i += 3
+    elif a == "erase_part":
+        confirm("erase partition")
+        log.write(f"erase_part {args[i+1]}\n"); i += 2
+    elif a in ("reset", "power_off", "disable_transcode"):
+        log.write(a + "\n"); i += 1
+    else:
+        sys.exit(f"fake spd_dump: unknown command {a}")

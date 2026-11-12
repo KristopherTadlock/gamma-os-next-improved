@@ -1,0 +1,36 @@
+id: medium
+name: Medium
+order: 2
+summary: "Balanced: RetroArch for classic systems plus N64, Dreamcast, PSP and DS emulators, the ES-DE home and Brave."
+emulators:
+  - { id: retroarch, name: RetroArch, systems: "Classic consoles, handhelds, PlayStation, Saturn, arcade" }
+  - { id: flycast, name: Flycast, systems: "Dreamcast" }
+  - { id: ppsspp, name: PPSSPP, systems: "PSP" }
+  - { id: m64plus-fz, name: M64Plus FZ, systems: "Nintendo 64" }
+  - { id: watermelonds, name: WatermelonDS, systems: "Nintendo DS" }
+  - { id: scummvm, name: ScummVM, systems: "Point-and-click adventures" }
+apps:
+  - { id: aurora-store, name: Aurora Store }
+  - { id: brave, name: Brave (default browser) }
+cores:
+  - { id: sameboy, system: "Game Boy / Color", default: true }
+  - { id: mgba, system: "Game Boy Advance", default: true }
+  - { id: gpsp, system: "Game Boy Advance (link cable)" }
+  - { id: doublecherrygb, system: "Game Boy (link cable)" }
+  - { id: mesen, system: "NES", default: true }
+  - { id: fceumm, system: "NES (odd cartridges)" }
+  - { id: snes9x, system: "SNES", default: true }
+  - { id: genesis_plus_gx, system: "Mega Drive / Genesis, Master System, Game Gear", default: true }
+  - { id: picodrive, system: "32X", default: true }
+  - { id: yabasanshiro, system: "Saturn", default: true }
+  - { id: pcsx_rearmed, system: "PlayStation" }
+  - { id: mednafen_psx_hw, system: "PlayStation (Beetle PSX HW, needs a BIOS)", default: true }
+  - { id: fbneo, system: "Arcade (CPS, Neo Geo)", default: true }
+  - { id: mame2003_plus, system: "Arcade (MAME 0.78)" }
+settings:
+  nano.theme: esde
+  nano.esde.themeset: colorful-simplified
+  nano.animations: standard
+  shader.global: "off"
+  browser.default: com.brave.browser
+editable: ["nano.theme", "nano.esde.*", "shader.global", "browser.default"]

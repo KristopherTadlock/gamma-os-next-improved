@@ -1,0 +1,288 @@
+{
+  "@@locale": "en",
+  "appTitle": "Thimsy Installer",
+  "stepDevice": "Device",
+  "stepProfile": "Profile",
+  "stepJourney": "Your device",
+  "stepBuild": "Download & build",
+  "stepBackup": "Back up",
+  "stepUnlock": "Unlock",
+  "stepConnect": "Connect",
+  "stepReview": "Review",
+  "stepInstall": "Install",
+  "stepFirstBoot": "First boot",
+  "stepDone": "Done",
+  "back": "Back",
+  "next": "Next",
+  "ok": "OK",
+  "cancel": "Cancel",
+  "open": "Open",
+  "details": "Details",
+  "tryAgain": "Try again",
+  "browse": "Browse…",
+  "catalogVersion": "Catalog {version}",
+  "@catalogVersion": {
+    "placeholders": {
+      "version": {
+        "type": "String"
+      }
+    }
+  },
+  "language": "Language",
+  "languageSystem": "System default",
+  "androidTitle": "Building and flashing from Android comes in a later version",
+  "androidBody": "For now, run Thimsy Installer on a Windows, Linux or macOS computer.",
+  "needsWindowsTitle": "Use a Windows PC",
+  "needsWindowsDefault": "This device can only be installed from a Windows PC. Run Thimsy Installer on Windows to continue.",
+  "buildExportAnyway": "Build and export anyway",
+  "spaceTitle": "Not enough free space",
+  "spaceBody": "Not enough free space: needs {need}, {free} available on {drive}. Choose another folder or free up space.",
+  "@spaceBody": {
+    "placeholders": {
+      "need": {
+        "type": "String"
+      },
+      "free": {
+        "type": "String"
+      },
+      "drive": {
+        "type": "String"
+      }
+    }
+  },
+  "spaceFlashBody": "{message}\n\nFree up space on that drive, then check again.",
+  "@spaceFlashBody": {
+    "placeholders": {
+      "message": {
+        "type": "String"
+      }
+    }
+  },
+  "chooseAnotherFolder": "Choose another folder",
+  "checkAgain": "Check again",
+  "deviceTitle": "Choose your device",
+  "runningOn": "Running on {host}.",
+  "@runningOn": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceListError": "The device list could not be loaded",
+  "onlyInstallable": "Only devices this computer can install",
+  "badgeNeedsWindows": "Needs Windows",
+  "badgeAutomated": "Installs on {host}",
+  "@badgeAutomated": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "badgeGuided": "Guided on {host}",
+  "@badgeGuided": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "badgeUntested": "Untested on {host}",
+  "@badgeUntested": {
+    "placeholders": {
+      "host": {
+        "type": "String"
+      }
+    }
+  },
+  "statusTesting": "testing",
+  "statusCandidate": "not yet supported",
+  "profileTitle": "Choose an experience",
+  "profileSubtitle": "Profiles decide which emulators and apps are installed and how Nano and the emulators start out. You can change settings on the device later.",
+  "planError": "Could not plan this device",
+  "notPublished": "Not published yet",
+  "profileSizes": "Download {download} · needs {disk} free",
+  "@profileSizes": {
+    "placeholders": {
+      "download": {
+        "type": "String"
+      },
+      "disk": {
+        "type": "String"
+      }
+    }
+  },
+  "emulators": "Emulators",
+  "apps": "Apps",
+  "notIncluded": "Not included on this device",
+  "journeyTitle": "Have you installed custom firmware on this device before?",
+  "journeySubtitle": "This decides whether the device needs unlocking and how Thimsy is written.",
+  "journeyIncludesUnlock": "Includes unlocking the bootloader.",
+  "journeySkipsUnlock": "Skips unlocking.",
+  "journeyFirstTitle": "First time installing custom firmware",
+  "journeyFirstBody": "The device still runs its original firmware. It needs unlocking first, and installing erases it.",
+  "journeyReturningTitle": "Already unlocked / installing an update",
+  "journeyReturningBody": "The device is already unlocked and runs custom firmware.",
+  "journeyUpdateNote": "Keeps your data. Only when the device already runs GammaOS Next 1.2-based firmware or Thimsy.",
+  "buildTitle": "Download and build",
+  "buildSubtitle": "Nothing is written to the device in this step.",
+  "exportOnlyTitle": "Build and export only",
+  "exportOnlyBody": "This computer can build the image but not install it. Copy the result to a Windows PC and finish there.",
+  "workspaceLabel": "Workspace folder",
+  "workspaceHelp": "A folder on a local drive with enough space (not FAT32).",
+  "importLabel": "Already downloaded files (optional)",
+  "importHelp": "Files found here are used instead of downloading, if their checksums match.",
+  "startBuild": "Start build",
+  "buildAgain": "Build again",
+  "buildComplete": "Build complete",
+  "spaceSummary": "Needs {need} · {free} free on {drive}",
+  "@spaceSummary": {
+    "placeholders": {
+      "need": {
+        "type": "String"
+      },
+      "free": {
+        "type": "String"
+      },
+      "drive": {
+        "type": "String"
+      }
+    }
+  },
+  "spaceChecking": "Checking free space…",
+  "deleteDownloads": "Delete downloaded files once they're used (saves about {size}, but you'll download again for another build)",
+  "@deleteDownloads": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "backupTitle": "Back up your device",
+  "backupSubtitle": "A fresh install erases everything on the device's internal storage.",
+  "backedUp": "I have backed up",
+  "unlockTitle": "Unlock the bootloader",
+  "unlockExplainTitle": "What unlocking means",
+  "unlockExplainBody": "Unlocking the bootloader lets the device accept Thimsy. It erases the device and some devices show an \"unlocked\" warning at start-up. You can restore stock firmware later.",
+  "unlockButton": "Unlock bootloader",
+  "unlocked": "Unlocked",
+  "alreadyUnlocked": "My device is already unlocked",
+  "unlockGuidedSubtitle": "This device's unlock uses its maker's or GammaOS's own procedure. Follow these steps, then come back.",
+  "deviceUnlocked": "My device is unlocked",
+  "noUnlockNeeded": "This device doesn't need unlocking.",
+  "connectTitle": "Connect your device",
+  "connectSubtitle": "Use a data USB cable plugged straight into this computer.",
+  "driverNeeded": "A USB driver is needed",
+  "installDriver": "Install driver",
+  "connected": "Connected: {label}",
+  "@connected": {
+    "placeholders": {
+      "label": {
+        "type": "String"
+      }
+    }
+  },
+  "waitingDevice": "Waiting for the device…",
+  "nothingConnected": "Nothing connected yet.",
+  "seenOther": "Seen: {devices}. That isn't the selected device in the right mode yet.",
+  "@seenOther": {
+    "placeholders": {
+      "devices": {
+        "type": "String"
+      }
+    }
+  },
+  "continueDryRun": "Continue without a device (dry run)",
+  "reviewTitle": "Review",
+  "rowDevice": "Device",
+  "rowConnectedAs": "Connected as",
+  "rowProfile": "Profile",
+  "rowImage": "Image",
+  "rowPartitions": "Partitions",
+  "dryRunValue": "dry run",
+  "howToInstall": "How to install",
+  "modeUpdate": "Update (keep my data)",
+  "modeUpdateFallback": "Only changed partitions are written.",
+  "modeReinstall": "Reinstall (erase everything)",
+  "modeFresh": "Fresh install (erases everything)",
+  "eraseWarning": "All data on the device will be erased",
+  "advanced": "Advanced",
+  "dryRun": "Dry run",
+  "dryRunHelp": "Show the commands without writing to the device.",
+  "installButton": "Install",
+  "startDryRun": "Start dry run",
+  "confirmDryRunTitle": "Start dry run?",
+  "confirmInstallTitle": "Install Thimsy now?",
+  "confirmDryRunBody": "Nothing is written to the device; the commands are shown in the log.",
+  "confirmFullBody": "This erases everything on {device}. Don't unplug the cable until the installer says it's done.",
+  "@confirmFullBody": {
+    "placeholders": {
+      "device": {
+        "type": "String"
+      }
+    }
+  },
+  "confirmUpdateBody": "Only changed partitions are written. Your games and saves stay. Don't unplug the cable until it's done.",
+  "installingTitle": "Installing",
+  "keepConnected": "Don't unplug the cable or let this computer sleep.",
+  "ready": "Ready.",
+  "dryRunComplete": "Dry run complete",
+  "dryRunCompleteBody": "Nothing was written. Turn off Dry run to install for real.",
+  "installWritten": "Thimsy is written",
+  "installWrittenBody": "The device is restarting into Thimsy.",
+  "runAgain": "Run again",
+  "stop": "Stop",
+  "firstBootTitle": "First boot",
+  "firstBootSubtitle": "The first start takes a few minutes while apps install. Check these on the device.",
+  "doneInstalledTitle": "Thimsy is installed",
+  "imageReadyTitle": "Image ready",
+  "finishOnWindows": "Finish on Windows",
+  "finishOnWindowsBody": "Copy the job folder below to the Windows PC, open Thimsy Installer there and choose the same device; point \"Already downloaded files\" at the copied folder.",
+  "allDone": "All done",
+  "allDoneBody": "Enjoy Thimsy. Keep the job folder: it holds the backup of your device's calibration data and the image, in case you need to restore.",
+  "openJobFolder": "Open job folder",
+  "freeUpTitle": "Free up space",
+  "cleanDownloads": "Downloaded files",
+  "cleanImage": "Built image",
+  "cleanBackup": "Calibration backup",
+  "cleanBackupWarning": "Holds the backup of your device's calibration data. Keep it unless you have another copy.",
+  "cleanScratch": "Temporary files",
+  "freeUpButton": "Free up {size}",
+  "@freeUpButton": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "freed": "Freed {size}.",
+  "@freed": {
+    "placeholders": {
+      "size": {
+        "type": "String"
+      }
+    }
+  },
+  "nothingToClean": "Nothing left to remove.",
+  "errEngineCrashed": "The installer engine stopped unexpectedly (exit code {code}).",
+  "@errEngineCrashed": {
+    "placeholders": {
+      "code": {
+        "type": "String"
+      }
+    }
+  },
+  "errEngineCrashedHint": "Save the diagnostic log and report it.",
+  "errEngineMissing": "The installer engine could not be started.",
+  "errEngineMissingHint": "Reinstall Thimsy Installer. Expected the engine at {path}.",
+  "@errEngineMissingHint": {
+    "placeholders": {
+      "path": {
+        "type": "String"
+      }
+    }
+  },
+  "errNoAnswer": "The installer engine didn't answer.",
+  "errCancelled": "Cancelled."
+}

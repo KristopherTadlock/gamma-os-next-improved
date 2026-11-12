@@ -1,0 +1,21 @@
+id: retroid-pocket-4-pro
+name: Retroid Pocket 4 Pro
+maker: Retroid
+soc: MediaTek Dimensity 1100
+display: "1334×750"
+status: candidate
+hardware: { android_api: 33, armv82: true, vulkan: true, ram_gb: 8, gpu: "Mali-G77" }
+support:
+  build: candidate
+  boot: candidate
+  install: { windows: untested, linux: untested, macos: untested, android: none }
+identify:
+  fastboot_product: "RP4Pro"
+notes:
+  - "Planned: fastboot install on every computer. Not buildable yet."
+guides:
+  unlock:
+    route: automated
+    steps:
+      - title: "Unlock in fastboot"
+        body: "The installer sends the unlock command; confirm it on the device with Volume Up."

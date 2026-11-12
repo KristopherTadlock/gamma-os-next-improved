@@ -1,0 +1,30 @@
+id: light
+name: Light
+order: 1
+summary: "Small download for classic systems up to PlayStation: one fast RetroArch core per system, the Minima home, no shaders."
+emulators:
+  - { id: retroarch, name: RetroArch, systems: "8-bit and 16-bit consoles, handhelds, PlayStation, arcade" }
+  - { id: scummvm, name: ScummVM, systems: "Point-and-click adventures" }
+apps:
+  - { id: aurora-store, name: Aurora Store }
+cores:
+  - { id: sameboy, system: "Game Boy / Color", default: true }
+  - { id: mgba, system: "Game Boy Advance", default: true }
+  - { id: mesen, system: "NES", default: true }
+  - { id: snes9x, system: "SNES", default: true }
+  - { id: genesis_plus_gx, system: "Mega Drive / Genesis, Master System, Game Gear", default: true }
+  - { id: picodrive, system: "32X", default: true }
+  - { id: pcsx_rearmed, system: "PlayStation", default: true }
+  - { id: mame2003_plus, system: "Arcade", default: true }
+  - { id: mednafen_pce_fast, system: "PC Engine / TurboGrafx-16", default: true }
+  - { id: mednafen_ngp, system: "Neo Geo Pocket", default: true }
+  - { id: mednafen_wswan, system: "WonderSwan", default: true }
+  - { id: stella, system: "Atari 2600", default: true }
+  - { id: mednafen_lynx, system: "Atari Lynx", default: true }
+settings:
+  nano.theme: minima
+  nano.animations: reduced
+  shader.global: "off"
+  retroarch.runahead: "off"
+  retroarch.rewind: "off"
+editable: ["nano.theme", "shader.global"]

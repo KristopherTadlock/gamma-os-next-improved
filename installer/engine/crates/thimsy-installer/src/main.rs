@@ -1,0 +1,418 @@
+// On Windows the app starts the engine with pipes; the GUI subsystem keeps a
+// console window from flashing up. Run from a terminal, it attaches to it.
+#![cfg_attr(windows, windows_subsystem = "windows")]
+
+//! `thimsy-installer`: the engine the Thimsy Installer app runs in the
+//! background (see installer/docs/engine-protocol.md). Also usable directly.
+
+use anyhow::{Context, Result};
+use clap::{Parser, Subcommand};
+use serde_json::json;
+use std::path::PathBuf;
+use thimsy_engine::catalog::{Catalog, InstallSupport};
+use thimsy_engine::host::Host;
+use thimsy_engine::i18n::tr;
+use thimsy_engine::{detect, drivers, flash, job, pac, pack, resolve, Reporter};
+
+#[derive(Parser)]
+#[command(
+    name = "thimsy-installer",
+    version,
+    about = "Builds and installs Thimsy OS on supported handhelds"
+)]
+struct Cli {
+    /// JSON Lines output for the app.
+    #[arg(long, global = true)]
+    json: bool,
+    /// Use a catalog directory instead of the built-in one.
+    #[arg(long, global = true)]
+    catalog: Option<PathBuf>,
+    /// Language for messages (Thimsy codes: en ar da de el es fi fr he it ja ko nb nl pl pt ru sv th tr zh-cn zh-tw).
+    #[arg(long, global = true, default_value = "en")]
+    lang: String,
+    /// Pretend to be another host (testing).
+    #[arg(long, global = true, hide = true)]
+    host: Option<String>,
+    #[command(subcommand)]
+    cmd: Cmd,
+}
+
+#[derive(Subcommand)]
+enum Cmd {
+    /// List devices and profiles.
+    Catalog,
+    /// Show what a device + profile install contains.
+    Resolve {
+        #[arg(long)]
+        device: String,
+        #[arg(long)]
+        profile: String,
+        #[arg(long = "set", value_parser = parse_kv)]
+        set: Vec<(String, String)>,
+    },
+    /// Download and build the firmware image.
+    Build {
+        #[arg(long)]
+        device: String,
+        #[arg(long)]
+        profile: String,
+        #[arg(long)]
+        workspace: PathBuf,
+        #[arg(long = "import")]
+        import: Vec<PathBuf>,
+        #[arg(long = "set", value_parser = parse_kv)]
+        set: Vec<(String, String)>,
+        /// Delete each download once it's used.
+        #[arg(long)]
+        delete_downloads: bool,
+    },
+    /// Check free space for a build before starting it.
+    Space {
+        #[arg(long)]
+        device: String,
+        #[arg(long)]
+        profile: String,
+        #[arg(long)]
+        workspace: PathBuf,
+        #[arg(long)]
+        delete_downloads: bool,
+    },
+    /// Remove downloads, images, scratch files or backups from a workspace.
+    Clean {
+        #[arg(long)]
+        workspace: PathBuf,
+        #[arg(long)]
+        downloads: bool,
+        #[arg(long)]
+        image: bool,
+        #[arg(long)]
+        scratch: bool,
+        #[arg(long)]
+        backup: bool,
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// List connected devices and flashing modes.
+    Detect {
+        #[arg(long)]
+        watch: bool,
+    },
+    /// Install a finished build on the device.
+    Flash {
+        #[arg(long)]
+        job: PathBuf,
+        #[arg(long, default_value = "full")]
+        mode: String,
+        #[arg(long)]
+        dry_run: bool,
+    },
+    /// Unlock the bootloader (devices with an automated unlock).
+    Unlock {
+        #[arg(long)]
+        device: String,
+    },
+    /// Windows USB driver status / install.
+    Drivers {
+        #[arg(long)]
+        device: String,
+        #[arg(long)]
+        install: bool,
+    },
+    /// Maintainer tools.
+    #[command(subcommand)]
+    Dev(Dev),
+}
+
+#[derive(Subcommand)]
+enum Dev {
+    /// List a PAC's entries.
+    PacList { pac: PathBuf },
+    /// List the logical partitions of a PAC's super entry.
+    LpList {
+        pac: PathBuf,
+        #[arg(long, default_value = "Super")]
+        entry: String,
+    },
+    /// Make a device pack from official firmware and a reference build.
+    Pack {
+        #[arg(long)]
+        source: PathBuf,
+        #[arg(long)]
+        reference: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+        #[arg(long)]
+        device: String,
+        #[arg(long)]
+        system_name: String,
+    },
+    /// Validate a catalog directory.
+    CheckCatalog,
+    /// Write the English source strings (catalog/i18n/en.yaml).
+    I18nStrings {
+        #[arg(long)]
+        src: PathBuf,
+        #[arg(long)]
+        out: PathBuf,
+    },
+}
+
+fn parse_kv(s: &str) -> Result<(String, String), String> {
+    s.split_once('=')
+        .map(|(k, v)| (k.to_string(), v.to_string()))
+        .ok_or_else(|| "expected KEY=VALUE".into())
+}
+
+fn out(json_mode: bool, v: serde_json::Value) {
+    if json_mode {
+        println!("{v}");
+    } else {
+        println!("{}", serde_json::to_string_pretty(&v).unwrap());
+    }
+}
+
+#[cfg(windows)]
+fn attach_console() {
+    // SAFETY: plain Win32 call; failure (no parent console) is fine.
+    unsafe {
+        windows_sys::Win32::System::Console::AttachConsole(
+            windows_sys::Win32::System::Console::ATTACH_PARENT_PROCESS,
+        );
+    }
+}
+
+fn main() {
+    #[cfg(windows)]
+    attach_console();
+    let cli = Cli::parse();
+    let rep = if cli.json {
+        Reporter::json()
+    } else {
+        Reporter::text()
+    };
+    let json_mode = cli.json;
+    let streaming = matches!(
+        cli.cmd,
+        Cmd::Build { .. }
+            | Cmd::Flash { .. }
+            | Cmd::Unlock { .. }
+            | Cmd::Drivers { .. }
+            | Cmd::Clean { .. }
+    );
+    match run(cli, &rep) {
+        Ok(()) => {}
+        Err(e) => {
+            rep.error(&e);
+            if json_mode && streaming {
+                println!("{}", json!({"type": "result", "ok": false}));
+            }
+            std::process::exit(1);
+        }
+    }
+}
+
+fn run(cli: Cli, rep: &Reporter) -> Result<()> {
+    let cat = match &cli.catalog {
+        Some(d) => Catalog::from_dir(d)?,
+        None => Catalog::bundled()?,
+    };
+    thimsy_engine::i18n::set_language(&cli.lang, &cat.files)?;
+    let host = match &cli.host {
+        Some(h) => Host::parse(h).context("unknown host")?,
+        None => Host::current(),
+    };
+    let j = cli.json;
+    match cli.cmd {
+        Cmd::Catalog => {
+            let devices: Vec<_> = cat
+                .devices
+                .iter()
+                .map(|d| {
+                    json!({
+                        "id": d.id, "name": d.name, "maker": d.maker, "soc": d.soc, "display": d.display,
+                        "status": d.status, "support": d.support, "blocks": d.blocks.iter().map(|n| tr(n)).collect::<Vec<_>>(),
+                        "host_message": (d.install_on(host) == InstallSupport::None).then(|| resolve::host_text(d, host)),
+                        "notes": d.notes.iter().map(|n| tr(n)).collect::<Vec<_>>(),
+                        "buildable": d.source.is_some() && !d.build.is_empty(),
+                    })
+                })
+                .collect();
+            let profiles: Vec<_> = cat
+                .profiles
+                .iter()
+                .map(|p| json!({"id": p.id, "name": tr(&p.name), "summary": tr(&p.summary), "available": cat.system_for(&p.id).is_some()}))
+                .collect();
+            out(
+                j,
+                json!({"type": "catalog", "version": cat.root.version, "release": cat.root.release,
+                "engine": thimsy_engine::VERSION, "host": host, "devices": devices, "profiles": profiles}),
+            );
+        }
+        Cmd::Resolve {
+            device,
+            profile,
+            set,
+        } => {
+            let plan = resolve::resolve(&cat, &device, &profile, &set, host)?;
+            out(j, serde_json::to_value(plan)?);
+        }
+        Cmd::Build {
+            device,
+            profile,
+            workspace,
+            import,
+            set,
+            delete_downloads,
+        } => {
+            std::fs::create_dir_all(&workspace)?;
+            let opts = job::BuildOptions {
+                device,
+                profile,
+                workspace,
+                imports: import,
+                overrides: set,
+                host,
+                delete_downloads,
+            };
+            let rec = job::build(&cat, &opts, rep)?;
+            let dir = job::job_dir(&opts.workspace, &rec.device, &rec.profile);
+            out(
+                j,
+                json!({"type": "result", "ok": true, "job": dir, "image": rec.image, "bytes": rec.bytes,
+                "sha256": rec.sha256, "matches_reference": rec.matches_reference}),
+            );
+        }
+        Cmd::Space {
+            device,
+            profile,
+            workspace,
+            delete_downloads,
+        } => {
+            let sc = job::check_space(&cat, &device, &profile, &workspace, delete_downloads)?;
+            out(j, serde_json::to_value(sc)?);
+        }
+        Cmd::Clean {
+            workspace,
+            downloads,
+            image,
+            scratch,
+            backup,
+            dry_run,
+        } => {
+            let items = job::cleanable(&workspace);
+            let mut kinds = Vec::new();
+            for (on, k) in [
+                (downloads, "downloads"),
+                (image, "image"),
+                (scratch, "scratch"),
+                (backup, "backup"),
+            ] {
+                if on {
+                    kinds.push(k);
+                }
+            }
+            let freed = if dry_run {
+                0
+            } else {
+                job::clean(&workspace, &kinds)?
+            };
+            out(
+                j,
+                json!({"type": "result", "ok": true, "items": items, "freed": freed}),
+            );
+        }
+        Cmd::Detect { watch } => {
+            let mut last = None;
+            loop {
+                let seen = detect::scan(&cat)?;
+                if last.as_ref() != Some(&seen) {
+                    out(j, json!({"type": "devices", "devices": seen}));
+                    last = Some(seen);
+                }
+                if !watch {
+                    break;
+                }
+                std::thread::sleep(std::time::Duration::from_millis(800));
+            }
+        }
+        Cmd::Flash { job, mode, dry_run } => {
+            let opts = flash::FlashOptions {
+                job,
+                mode: flash::Mode::parse(&mode)?,
+                dry_run,
+                host,
+            };
+            let r = flash::flash(&cat, &opts, rep)?;
+            out(
+                j,
+                json!({"type": "result", "ok": true, "backup": r.backup, "commands": r.commands}),
+            );
+        }
+        Cmd::Unlock { device } => {
+            flash::unlock(&cat, &device, rep)?;
+            out(j, json!({"type": "result", "ok": true}));
+        }
+        Cmd::Drivers { device, install } => {
+            let d = cat.device(&device)?;
+            if install {
+                drivers::ensure(d, host, rep)?;
+            }
+            let st = drivers::status(d, host);
+            out(
+                j,
+                json!({"type": "result", "ok": true, "status": st.status, "detail": st.detail}),
+            );
+        }
+        Cmd::Dev(dev) => {
+            match dev {
+                Dev::PacList { pac: path } => {
+                    let p = pac::Pac::open(&path)?;
+                    println!("version: {}\nalias: {}", p.version(), p.alias());
+                    for e in &p.entries {
+                        println!("{:22} {:32} {:>12}", e.id, e.file, e.size);
+                    }
+                }
+                Dev::LpList { pac: path, entry } => {
+                    let p = pac::Pac::open(&path)?;
+                    let e = p.find(&entry)?;
+                    let mut f = std::fs::File::open(&path)?;
+                    for (name, exts) in
+                        thimsy_engine::lp::Super::new(&mut f, e.offset, e.size).partitions()?
+                    {
+                        let size: u64 = exts.iter().map(|x| x.len).sum();
+                        println!("{name:24} {size:>12}  extents={}", exts.len());
+                    }
+                }
+                Dev::Pack {
+                    source,
+                    reference,
+                    out: o,
+                    device,
+                    system_name,
+                } => {
+                    let r = pack::make(&source, &reference, &o, &device, &system_name, rep)?;
+                    println!("{}", serde_json::to_string_pretty(&r)?);
+                }
+                Dev::I18nStrings { src, out: path } => {
+                    let strings = thimsy_engine::i18n::source_strings(&cat, &src)?;
+                    let mut body = String::from("# Source strings (English): thimsy-installer dev i18n-strings. Don't edit.\n");
+                    for s in &strings {
+                        let q = serde_json::to_string(s)?;
+                        body.push_str(&format!("{q}: {q}\n"));
+                    }
+                    std::fs::write(&path, body)?;
+                    println!("{} strings -> {}", strings.len(), path.display());
+                }
+                Dev::CheckCatalog => {
+                    println!(
+                        "catalog {} ok: {} devices, {} profiles",
+                        cat.root.version,
+                        cat.devices.len(),
+                        cat.profiles.len()
+                    );
+                }
+            }
+        }
+    }
+    Ok(())
+}

@@ -1,0 +1,18 @@
+id: anbernic-rg557
+name: Anbernic RG557
+maker: Anbernic
+soc: MediaTek Dimensity 8300
+display: "1920×1080"
+status: candidate
+hardware: { android_api: 34, armv82: true, vulkan: true, ram_gb: 12, gpu: "Mali-G615" }
+support:
+  build: candidate
+  boot: candidate
+  install: { windows: untested, linux: untested, macos: none, android: none }
+host_message: "{device} is installed with MediaTek's SP Flash Tool, which doesn't run on {host}. Run Thimsy Installer on a Windows PC to install it."
+notes:
+  - "Planned: SP Flash Tool on Windows and Linux. Not buildable yet."
+blocks:
+  - "Don't install on units whose stock firmware is v1.26."
+guides:
+  unlock: { route: none, steps: [] }

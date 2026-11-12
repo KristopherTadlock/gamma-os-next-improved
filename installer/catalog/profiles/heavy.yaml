@@ -1,0 +1,63 @@
+# Heavy is the full Thimsy 1.0a set (what the current test builds ship).
+id: heavy
+name: Heavy
+order: 3
+summary: "Everything: Medium plus GameCube/Wii, 3DS, PS2, Xbox and PS Vita emulators and the accuracy cores. The full Thimsy 1.0a set."
+emulators:
+  - { id: retroarch, name: RetroArch, systems: "Classic consoles, handhelds, PlayStation, Saturn, arcade" }
+  - { id: flycast, name: Flycast, systems: "Dreamcast" }
+  - { id: ppsspp, name: PPSSPP, systems: "PSP" }
+  - { id: m64plus-fz, name: M64Plus FZ, systems: "Nintendo 64" }
+  - { id: watermelonds, name: WatermelonDS, systems: "Nintendo DS" }
+  - { id: azahar, name: Azahar, systems: "Nintendo 3DS", requires: { vulkan: true } }
+  - { id: dolphin, name: Dolphin, systems: "GameCube, Wii", requires: { vulkan: true } }
+  - { id: armsx2, name: ARMSX2, systems: "PlayStation 2", requires: { android_api: 33, armv82: true } }
+  - { id: hakux, name: hakuX, systems: "Xbox", requires: { vulkan: true } }
+  - { id: vita3k, name: Vita3K, systems: "PS Vita", requires: { vulkan: true } }
+  - { id: scummvm, name: ScummVM, systems: "Point-and-click adventures" }
+apps:
+  - { id: aurora-store, name: Aurora Store }
+  - { id: brave, name: Brave (default browser) }
+  - { id: malisx2, name: MaliSX2 Vulkan driver, requires: { vulkan: true } }
+  - { id: shattered-pd, name: Shattered Pixel Dungeon (pack-in game) }
+cores:
+  - { id: sameboy, system: "Game Boy / Color", default: true }
+  - { id: doublecherrygb, system: "Game Boy (link cable)" }
+  - { id: mgba, system: "Game Boy Advance", default: true }
+  - { id: gpsp, system: "Game Boy Advance (link cable)" }
+  - { id: mesen, system: "NES", default: true }
+  - { id: fceumm, system: "NES (odd cartridges)" }
+  - { id: snes9x, system: "SNES", default: true }
+  - { id: bsnes, system: "SNES (cycle-accurate)" }
+  - { id: mupen64plus_next_gles3, system: "Nintendo 64 (RetroArch)" }
+  - { id: mednafen_vb, system: "Virtual Boy", default: true }
+  - { id: genesis_plus_gx, system: "Mega Drive / Genesis, Master System, Game Gear", default: true }
+  - { id: picodrive, system: "32X", default: true }
+  - { id: yabasanshiro, system: "Saturn", default: true }
+  - { id: mednafen_saturn, system: "Saturn (accurate)" }
+  - { id: flycast, system: "Dreamcast (RetroArch)" }
+  - { id: pcsx_rearmed, system: "PlayStation" }
+  - { id: swanstation, system: "PlayStation (upscaling)" }
+  - { id: mednafen_psx_hw, system: "PlayStation (Beetle PSX HW, needs a BIOS)", default: true }
+  - { id: fbneo, system: "Arcade (CPS, Neo Geo)" }
+  - { id: mamearcade, system: "Arcade (MAME 0.289)", default: true }
+  - { id: mame2003_plus, system: "Arcade (MAME 0.78)" }
+  - { id: mednafen_ngp, system: "Neo Geo Pocket", default: true }
+  - { id: mednafen_pce_fast, system: "PC Engine / TurboGrafx-16", default: true }
+  - { id: mednafen_wswan, system: "WonderSwan", default: true }
+  - { id: stella, system: "Atari 2600", default: true }
+  - { id: a5200, system: "Atari 5200", default: true }
+  - { id: prosystem, system: "Atari 7800", default: true }
+  - { id: mednafen_lynx, system: "Atari Lynx", default: true }
+  - { id: opera, system: "3DO", default: true }
+  - { id: gearcoleco, system: "ColecoVision", default: true }
+  - { id: bluemsx, system: "MSX", default: true }
+  - { id: fake08, system: "PICO-8" }
+settings:
+  nano.theme: esde
+  nano.esde.themeset: colorful-simplified
+  nano.animations: standard
+  shader.global: "off"
+  browser.default: com.brave.browser
+  armsx2.renderer: vulkan
+editable: ["nano.theme", "nano.esde.*", "shader.global", "browser.default"]
