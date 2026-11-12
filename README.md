@@ -490,6 +490,31 @@ It also changes Nano:
   on the card. Internal copies of files the card already had go to
   `Internal storage/Nano Backup`, and you choose: keep them there as a backup,
   delete them, or overwrite the card's copies with them.
+- **Setup with a microSD card:** after the emulators are installed, setup
+  offers **Keep ES-DE on the microSD card** and **Keep emulator files on the
+  microSD card** (both Off unless turned on). An option that is on runs its
+  move straight away, without questions, with its progress on screen: files the
+  card already has are kept, and the internal copies are deleted. Only what has
+  files moves; an emulator that has none yet stays as it is. With nothing in
+  the internal ES-DE folder and an `ES-DE` folder already on the card, Thimsy
+  uses that one. Without a card, setup skips these steps and the BIOS step.
+- **BIOS dialog** (the last setup step with a card in, and **Install BIOS
+  Files** in Game Settings at any time): lists the files the emulators need
+  (required, then needed for some games), then the ones that only improve
+  compatibility or add features, each with its system, emulators, file name and
+  SHA-1. The version shown is the one for the system language's region;
+  **Alternates** on a row lists the other versions with their SHA-1. **this
+  list** opens All Supported Files: everything the installer accepts, by
+  system, with how each file is recognised and how to include it. **Install**
+  opens a folder browser (on the card's `bios` folder when there is one); every
+  file in the chosen folder is recognised by its contents, whatever its name,
+  and copied where each emulator looks for it, with progress and a short report
+  (installed, already installed, kept because a different file was there, not
+  recognised). **Skip** looks at nothing. Controller (d-pad or stick to move,
+  A, B, L1/R1 to page) and touch (tap, drag, fling) both work. BIOS files
+  installed before follow a later Move Emulator Files to microSD.
+- [BIOS.md](BIOS.md) lists every supported BIOS and firmware file, where each
+  one is installed, and how it is matched.
 - **Storage access:** every emulator GammaOS ships is granted its storage
   permissions at boot and when it is installed, all-files access included for
   the ones that ask for it (Azahar, ARMSX2, Vita3K), so none of them prompts.
@@ -578,7 +603,7 @@ Daijisho gets 11 more platforms, each from Daijisho's official definition:
 GameCube, Wii, 3DS, Xbox and ScummVM for the added emulators, and Virtual Boy,
 32X, TurboGrafx-16 (PC Engine HuCards), Atari 2600, Atari 5200 and Atari 7800,
 which have pack-in games and RetroArch cores but no platform upstream. Systems
-that need a BIOS (TurboGrafx-CD, Saturn, Lynx, 3DO, ColecoVision, MSX) keep
+that need a BIOS (TurboGrafx-CD, Saturn, Lynx, 3DO, ColecoVision) and MSX keep
 their RetroArch cores but get no platform or pack-in game. Edit
 `mods/daijisho-platforms.txt` to change them.
 
@@ -655,6 +680,18 @@ The tools it uses:
 
 ### Boot time
 
+- **Apps compiled after setup:** setup installs the apps without dexopt (it would
+  add seconds per APK), and Android's background compile only runs when the
+  console is idle and charging. `thimsy-dexopt.sh` runs once, a minute after the
+  first boot after setup, at background priority: emulators and games are
+  compiled in full (`speed`), every other installed app gets `verify`. It sets
+  `persist.thimsy.dexopt_done` when every app compiled, and runs again at the
+  next boot otherwise.
+- The startup sound is decoded while Android is still starting, then waits for
+  AudioService, so the home and its sound come about 0.4 s sooner.
+- AppStandbyController asks for the network score service, which the minimal
+  boot doesn't start, only when it is published: asking for a missing service
+  logged a WTF with a stack trace for every installed app as boot completed.
 - The image's ART code is compiled for the userfaultfd garbage collector
   (`PRODUCT_ENABLE_UFFD_GC := true`), the one Android 14 uses on the RG Cube's
   kernel. Compiled for the other one, it was thrown away and compiled again on

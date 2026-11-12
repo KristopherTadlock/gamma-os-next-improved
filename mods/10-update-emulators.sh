@@ -25,6 +25,10 @@ CORES_URL="https://buildbot.libretro.com/nightly/android/latest/arm64-v8a"
 INFO_URL="https://buildbot.libretro.com/assets/frontend/info.zip"
 PPSSPP_ASSETS_URL="https://buildbot.libretro.com/assets/system/PPSSPP.zip"
 RA_DATA="data/data/com.retroarch.aarch64"
+# C-BIOS (2-clause BSD), the free MSX BIOS: blueMSX runs MSX cartridge games
+# with it when no MSX BIOS was installed. Disk games still need the real one.
+CBIOS_URL="https://downloads.sourceforge.net/project/cbios/cbios/0.29/cbios-0.29a.zip"
+CBIOS_SHA256="c585a2f4a10b397e460a95043d59ac79cf4442fbb45a6e14a1e27ef9febaed73"
 
 mkdir -p "$CACHE"
 
@@ -110,6 +114,28 @@ else
   echo "updated RetroArch core info; removed the PPSSPP core's assets (core not shipped)"
 fi
 
+# blueMSX's Auto machine falls back to these three when there is no "MSX2+"
+# machine, for every game but a disk. Each folder gets its ROMs, laid out as the
+# release's configs/blueMSX/README.txt says, and the license.
+fetch "$CBIOS_URL" "$CACHE/cbios-0.29a.zip"
+echo "$CBIOS_SHA256  $CACHE/cbios-0.29a.zip" | sha256sum -c --quiet ||
+  { rm -f "$CACHE/cbios-0.29a.zip"; echo "C-BIOS download failed its checksum; run the build again" >&2; exit 1; }
+rm -rf "$work/cbios"
+unzip -q "$CACHE/cbios-0.29a.zip" -d "$work/cbios"
+cb="$work/cbios/cbios-0.29a"
+machines="$work/tree/sdcard/RetroArch/system/Machines"
+for m in "MSX:msx1" "MSX2:msx2" "MSX2+:msx2+"; do
+  dir="$machines/${m%%:*} - C-BIOS" gen="${m#*:}"
+  mkdir -p "$dir"
+  install -m 644 "$cb/configs/blueMSX/${m%%:*} - C-BIOS/config.ini" "$cb/roms/cbios_main_$gen.rom" \
+    "$cb/roms/cbios_logo_$gen.rom" "$dir/"
+  [[ "$gen" == msx1 ]] || install -m 644 "$cb/roms/cbios_sub.rom" "$dir/"
+  [[ "$gen" != msx2+ ]] || install -m 644 "$cb/roms/cbios_music.rom" "$dir/"
+  install -m 644 "$cb/doc/cbios.txt" "$dir/C-BIOS license.txt"
+done
+rm -rf "$work/cbios"
+echo "added C-BIOS 0.29a for blueMSX"
+
 # The built-in controller reports its face buttons by position
 # (27-controller-layout.sh), so its RetroArch profile and player 1 binds, set
 # for the buttons' print, swap A/B and X/Y back to the RetroPad's positions.
@@ -134,6 +160,11 @@ echo "added the rg_cube_4_3_cropped and rg_cube_8_7_cropped shaders"
 # Repack the same top-level paths as the original, so no entries for data/ or
 # sdcard/ themselves are added; root would apply their owner and mode on extract.
 tar -tf "$work/in.tar" | python3 -I "$MODS/../scripts/tar_roots.py" >"$work/roots"
+# C-BIOS is new to the payload: its folder is added if no path above takes it in.
+c="sdcard/RetroArch/system/Machines"
+while [[ "$c" == */* ]] && ! grep -qxF "$c" "$work/roots"; do c="${c%/*}"; done
+grep -qxF "$c" "$work/roots" || grep -q '^sdcard/RetroArch/system/Machines/' "$work/roots" ||
+  echo "sdcard/RetroArch/system/Machines" >>"$work/roots"
 (cd "$work/tree" && tar -cpf "$work/out.tar" --owner=u0_a188:10188 --group=u0_a188:10188 -T "$work/roots")
 tar_to_payload "$work/out.tar" "$work/${pack##*/}"
 echo "${pack##*/}: $(stat -c %s "$pack") -> $(stat -c %s "$work/${pack##*/}") bytes"
