@@ -311,6 +311,16 @@ It also changes Nano:
   keys as large as the screen allows with no gaps between them, and the key
   under the finger lit. A button above the keyboard switches between the two,
   and a d-pad or A press on the touch keyboard brings the controller one.
+- **ES-DE game lists** (each system's `gamelist.xml`: titles, descriptions,
+  dates, favourites) are read on a worker thread. Every system is queued as
+  soon as the home has its system list, at idle priority so it only takes CPU
+  the boot leaves free; the system on screen moves to the front at normal
+  priority. They were read on the drawing thread the first time a system was
+  shown, so a large one stalled the screen.
+- **Android mode's style overlays:** the 42 icon packs, icon shapes, fonts and
+  display cutout simulations are removed (`mods/12-trim-overlays.sh`); Android
+  reads every overlay at each boot. The navigation bar modes, the black theme
+  and the device configuration overlays stay.
 - **Setup:** the first boot's Android setup no longer holds the setup wizard
   on a "Please Wait" screen before Wi-Fi: the wizard goes on, and its Wi-Fi
   scan waits for Android, scanning as soon as it can.

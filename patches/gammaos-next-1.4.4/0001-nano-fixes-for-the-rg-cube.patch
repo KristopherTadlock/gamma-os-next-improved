@@ -1,5 +1,5 @@
 diff --git a/device/phh/treble/lineage_arm64_bgN.mk b/device/phh/treble/lineage_arm64_bgN.mk
-index 37a6694e144..acc00fa0c13 100644
+index 37a6694e144..ad3c6a7c5ae 100644
 --- a/device/phh/treble/lineage_arm64_bgN.mk
 +++ b/device/phh/treble/lineage_arm64_bgN.mk
 @@ -2,14 +2,16 @@ TARGET_GAPPS_ARCH := arm64
@@ -21,7 +21,7 @@ index 37a6694e144..acc00fa0c13 100644
  
  # Overwrite the inherited "emulator" characteristics
  PRODUCT_CHARACTERISTICS := device
-@@ -29,12 +31,9 @@ PRODUCT_PACKAGES += \
+@@ -29,12 +31,14 @@ PRODUCT_PACKAGES += \
  PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
      persist.gammaos.secondary_home=com.gammaos.secondaryhome/com.gammaos.secondaryhome.SecondaryHomeActivity
  
@@ -34,6 +34,11 @@ index 37a6694e144..acc00fa0c13 100644
 -# wasted). Setting this here on the top-level product makefile ensures the
 -# value wins the inherit-product resolution chain.
 -PRODUCT_ENABLE_UFFD_GC := false
++# 4 MB log buffers (the default is 256 KB): a boot's early messages were gone from a log taken a
++# minute after it, which hid where the boot spent its time.
++PRODUCT_SYSTEM_DEFAULT_PROPERTIES += \
++    ro.logd.size=4M
++
 +# Userfaultfd (CMC) GC. On Android 14 the runtime uses CMC whenever the kernel supports
 +# userfaultfd, whatever this flag says (art/runtime/gc/collector/mark_compact.cc,
 +# SysPropSaysUffdGc), and the RG Cube's kernel does. Built with "false", the system's boot image
@@ -4637,7 +4642,7 @@ index dcd7bbaf475..22dc5c39b78 100644
      return false;
  }
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenu.h b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
-index 88e7cae6699..4dc6311830e 100644
+index 88e7cae6699..673c93bb97c 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenu.h
 @@ -57,10 +57,12 @@ static inline void nanoThreadNormalPriority() {
@@ -5812,11 +5817,12 @@ index 88e7cae6699..4dc6311830e 100644
      void saveScrapeIndex();
      const ScrapeEntry* scrapeEntryFor(const std::string& romPath);
      const ScrapeEntry* scrapeIndexLookup(const std::string& romPath);   // the manifest entry alone (no cart art)
-@@ -3332,9 +3793,76 @@ private:
+@@ -3332,9 +3793,88 @@ private:
      // scrape store which can differ (e.g. a timezone-shifted release date). Loaded lazily per system
      // and merged with the scrape store's cover paths; absent gamelist.xml -> falls back to the store.
      std::unordered_map<std::string, ScrapeEntry> mEsdeGamelistMeta;  // full romPath -> gamelist metadata
 -    std::set<int> mEsdeGamelistLoadedSys;                            // system indices already parsed
+-    void esdeEnsureGamelistLoaded(int sysIdx);                       // parse gamelists/<system>/gamelist.xml once
 +    // Each gamelist.xml as last parsed (by path), re-checked every few seconds so an edited
 +    // gamelist, or games added to the system, show without a restart.
 +    struct EsdeGamelistStamp { long long mtime = -2, size = -2; size_t roms = 0; int64_t checkedMs = 0; };
@@ -5829,8 +5835,20 @@ index 88e7cae6699..4dc6311830e 100644
 +    std::unordered_map<std::string, EsdeMediaUse> mEsdeMediaUse;
 +    uint64_t mEsdeMediaClock = 0, mEsdeMediaFrameClock = 0, mEsdeMediaPrevFrameClock = 0;
 +    void esdeMediaTouch(const std::string& path);
-     void esdeEnsureGamelistLoaded(int sysIdx);                       // parse gamelists/<system>/gamelist.xml once
-+    void esdeParseGamelist(int sysIdx, const std::string& path);
++    // Read gamelists/<system>/gamelist.xml on the gamelist worker (NanoThemeEngine.cpp).
++    enum { kGlPrefetch = 0, kGlNow = 1, kGlWait = 2 };
++    void esdeEnsureGamelistLoaded(int sysIdx, int mode = kGlNow);
++    struct EsdeGamelistInput;
++    struct EsdeGamelistPool;
++    struct EsdeGlPending { uint64_t id = 0; bool first = false; };
++    std::shared_ptr<EsdeGamelistPool> mEsdeGlPool;
++    std::unordered_map<int, EsdeGlPending> mEsdeGlReading;   // system -> its gamelist read in flight
++    uint64_t mEsdeGlNextId = 0;
++    bool mEsdeGlPrefetched = false;
++    EsdeGamelistInput esdeGamelistInput(int sysIdx, const std::string& path);
++    void esdeGamelistAdopt();
++    void esdeGamelistApply(int sysIdx, bool first, std::vector<std::pair<std::string, ScrapeEntry>> meta);
++    void esdeGamelistPrefetch();
 +    // The ES-DE folder as Nano's store (NanoEsdeStore.cpp), once it was moved to the card.
 +    static std::string esdeDataDir();          // persist.gammaos.nano.esde.dir, else /storage/emulated/0/ES-DE
 +    static bool esdeStoreMode();               // the ES-DE folder on the card is Nano's store
@@ -5890,7 +5908,7 @@ index 88e7cae6699..4dc6311830e 100644
      // Per-game title override (Rename / Edit Title). A user-typed name that overrides
      // the basename-minus-extension display name everywhere (columns / recents / search /
      // Info) AND becomes the scraper search query so a corrected title can match. Stored
-@@ -3392,38 +3920,42 @@ private:
+@@ -3392,38 +3932,42 @@ private:
      void openHelpPage();                    // Settings > User Guide: scrollable, themed help page
      void scrapeOneSystem(int sysIdx);      // Game Systems editor action
      // One ROM of work, fully snapshotted so the worker never touches mXmbSystems.
@@ -5960,7 +5978,7 @@ index 88e7cae6699..4dc6311830e 100644
      // scrape worker state
      std::mutex mScrapeMutex;
      bool mScrapeRunning = false;           // worker alive
-@@ -3432,9 +3964,26 @@ private:
+@@ -3432,9 +3976,26 @@ private:
      bool mScrapeDoneFlag = false;          // worker finished -> show summary
      int  mScrapeDone = 0, mScrapeTotal = 0, mScrapeHits = 0, mScrapeFail = 0;
      std::string mScrapeStatus;             // "System / Game" current line (under mutex)
@@ -5988,7 +6006,7 @@ index 88e7cae6699..4dc6311830e 100644
      // Where scraped covers/fanart + index.json live. Default is internal storage; the Boxart
      // Folder setting (persist.gammaos.scraper.dir) moves it to any browsable folder, typically the
      // SD card. names.json (title overrides) always stays in the default internal dir.
-@@ -3445,10 +3994,14 @@ private:
+@@ -3445,10 +4006,14 @@ private:
      int64_t mScrapeDirPollMs = 0;          // availability probe throttle (once a second, uptime)
      std::string mScrapeMoveSrc, mScrapeMoveDst;   // relocation in flight: old/new folder ("" = none)
      bool mScrapeMoveMode = false;          // the progress modal fronts a relocation (wording), until the next scrape
@@ -6003,7 +6021,7 @@ index 88e7cae6699..4dc6311830e 100644
      void scrapeMoveThreadFunc(std::vector<std::pair<std::string, ScrapeEntry>> entries,
                                std::string src, std::string dst);
      void gsOpenClearArtConfirm();          // Game Systems editor: Clear Boxart confirm (theme key 49)
-@@ -3457,8 +4010,11 @@ private:
+@@ -3457,8 +4022,11 @@ private:
      // cartridge icon, freed when leaving the Game category and on sleep/occlusion.
      // ar = width/height. pixel = a PICO-8 cart label: 128x128 pixel art uploaded NEAREST, drawn at an
      // integer multiple of its size (cartPixelSize) so every cart pixel stays square.
@@ -6016,7 +6034,7 @@ index 88e7cae6699..4dc6311830e 100644
      bool mScrapeBoxartOn = false;        // per-frame cache of scraperBoxartEnabled()
      bool mNdsTileIcon = false;           // per-frame cache of persist.gammaos.nano.nds.tileicon (DS Icons On Tiles)
      // Data-loss guards: a loader sets its flag true when the on-disk file EXISTS but could not be
-@@ -3543,36 +4099,19 @@ private:
+@@ -3543,36 +4111,19 @@ private:
      // entry; open()/play() on first track play.
      NanoAudioPlayer mMusicPlayer;
  
@@ -6059,7 +6077,7 @@ index 88e7cae6699..4dc6311830e 100644
      NanoAudioPlayer mAmbiancePlayer;
      std::atomic<bool> mAmbiancePlaying{false};
      void ndsAmbianceTick(bool wantOnHome);   // per-frame: start/loop/stop the carousel ambiance
-@@ -3908,6 +4447,8 @@ private:
+@@ -3908,6 +4459,8 @@ private:
      void drawAssCue(const VidCue& c, float W, float H, int prX, int prY,
                      float sx, float sy, bool scaledBorder, float et);   // positioned/coloured ASS cue
      std::vector<std::string> wrapTextToWidth(const std::string& s, float fs, float maxW);   // greedy word-wrap (keeps \n)
@@ -6068,7 +6086,7 @@ index 88e7cae6699..4dc6311830e 100644
      // ASS header + per-event parse (static: pure logic, no member state; access the private nested
      // VidCue/VidSubTrk/AssStyle types). parseAssHeader runs at track build (render thread);
      // parseAssEvent runs on the lazy-cue worker thread from a value-copied style snapshot.
-@@ -3981,7 +4522,6 @@ private:
+@@ -3981,7 +4534,6 @@ private:
      std::vector<std::string> mVidSubOpts;
      int   mVidSubSel = 0;
      bool  mVidPanelTouch = false;           // panel opened by a screen tap -> enlarge icons
@@ -6076,7 +6094,7 @@ index 88e7cae6699..4dc6311830e 100644
      // Debounced touch scrub: NanoAudioPlayer::seek() joins+restarts the decode thread
      // (heavy, blocking on the render thread), so a live drag that seeks every move
      // freezes the render heartbeat and trips the 8s watchdog. Instead the drag only
-@@ -4002,11 +4542,13 @@ private:
+@@ -4002,11 +4554,13 @@ private:
      void drawVideoPanel(float closeT);      // render the panel (closeT>=0 drives close anim)
      // Shared XMB-style media option dialog (video + photo option lists): a solid dark
      // rounded panel centred on screen with a title + touch-capable rows. One look/behaviour
@@ -6093,7 +6111,7 @@ index 88e7cae6699..4dc6311830e 100644
      GLuint vidIcon(int n);                  // load+cache a videoplayer icon (NanoMenuPS3Icons.cpp)
      float  vidIconAR(int n);                // cached aspect ratio (w/h)
      std::map<int, GLuint> mVidIconCache;
-@@ -4053,6 +4595,7 @@ private:
+@@ -4053,6 +4607,7 @@ private:
      bool  mVidSceneClosing = false;
      int   mVidSceneSel = 0;
      int   mVidSceneSelPrev = 0;
@@ -6101,7 +6119,7 @@ index 88e7cae6699..4dc6311830e 100644
      float mVidSceneAnimStart = -1.0f;       // open fade start
      float mVidSceneCloseStart = -1.0f;
      float mVidSceneFocusStart = -1.0f;      // selection-change ease start
-@@ -4159,10 +4702,6 @@ private:
+@@ -4159,10 +4714,6 @@ private:
      bool   mMpSeekPending = false;
      double mMpSeekTarget = 0.0;        // desired position (seconds) while scrubbing
      float  mMpSeekInputT = 0.0f;       // mEffectTime of the last scrub press
@@ -6112,7 +6130,7 @@ index 88e7cae6699..4dc6311830e 100644
      // Async audio-control worker: NanoAudio control ops (play/pause/stop/seek/open)
      // can block on the audio server / codec; running them on the render thread risks
      // a watchdog abort or a hang. The render thread enqueues a command (cheap) and a
-@@ -4441,6 +4980,7 @@ private:
+@@ -4441,6 +4992,7 @@ private:
      int  gsearchResultAtVisRow(int visRow) const;  // result index at a visual row, -1 for a header/oob
      void renderGlobalSearch();    // draw the overlay (returns nothing; caller gates on mGSearchActive)
      void gsearchTouch();          // DSi theme: tap a result row to select+activate, tap Back to cancel
@@ -6120,7 +6138,7 @@ index 88e7cae6699..4dc6311830e 100644
  
      // VIDEO (R4) - the HW decoder instance for the player. Lazily created in
      // openVideoPlayer, fully torn down in closeVideoPlayer/videoTick so an idle launcher
-@@ -4507,7 +5047,6 @@ private:
+@@ -4507,7 +5059,6 @@ private:
      int  mPhotoGridCursor = 0;
      int  mPhotoGridTop = 0;               // top visible row (scroll, kept in sync with the pixel scroll)
      float mPhotoGridScrollY = 0.0f;       // smooth pixel scroll (finger-driven; source of truth for the render)
@@ -6128,7 +6146,7 @@ index 88e7cae6699..4dc6311830e 100644
      std::string mPhotoGridTitle;
      float mPhotoGridAnim = 0.0f;          // open fade-in
      float mPhotoGridFocusStart = -1.0f;   // focus grow tween start
-@@ -4790,8 +5329,9 @@ private:
+@@ -4790,8 +5341,9 @@ private:
          int   w = -1, h = -1;         // panel size -> layout scale (resize forces a rebuild)
          uint8_t tile[8] = {0};        // per-tile ccActState() 0/1/2 (bg + icon colour + shape + perf label)
          int   wday = -1, mday = -1;   // clock date "MON 20"
@@ -6139,7 +6157,7 @@ index 88e7cae6699..4dc6311830e 100644
              for (int i = 0; i < 8; i++) if (tile[i] != o.tile[i]) return false;
              return true;
          }
-@@ -4804,7 +5344,8 @@ private:
+@@ -4804,7 +5356,8 @@ private:
      void   ccEnsureStaticCache();          // (re)bake the static layers when the signature changes
      void   ccFreeStaticCache();            // delete the FBO + texture (teardown / GPU failure)
      void  pspClockPollInput();
@@ -6149,7 +6167,7 @@ index 88e7cae6699..4dc6311830e 100644
      void  pspClockPollTilt(bool active);       // accel -> smoothed mPspTilt* parallax (gyro peek)
      float pspClockTextFade() const;            // smoothed XMB-text alpha multiplier (5.4)
      float pspClockChromeFade() const;          // whole-canvas backstop opacity (5.5, window 0.58..0.72)
-@@ -4915,6 +5456,9 @@ private:
+@@ -4915,6 +5468,9 @@ private:
      // it red) and beveled into a normal map for the XMB glass relight. Lazily built + cached.
      GLuint mHeartIconTex = 0, mHeartNmapTex = 0;
      void   ensureHeartIcon();               // build mHeartIconTex + mHeartNmapTex once
@@ -6159,7 +6177,7 @@ index 88e7cae6699..4dc6311830e 100644
      GLuint gpGlassNmap(bool round, float wpx, float hpx);    // cached bevel nmap for a gamepad-tester button shape
      // Resolve a system iconRef (builtin:/retroarch:/core:/file:) to a (colour
      // tex, glass bevel nmap) pair, cached by ref string. See NanoMenuPS3Icons.cpp.
-@@ -4935,11 +5479,14 @@ private:
+@@ -4935,11 +5491,14 @@ private:
          std::vector<std::string> activePaths;
          std::string activePath;
          bool valid;              // true if scan found at least one path
@@ -6174,7 +6192,7 @@ index 88e7cae6699..4dc6311830e 100644
      void bgScanThreadFunc();                  // the thread entry point
  
      // Settings column. Pinned as the leftmost XMB column at sentinel index -2.
-@@ -4998,7 +5545,6 @@ private:
+@@ -4998,7 +5557,6 @@ private:
      bool   mPs3WizActive = false;
      int    mPs3WizExit = 0;               // on close: +1 completed/forward, -1 cancelled/back (for the setup step)
      bool   mSetupNetWizSeen = false;      // setup-wizard tracking of the network step's wizard
@@ -6182,7 +6200,7 @@ index 88e7cae6699..4dc6311830e 100644
      int    mPs3WizId = 0;                 // current screen (WizScreen enum, file-local)
      std::vector<int> mPs3WizStack;        // back stack of screen ids
      int    mPs3WizSel = 0;                // chooser/list selection
-@@ -5008,6 +5554,7 @@ private:
+@@ -5008,6 +5566,7 @@ private:
      int    mPs3WizSlideDir = 1;           // +1 forward (enter from right), -1 back
      float  mPs3WizSlideStart = 0.0f;      // mEffectTime at the start of the slide
      float  mPs3WizScreenStart = 0.0f;     // mEffectTime when the current screen opened
@@ -6190,7 +6208,7 @@ index 88e7cae6699..4dc6311830e 100644
      int    mPs3WizTextField = 0;          // which value the open OSK is editing (WizField)
      std::string mPs3WizFieldError;        // inline validation message under the current text field (red)
      // Collected values (mirror web wizState.values):
-@@ -5029,7 +5576,6 @@ private:
+@@ -5029,7 +5588,6 @@ private:
                                          // a new OSK from inside the old OSK's callback)
      // Wizard lifecycle + render (NanoMenuPS3Menu.cpp).
      void startNetWizard();
@@ -6198,7 +6216,7 @@ index 88e7cae6699..4dc6311830e 100644
      // Network: Internet Browser / Internet Search (launch the com.gammaos.browser app).
      void openInternetBrowser();
      void openInternetSearch();
-@@ -5053,7 +5599,6 @@ private:
+@@ -5053,7 +5611,6 @@ private:
      void renderNdsNetWizardBody(float rx, float ry, float rw, float rh);
      void ndsWizTouch();                   // DSi wizard bottom-panel touch: tap rows / Yes-No / Back-OK-Search bar
      void renderMinimaNetWizardBody(float rx, float ry, float rw, float rh);   // Minima-styled Wi-Fi/BT wizard
@@ -6206,7 +6224,7 @@ index 88e7cae6699..4dc6311830e 100644
  
      // Bluetooth sub-screen state
      std::vector<BtDevEntry> mBtEntries;
-@@ -5086,6 +5631,7 @@ private:
+@@ -5086,6 +5643,7 @@ private:
      std::string mBtWizInPasskey;              // inbound passkey to display for confirmation
      std::atomic<bool> mBtWizRadioOn{true};    // cached real radio state (dumpsys enabled:)
      std::atomic<bool> mBtWizToggling{false};  // a radio enable/disable is settling
@@ -6214,7 +6232,7 @@ index 88e7cae6699..4dc6311830e 100644
      float mBtWizManageRefreshT = -999.0f;     // last live-refresh time while sitting on Manage
      void btWizToggleRadioAsync(bool on);      // enable/disable the radio + settle + refresh
  
-@@ -5168,6 +5714,7 @@ private:
+@@ -5168,6 +5726,7 @@ private:
      int   mTouchMinX = 0, mTouchMaxX = 0;   // digitizer X range (max<=min = unread)
      int   mTouchMinY = 0, mTouchMaxY = 0;   // digitizer Y range
      int   mTouchRawX = -1, mTouchRawY = -1; // last raw ABS_MT position (slot 0)
@@ -6222,7 +6240,7 @@ index 88e7cae6699..4dc6311830e 100644
      bool  mTouchDown = false, mTouchWasDown = false;
      // Mouse/keyboard support for the nano UI. The cursor is accumulated from EV_REL in
      // logical-pixel space and drawn on top each frame; a left click is routed through the
-@@ -5176,6 +5723,7 @@ private:
+@@ -5176,6 +5735,7 @@ private:
      bool    mCursorVisible = false;             // shown while recently moved/clicked
      int64_t mLastPointerMs = 0;                 // last pointer activity (auto-hide timer)
      bool    mTouchFromPointer = false;          // current touch frame is a mouse click, not a finger
@@ -6230,7 +6248,7 @@ index 88e7cae6699..4dc6311830e 100644
      bool    mKbdShiftHeld = false;              // physical-keyboard shift state (for OSK typing)
      void    drawPointerCursor();                // draw the mouse cursor overlay (NanoMenuRender.cpp)
      int     kbdCodeToCp(int code, bool shift);  // USB-keyboard keycode -> printable codepoint (0 = none)
-@@ -5185,26 +5733,21 @@ private:
+@@ -5185,26 +5745,21 @@ private:
      int   mTouchSX[2]  = { 0, 0 };          // per-slot raw X
      int   mTouchSY[2]  = { 0, 0 };          // per-slot raw Y
      bool  mPvPinchActive = false;           // two-finger pinch in progress (photo)
@@ -6263,7 +6281,7 @@ index 88e7cae6699..4dc6311830e 100644
      std::vector<SearchResult> mSearchResults;
      int mSearchSelectedIndex;
      bool mSearchActive;        // Search results being displayed
-@@ -5400,6 +5943,33 @@ private:
+@@ -5400,6 +5955,33 @@ private:
                                    // globe on black until ready so the one-time texture
                                    // load spike isn't charged against the 360ms fade
      int mTzSelOnOpen = 0;         // mTzSelected when the globe opened (restore on cancel)
@@ -6627,7 +6645,7 @@ index cecc918f549..08a300f1287 100644
      }
  
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoMenuEsdeMenu.cpp b/frameworks/base/cmds/gammaos-nano/NanoMenuEsdeMenu.cpp
-index 2d621760914..92b4720ce76 100644
+index 2d621760914..1917780a053 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoMenuEsdeMenu.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoMenuEsdeMenu.cpp
 @@ -11,7 +11,10 @@
@@ -7249,7 +7267,7 @@ index 2d621760914..92b4720ce76 100644
 +        if (low.size() < 4 || low.compare(low.size() - 4, 4, ".pdf") != 0) mEsdeViewerManual.clear();
 +    }
 +    mEsdeViewerVideo = esdeGameMediaPath(rom, "video");
-+    esdeEnsureGamelistLoaded(sysIdx);
++    esdeEnsureGamelistLoaded(sysIdx, kGlWait);
 +    mEsdeInfoRom = rom;
 +    mEsdeInfoLoc = esdeRomLocation(rom);
 +    mEsdeInfoScroll = 0.0f; mEsdeInfoMaxScroll = 0.0f; mEsdeInfoPageBack.clear();
@@ -7394,7 +7412,7 @@ index 2d621760914..92b4720ce76 100644
 +void NanoMenu::esdeInfoOpen(int sysIdx, int romIdx) {
 +    if (sysIdx < 0 || sysIdx >= (int)mXmbSystems.size()) return;
 +    if (romIdx < 0 || romIdx >= (int)mXmbSystems[sysIdx].roms.size()) return;
-+    esdeEnsureGamelistLoaded(sysIdx);
++    esdeEnsureGamelistLoaded(sysIdx, kGlWait);
 +    mEsdeInfoRom = mXmbSystems[sysIdx].roms[romIdx];
 +    mEsdeInfoLoc = esdeRomLocation(mEsdeInfoRom);
 +    mEsdeInfoScroll = 0.0f; mEsdeInfoMaxScroll = 0.0f; mEsdeInfoAnim = 0.0f; mEsdeInfoPageBack.clear();
@@ -33385,7 +33403,7 @@ index f5ca32a9296..29b530b38ed 100644
      // Label, vertically centred.
      const float textX = barX + barW + barGap;
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoThemeEngine.cpp b/frameworks/base/cmds/gammaos-nano/NanoThemeEngine.cpp
-index 857edadb1e6..02d4dd97c50 100644
+index 857edadb1e6..e7126319a33 100644
 --- a/frameworks/base/cmds/gammaos-nano/NanoThemeEngine.cpp
 +++ b/frameworks/base/cmds/gammaos-nano/NanoThemeEngine.cpp
 @@ -13,13 +13,18 @@
@@ -35090,7 +35108,7 @@ index 857edadb1e6..02d4dd97c50 100644
                      auto fd = mEsdePngDims.find(se->fan);
                      if (fd != mEsdePngDims.end() && fd->second.second > 0 && outAR)
                          *outAR = (float)fd->second.first / (float)fd->second.second;
-@@ -1042,6 +2081,7 @@ GLuint NanoMenu::esdeGameMediaTex(const std::string& romPath, const std::string&
+@@ -1042,80 +2081,363 @@ GLuint NanoMenu::esdeGameMediaTex(const std::string& romPath, const std::string&
      }
      EsdeSvg a = esdeArtTex(found, mWidth, mHeight);           // load + cache (decode-budgeted)
      if (!a.tex) return 0;
@@ -35098,9 +35116,155 @@ index 857edadb1e6..02d4dd97c50 100644
      auto dit = mEsdePngDims.find(found);
      if (dit != mEsdePngDims.end() && dit->second.second > 0 && outAR)
          *outAR = (float)dit->second.first / (float)dit->second.second;
-@@ -1057,21 +2097,93 @@ GLuint NanoMenu::esdeGameMediaTex(const std::string& romPath, const std::string&
+     return a.tex;
+ }
+ 
+-// Parse ES-DE's own gamelist.xml for a system once and cache each game's metadata keyed by the full
+-// rom path, so the ES-DE theme engine shows the identical text ES-DE does. ES-DE stores the release
+-// date as ISO basic ("19980501T000000"); convert it to YYYY-MM-DD by pure string slicing (NO mktime/
++// ES-DE gamelists are read on a worker thread (EsdeGamelistPool). The render thread works out which
++// of nano's roms each gamelist entry can be (esdeGamelistInput), the worker parses the XML, and the
++// render thread adopts the result (esdeGamelistAdopt). Every ES-DE system is queued at idle priority
++// as soon as the system list exists (esdeGamelistPrefetch), so the lists are usually read before
++// they are shown without taking CPU from the boot; the focused system's list jumps the queue.
++
++// One gamelist.xml and the roms its <path> entries can match.
++struct NanoMenu::EsdeGamelistInput {
++    std::string path;
++    std::unordered_map<std::string, std::string> byRel, byBase;
++    std::unordered_map<std::string, int> baseCount;
++};
++
++struct NanoMenu::EsdeGamelistPool {
++    struct Job { uint64_t id = 0; bool urgent = false; std::vector<EsdeGamelistInput> inputs; };
++    struct Result { uint64_t id = 0; std::vector<std::pair<std::string, ScrapeEntry>> meta; };
++    std::mutex mu;
++    std::condition_variable cv, doneCv;
++    std::deque<Job> queue;
++    std::vector<Result> done;
++    bool stop = false;
++    std::thread th;
++
++    EsdeGamelistPool() { th = std::thread([this] { run(); }); }
++    ~EsdeGamelistPool() {
++        { std::lock_guard<std::mutex> lk(mu); stop = true; }
++        cv.notify_all();
++        doneCv.notify_all();
++        if (th.joinable()) th.join();
++    }
++    void submit(Job&& j) {
++        { std::lock_guard<std::mutex> lk(mu);
++          if (j.urgent) queue.push_front(std::move(j)); else queue.push_back(std::move(j)); }
++        cv.notify_all();
++    }
++    // A queued job is wanted now: to the front, at normal priority.
++    void promote(uint64_t id) {
++        std::lock_guard<std::mutex> lk(mu);
++        for (size_t i = 0; i < queue.size(); i++) {
++            if (queue[i].id != id) continue;
++            Job j = std::move(queue[i]);
++            queue.erase(queue.begin() + (long)i);
++            j.urgent = true;
++            queue.push_front(std::move(j));
++            return;
++        }
++    }
++    void take(std::vector<Result>* out) {
++        std::lock_guard<std::mutex> lk(mu);
++        for (auto& r : done) out->push_back(std::move(r));
++        done.clear();
++    }
++    // Blocks until job id has finished (it is left in done for take).
++    void wait(uint64_t id) {
++        std::unique_lock<std::mutex> lk(mu);
++        doneCv.wait(lk, [&] {
++            if (stop) return true;
++            for (const auto& r : done) if (r.id == id) return true;
++            return false;
++        });
++    }
++    void run() {
++        pthread_setname_np(pthread_self(), "nano-gamelist");
++        bool idle = false;
++        for (;;) {
++            Job job;
++            {
++                std::unique_lock<std::mutex> lk(mu);
++                cv.wait(lk, [&] { return stop || !queue.empty(); });
++                if (stop) return;
++                job = std::move(queue.front());
++                queue.pop_front();
++            }
++            // Prefetches take only spare CPU; a list being shown is parsed at normal priority.
++            if (job.urgent == idle) {
++                sched_param sp{};
++                sched_setscheduler(0, job.urgent ? SCHED_OTHER : SCHED_IDLE, &sp);
++                idle = !job.urgent;
++            }
++            Result r;
++            r.id = job.id;
++            for (const auto& in : job.inputs) parse(in, &r.meta);
++            { std::lock_guard<std::mutex> lk(mu); done.push_back(std::move(r)); }
++            doneCv.notify_all();
++        }
++    }
++    static void parse(const EsdeGamelistInput& in, std::vector<std::pair<std::string, ScrapeEntry>>* out) {
++        tinyxml2::XMLDocument doc;
++        if (doc.LoadFile(in.path.c_str()) != tinyxml2::XML_SUCCESS) return;
++        tinyxml2::XMLElement* root = doc.FirstChildElement("gameList");
++        if (!root) return;
++        auto childText = [](tinyxml2::XMLElement* g, const char* k) -> std::string {
++            tinyxml2::XMLElement* c = g->FirstChildElement(k);
++            const char* t = c ? c->GetText() : nullptr;
++            return t ? std::string(t) : std::string();
++        };
++        for (tinyxml2::XMLElement* g = root->FirstChildElement("game"); g; g = g->NextSiblingElement("game")) {
++            std::string p = childText(g, "path");
++            if (p.empty()) continue;
++            while (p.compare(0, 2, "./") == 0) p.erase(0, 2);
++            auto bi = in.byRel.find(p);
++            if (bi == in.byRel.end()) {
++                size_t sl = p.find_last_of('/');
++                const std::string base = (sl == std::string::npos) ? p : p.substr(sl + 1);
++                auto c = in.baseCount.find(base);
++                if (c == in.baseCount.end() || c->second != 1) continue;   // not in nano's scan, or ambiguous
++                bi = in.byBase.find(base);
++            }
++            ScrapeEntry e;   // box and fan come from nano's scrape store as the entry is read (esdeMetaFor)
++            e.title      = childText(g, "name");
++            e.synopsis   = childText(g, "desc");
++            e.rating     = childText(g, "rating");
++            e.developer  = childText(g, "developer");
++            e.publisher  = childText(g, "publisher");
++            e.genre      = childText(g, "genre");
++            e.players    = childText(g, "players");
++            std::string rd = childText(g, "releasedate");           // ISO basic YYYYMMDDThhmmss
++            if (rd.size() >= 8 && rd.compare(0, 8, "19700101") != 0) // 19700101 = ES-DE's "unset" epoch
++                e.releaseDate = rd.substr(0, 4) + "-" + rd.substr(4, 2) + "-" + rd.substr(6, 2);
++            e.lastPlayed = childText(g, "lastplayed");               // ISO basic, or unset -> never
++            e.playTime   = childText(g, "playtime");                 // whole seconds, or 0 -> unknown
++            e.playCount  = childText(g, "playcount");                // launch tally, or unset -> 0
++            e.favorite   = childText(g, "favorite")  == "true";      // badge slots (GamelistView.cpp)
++            e.completed  = childText(g, "completed") == "true";
++            e.kidgame    = childText(g, "kidgame")   == "true";
++            e.broken     = childText(g, "broken")    == "true";
++            e.controller = childText(g, "controller");               // controller shortName for the overlay
++            e.altemulator = childText(g, "altemulator");
++            out->push_back({bi->second, std::move(e)});
++        }
++    }
++};
++
++// Parse ES-DE's own gamelist.xml for a system and cache each game's metadata keyed by the full rom
++// path, so the ES-DE theme engine shows the identical text ES-DE does. ES-DE stores the release date
++// as ISO basic ("19980501T000000"); convert it to YYYY-MM-DD by pure string slicing (NO mktime/
+ // localtime, which is what shifted nano's own store back a day). The <path> is relative to the rom
+ // dir, so match games to nano's scanned roms by basename. Cover paths are kept from nano's scrape
+ // store (gamelist.xml has no media paths - ES-DE derives those by convention). Absent file -> no-op,
  // and esdeMetaFor falls back to the scrape store, so nano still works with no ES-DE data present.
- void NanoMenu::esdeEnsureGamelistLoaded(int sysIdx) {
+-void NanoMenu::esdeEnsureGamelistLoaded(int sysIdx) {
++// mode: kGlPrefetch queues it at idle priority, kGlNow at the front, kGlWait also waits for it.
++void NanoMenu::esdeEnsureGamelistLoaded(int sysIdx, int mode) {
      if (sysIdx < 0 || sysIdx >= (int)mXmbSystems.size()) return;
 -    if (mEsdeGamelistLoadedSys.count(sysIdx)) return;
 -    mEsdeGamelistLoadedSys.insert(sysIdx);                       // mark attempted (don't retry a missing file)
@@ -35108,6 +35272,18 @@ index 857edadb1e6..02d4dd97c50 100644
 -    std::string sysName = esdeCanonSystemName(sys.romDir, sys.shortname);
 -    if (sysName.empty() || sys.roms.empty()) return;
 -    std::string path = "/storage/emulated/0/ES-DE/gamelists/" + sysName + "/gamelist.xml";
+-    tinyxml2::XMLDocument doc;
+-    if (doc.LoadFile(path.c_str()) != tinyxml2::XML_SUCCESS) return;
+-    tinyxml2::XMLElement* root = doc.FirstChildElement("gameList");
+-    if (!root) return;
+-    // basename -> full rom path (nano's own scanned paths, which curRom uses).
+-    std::unordered_map<std::string, std::string> byBase;
++    auto pend = mEsdeGlReading.find(sysIdx);
++    if (pend != mEsdeGlReading.end() && mode != kGlPrefetch && mEsdeGlPool) {
++        mEsdeGlPool->promote(pend->second.id);
++        if (mode == kGlWait) { mEsdeGlPool->wait(pend->second.id); esdeGamelistAdopt(); }
++        return;
++    }
 +    // In store mode every ES-DE folder the system's games are in (ES-DE keeps one per ROM folder).
 +    std::vector<std::string> paths;
 +    if (esdeStoreMode()) {
@@ -35137,38 +35313,32 @@ index 857edadb1e6..02d4dd97c50 100644
 +    if (mtime == st.mtime && size == st.size && st.roms == sys.roms.size()) return;
 +    const bool firstParse = mEsdeGamelistParsed.insert(sysIdx).second;   // per system: two can share a gamelist
 +    st.mtime = mtime; st.size = size; st.roms = sys.roms.size();
-+    // A change to ES-DE's favourites re-orders the list (favoritesFirst), next frame.
-+    auto metaFavs = [&]() {
-+        std::vector<std::string> v;
-+        for (const auto& r : sys.roms) { auto it = mEsdeGamelistMeta.find(r); if (it != mEsdeGamelistMeta.end() && it->second.favorite) v.push_back(r); }
-+        return v;
-+    };
-+    struct FavCheck {
-+        NanoMenu* m; int sys; std::vector<std::string> before; std::function<std::vector<std::string>()> now;
-+        bool first;
-+        ~FavCheck() {
-+            if (now() == before) return;
-+            for (const auto& q : m->mFavResortSys) if (q.first == sys) return;
-+            m->mFavResortSys.push_back({sys, first});
-+        }
-+    } favCheck{this, sysIdx, metaFavs(), metaFavs, firstParse};
-+    for (const auto& r : sys.roms) mEsdeGamelistMeta.erase(r);
-+    if (mtime < 0) return;
-+    for (const auto& path : paths) esdeParseGamelist(sysIdx, path);
++    EsdeGlPending pd;
++    pd.id = ++mEsdeGlNextId;
++    pd.first = firstParse;
++    mEsdeGlReading[sysIdx] = pd;
++    if (mtime < 0) {   // no gamelist (any more): drop what was read
++        EsdeGamelistPool::Result r;
++        r.id = pd.id;
++        esdeGamelistApply(sysIdx, pd.first, std::move(r.meta));
++        mEsdeGlReading.erase(sysIdx);
++        return;
++    }
++    EsdeGamelistPool::Job job;
++    job.id = pd.id;
++    job.urgent = mode != kGlPrefetch;
++    for (const auto& path : paths) job.inputs.push_back(esdeGamelistInput(sysIdx, path));
++    if (!mEsdeGlPool) mEsdeGlPool = std::make_shared<EsdeGamelistPool>();
++    mEsdeGlPool->submit(std::move(job));
++    if (mode == kGlWait) { mEsdeGlPool->wait(pd.id); esdeGamelistAdopt(); }
 +}
 +
-+void NanoMenu::esdeParseGamelist(int sysIdx, const std::string& path) {
++// Which of the system's roms each <path> of one gamelist can be: by the path relative to the system
++// folder, and by file name where that is unique.
++NanoMenu::EsdeGamelistInput NanoMenu::esdeGamelistInput(int sysIdx, const std::string& path) {
 +    const auto& sys = mXmbSystems[sysIdx];
-     tinyxml2::XMLDocument doc;
-     if (doc.LoadFile(path.c_str()) != tinyxml2::XML_SUCCESS) return;
-     tinyxml2::XMLElement* root = doc.FirstChildElement("gameList");
-     if (!root) return;
--    // basename -> full rom path (nano's own scanned paths, which curRom uses).
--    std::unordered_map<std::string, std::string> byBase;
-+    // A gamelist <path> ("./Game/EBOOT.PBP") is relative to the system folder: match it to nano's
-+    // scanned roms by that relative path, and by file name only when the name is unique.
-+    std::unordered_map<std::string, std::string> byRel, byBase;
-+    std::unordered_map<std::string, int> baseCount;
++    EsdeGamelistInput in;
++    in.path = path;
 +    // In store mode one gamelist per ES-DE folder: a system with folders of two ES-DE names has two,
 +    // each for the games in its folders.
 +    std::vector<std::pair<std::string, bool>> roots;   // hiddenKey(root), its gamelist is this one
@@ -35191,36 +35361,95 @@ index 857edadb1e6..02d4dd97c50 100644
 +            if (!mine) continue;
 +        }
 +        std::string rel;
-+        if (esdeRomSubPath(r, sysIdx, nullptr, nullptr, &rel)) byRel[rel] = r;
++        if (esdeRomSubPath(r, sysIdx, nullptr, nullptr, &rel)) in.byRel[rel] = r;
          size_t sl = r.find_last_of('/');
 -        byBase[sl == std::string::npos ? r : r.substr(sl + 1)] = r;
 +        const std::string b = sl == std::string::npos ? r : r.substr(sl + 1);
-+        byBase[b] = r;
-+        baseCount[b]++;
++        in.byBase[b] = r;
++        in.baseCount[b]++;
      }
-     auto childText = [](tinyxml2::XMLElement* g, const char* k) -> std::string {
-         tinyxml2::XMLElement* c = g->FirstChildElement(k);
-@@ -1081,10 +2193,14 @@ void NanoMenu::esdeEnsureGamelistLoaded(int sysIdx) {
-     for (tinyxml2::XMLElement* g = root->FirstChildElement("game"); g; g = g->NextSiblingElement("game")) {
-         std::string p = childText(g, "path");
-         if (p.empty()) continue;
+-    auto childText = [](tinyxml2::XMLElement* g, const char* k) -> std::string {
+-        tinyxml2::XMLElement* c = g->FirstChildElement(k);
+-        const char* t = c ? c->GetText() : nullptr;
+-        return t ? std::string(t) : std::string();
+-    };
+-    for (tinyxml2::XMLElement* g = root->FirstChildElement("game"); g; g = g->NextSiblingElement("game")) {
+-        std::string p = childText(g, "path");
+-        if (p.empty()) continue;
 -        size_t sl = p.find_last_of('/');
 -        std::string base = (sl == std::string::npos) ? p : p.substr(sl + 1);
 -        auto bi = byBase.find(base);
 -        if (bi == byBase.end()) continue;                       // game not in nano's scan
-+        while (p.compare(0, 2, "./") == 0) p.erase(0, 2);
-+        auto bi = byRel.find(p);
-+        if (bi == byRel.end()) {
-+            size_t sl = p.find_last_of('/');
-+            const std::string base = (sl == std::string::npos) ? p : p.substr(sl + 1);
-+            if (baseCount[base] != 1) continue;                 // not in nano's scan, or ambiguous
-+            bi = byBase.find(base);
-+        }
-         ScrapeEntry e;
-         if (const ScrapeEntry* s = scrapeEntryFor(bi->second)) { e.box = s->box; e.fan = s->fan; }
-         e.title      = childText(g, "name");
-@@ -1112,10 +2228,73 @@ void NanoMenu::esdeEnsureGamelistLoaded(int sysIdx) {
+-        ScrapeEntry e;
+-        if (const ScrapeEntry* s = scrapeEntryFor(bi->second)) { e.box = s->box; e.fan = s->fan; }
+-        e.title      = childText(g, "name");
+-        e.synopsis   = childText(g, "desc");
+-        e.rating     = childText(g, "rating");
+-        e.developer  = childText(g, "developer");
+-        e.publisher  = childText(g, "publisher");
+-        e.genre      = childText(g, "genre");
+-        e.players    = childText(g, "players");
+-        std::string rd = childText(g, "releasedate");           // ISO basic YYYYMMDDThhmmss
+-        if (rd.size() >= 8 && rd.compare(0, 8, "19700101") != 0) // 19700101 = ES-DE's "unset" epoch
+-            e.releaseDate = rd.substr(0, 4) + "-" + rd.substr(4, 2) + "-" + rd.substr(6, 2);
+-        e.lastPlayed = childText(g, "lastplayed");               // ISO basic, or unset -> never
+-        e.playTime   = childText(g, "playtime");                 // whole seconds, or 0 -> unknown
+-        e.playCount  = childText(g, "playcount");                // launch tally, or unset -> 0
+-        e.favorite   = childText(g, "favorite")  == "true";      // badge slots (GamelistView.cpp)
+-        e.completed  = childText(g, "completed") == "true";
+-        e.kidgame    = childText(g, "kidgame")   == "true";
+-        e.broken     = childText(g, "broken")    == "true";
+-        e.controller = childText(g, "controller");               // controller shortName for the overlay
+-        e.altemulator = childText(g, "altemulator");
+-        mEsdeGamelistMeta[bi->second] = std::move(e);
++    return in;
++}
++
++// Finished gamelists into the metadata cache (render thread, once a frame and when waited for).
++void NanoMenu::esdeGamelistAdopt() {
++    if (!mEsdeGlPool) return;
++    std::vector<EsdeGamelistPool::Result> got;
++    mEsdeGlPool->take(&got);
++    for (auto& r : got) {
++        for (auto it = mEsdeGlReading.begin(); it != mEsdeGlReading.end(); ++it) {
++            if (it->second.id != r.id) continue;
++            const int sysIdx = it->first;
++            const bool first = it->second.first;
++            mEsdeGlReading.erase(it);
++            esdeGamelistApply(sysIdx, first, std::move(r.meta));
++            mDisplayDirty = true;
++            break;
++        }   // not pending any more: superseded by a newer read of the same system
+     }
+ }
  
++// The system's games' gamelist metadata replaced by meta. A change to ES-DE's favourites re-orders
++// the list (favoritesFirst), next frame.
++void NanoMenu::esdeGamelistApply(int sysIdx, bool first, std::vector<std::pair<std::string, ScrapeEntry>> meta) {
++    if (sysIdx < 0 || sysIdx >= (int)mXmbSystems.size()) return;
++    const auto& sys = mXmbSystems[sysIdx];
++    auto metaFavs = [&]() {
++        std::vector<std::string> v;
++        for (const auto& r : sys.roms) { auto it = mEsdeGamelistMeta.find(r); if (it != mEsdeGamelistMeta.end() && it->second.favorite) v.push_back(r); }
++        return v;
++    };
++    const std::vector<std::string> before = metaFavs();
++    for (const auto& r : sys.roms) mEsdeGamelistMeta.erase(r);
++    for (auto& kv : meta) mEsdeGamelistMeta[kv.first] = std::move(kv.second);
++    if (metaFavs() == before) return;
++    for (const auto& q : mFavResortSys) if (q.first == sysIdx) return;
++    mFavResortSys.push_back({sysIdx, first});
++}
++
++// Every ES-DE system's gamelist queued at idle priority, the focused one first.
++void NanoMenu::esdeGamelistPrefetch() {
++    mEsdeGlPrefetched = true;
++    const int n = (int)mEsdeSysList.size();
++    const int start = (mEsdeSysSel >= 0 && mEsdeSysSel < n) ? mEsdeSysSel : 0;
++    for (int k = 0; k < n; k++) esdeEnsureGamelistLoaded(mEsdeSysList[(start + k) % n], kGlPrefetch);
++    ALOGI("esde: %zu gamelist(s) queued at %lld ms", mEsdeGlReading.size(), (long long)uptimeMillis());
++}
++
  const NanoMenu::ScrapeEntry* NanoMenu::esdeMetaFor(const std::string& romPath) {
      auto it = mEsdeGamelistMeta.find(romPath);
 -    if (it != mEsdeGamelistMeta.end()) return &it->second;
@@ -35294,7 +35523,7 @@ index 857edadb1e6..02d4dd97c50 100644
  // ES-DE lastplayed: a <datetime metadata="lastplayed"> auto-enables displayRelative, so a set time
  // reads the relative age "N days/hours/minutes/seconds ago" (DateTimeComponent::getDisplayString).
  // The gamelist value is ISO basic YYYYMMDDThhmmss; parse it as UTC (timegm) and compare to now so the
-@@ -1137,12 +2316,14 @@ static std::string esdeLastPlayedString(const std::string& iso) {
+@@ -1137,12 +2459,14 @@ static std::string esdeLastPlayedString(const std::string& iso) {
      long dur = (long)(time(nullptr) - t);
      if (dur < 0) dur = 0;
      auto ago = [](long n, const char* one, const char* many) {
@@ -35314,7 +35543,7 @@ index 857edadb1e6..02d4dd97c50 100644
  }
  
  // ES-DE playtime (FileData::getPlayTimeString): 1..119s -> "1 minute"; 2..119 min -> "N minutes";
-@@ -1154,13 +2335,17 @@ static std::string esdePlayTimeString(const std::string& secsStr) {
+@@ -1154,13 +2478,17 @@ static std::string esdePlayTimeString(const std::string& secsStr) {
      if (!secsStr.empty()) { secs = strtol(secsStr.c_str(), nullptr, 10); if (secs < 0) secs = 0; }
      int hour = (int)(secs / 3600), min = (int)((secs % 3600) / 60), sec = (int)(secs % 60);
      auto pl = [](int n, const char* one, const char* many) {
@@ -35337,7 +35566,7 @@ index 857edadb1e6..02d4dd97c50 100644
      return out;
  }
  
-@@ -1217,17 +2402,28 @@ std::string NanoMenu::esdeDefaultStarPath(bool filled) {
+@@ -1217,17 +2545,30 @@ std::string NanoMenu::esdeDefaultStarPath(bool filled) {
  
  void NanoMenu::renderEsde() {
      ensureEsdeTheme();
@@ -35349,6 +35578,8 @@ index 857edadb1e6..02d4dd97c50 100644
 +        }
 +    }
      esdeRebuildSysList();
++    if (!mEsdeGlPrefetched && !mEsdeSysList.empty()) esdeGamelistPrefetch();
++    esdeGamelistAdopt();
 +    esdeVideoResolve();
  
      // Clear the deferred menu-help cache each frame; esdeDrawHelp re-sets it if a helpsystem
@@ -35369,7 +35600,7 @@ index 857edadb1e6..02d4dd97c50 100644
  
      // ES-DE draws text flat - no drop shadow or outline (its Font has none). nano's drawText
      // otherwise adds an outline/shadow (mTextOutlineMode), so force flat here and restore on exit,
-@@ -1244,6 +2440,10 @@ void NanoMenu::renderEsde() {
+@@ -1244,6 +2585,10 @@ void NanoMenu::renderEsde() {
          int foc = mEsdeSysList[mEsdeSysSel];
          if (foc != mEsdeLoadedSysIdx) esdeReloadForSystem(foc);
      }
@@ -35380,7 +35611,7 @@ index 857edadb1e6..02d4dd97c50 100644
  
      // mEsdeForceView lets a slide transition render either view (from the stored selection) so both
      // can be composited; 0 = follow the live mEsdeInGamelist.
-@@ -1251,6 +2451,10 @@ void NanoMenu::renderEsde() {
+@@ -1251,6 +2596,10 @@ void NanoMenu::renderEsde() {
      const bool gamelist = inGamelist && !mEsdeSysList.empty();
      const nanoesde::View* view =
          mEsdeDoc.valid() ? mEsdeDoc.view(gamelist ? "gamelist" : "system") : nullptr;
@@ -35391,7 +35622,7 @@ index 857edadb1e6..02d4dd97c50 100644
  
      // In-game overlay scrim: when nano is the overlay layer composited over a still-running app
      // (mOverlayMode && !mOverlayWallpaper), the dispatcher clears the frame to a translucent black
-@@ -1267,10 +2471,12 @@ void NanoMenu::renderEsde() {
+@@ -1267,10 +2616,12 @@ void NanoMenu::renderEsde() {
          if (!esdeInGameScrim)   // over a live app: keep the notice text but not the opaque panel
              drawQuad(0, 0, (float)mWidth, (float)mHeight, 0.06f, 0.07f, 0.09f, 1.0f);
          float sc = std::min(mWidth, mHeight) * 0.03f / FONT_CHAR_H;   // font: shorter dim (ES-DE)
@@ -35408,7 +35639,7 @@ index 857edadb1e6..02d4dd97c50 100644
                   sc * 0.8f, 0.7f, 0.7f, 0.75f, 1.0f);
          mTextOutlineMode = esdePrevOutline;
          return;
-@@ -1531,6 +2737,8 @@ void NanoMenu::renderEsde() {
+@@ -1531,6 +2882,8 @@ void NanoMenu::renderEsde() {
                                 ? (int)mXmbSystems[mEsdeSysList[mEsdeSysSel]].roms.size() : 0)
                          : (int)mEsdeSysList.size();
          int sel = gamelist ? mEsdeGameSel : mEsdeSysSel;
@@ -35417,7 +35648,7 @@ index 857edadb1e6..02d4dd97c50 100644
          auto label = [&](int i) -> std::string {
              if (gamelist) {
                  const auto& sys = mXmbSystems[mEsdeSysList[mEsdeSysSel]];
-@@ -1548,7 +2756,7 @@ void NanoMenu::renderEsde() {
+@@ -1548,7 +2901,7 @@ void NanoMenu::renderEsde() {
                  // shows it (GamelistBase), never the carousel/grid, and never in a favourites
                  // collection (nano has none). The star renders through nano's FA fallback face.
                  if (haveRom && !isCarousel && !isGrid &&
@@ -35426,7 +35657,7 @@ index 857edadb1e6..02d4dd97c50 100644
                      std::string ind = primary->getS("indicators", std::string("symbols"));
                      if (ind == "ascii")     nm = "* " + nm;
                      else if (ind != "none") nm = "\xEF\x80\x85  " + nm;   // U+F005 + two spaces
-@@ -1572,7 +2780,7 @@ void NanoMenu::renderEsde() {
+@@ -1572,7 +2925,7 @@ void NanoMenu::renderEsde() {
  
          if (count <= 0) {
              float sc = h > 0 ? h * 0.2f / FONT_CHAR_H : mHeight * 0.03f / FONT_CHAR_H;
@@ -35435,7 +35666,7 @@ index 857edadb1e6..02d4dd97c50 100644
          } else if (isCarousel) {
              // ES-DE horizontal carousel (CarouselComponent): items sit at fixed positions
              // spaced by itemSpacing = ((size - itemSize*maxItemCount)/maxItemCount) + itemSize;
-@@ -1627,6 +2835,7 @@ void NanoMenu::renderEsde() {
+@@ -1627,6 +2980,7 @@ void NanoMenu::renderEsde() {
                  ? ((h - itemH * maxItemCount) / maxItemCount) + itemH
                  : ((w - itemW * maxItemCount) / maxItemCount) + itemW;
              if (spacing < 1.0f) spacing = isVertical ? itemH : itemW;
@@ -35443,7 +35674,7 @@ index 857edadb1e6..02d4dd97c50 100644
              // ES-DE WHEEL carousels (verticalWheel / horizontalWheel): items are NOT laid out along a
              // straight axis. They sit co-located at the wheel centre (itemSpacing stays {0,0}) and each
              // one is rotated by itemRotation*distance about a pivot itemRotationOrigin*itemSize away, so
-@@ -1860,6 +3069,7 @@ void NanoMenu::renderEsde() {
+@@ -1860,6 +3214,7 @@ void NanoMenu::renderEsde() {
                  if (!isWheel && !isVertical && ss != 1.0f && itemVA == "top")
                      slotCy += itemH * (ss - 1.0f) * 0.5f;
                  int bw = (int)(itemW * ss), bh = (int)(itemH * ss);
@@ -35451,7 +35682,7 @@ index 857edadb1e6..02d4dd97c50 100644
                  float ad = fabsf(distance);
                  float opacity = (distance == 0.0f || unfOpacity == 1.0f) ? 1.0f
                                : (ad >= 1.0f ? unfOpacity
-@@ -1892,8 +3102,9 @@ void NanoMenu::renderEsde() {
+@@ -1892,8 +3247,9 @@ void NanoMenu::renderEsde() {
                  if (!gamelist && !artTmpl.empty()) {
                      int sysIdx = mEsdeSysList[idx];
                      EsdeSvg art = esdeArtTex(esdeResolveSystemPath(artTmpl, sysIdx), bw, bh);
@@ -35462,7 +35693,7 @@ index 857edadb1e6..02d4dd97c50 100644
                      if (art.tex) {
                          // ES-DE tints the focused item with imageSelectedColor when the theme sets
                          // it, and every other item with imageColor.
-@@ -1941,8 +3152,10 @@ void NanoMenu::renderEsde() {
+@@ -1941,8 +3297,10 @@ void NanoMenu::renderEsde() {
                  // skip the art entirely and let the label draw.
                  if (gamelist && primary->getS("imageType", std::string()) != "none") {
                      std::string rom = gameRom(idx);
@@ -35473,7 +35704,7 @@ index 857edadb1e6..02d4dd97c50 100644
                      if (tex && ar > 0.0f && bw > 1 && bh > 1) {
                          float ic[4] = {imgC[0], imgC[1], imgC[2], imgC[3]};
                          if (idx == sel) primary->getColor("imageSelectedColor", ic);
-@@ -2107,6 +3320,7 @@ void NanoMenu::renderEsde() {
+@@ -2107,6 +3465,7 @@ void NanoMenu::renderEsde() {
              float spY = primary->has("itemSpacing")
                          ? clampf(primary->getPair("itemSpacing", 1, 0.0f), 0.0f, 0.1f) * mHeight
                          : (itemScale < 1.0f ? 0.0f : ((itemScale - 1.0f) * itemH) * 0.5f);
@@ -35481,7 +35712,7 @@ index 857edadb1e6..02d4dd97c50 100644
              float hMargin = 0.0f, vMargin = 0.0f;
              if (itemScale >= 1.0f) {
                  hMargin = (itemW * (scaleInwards ? 1.0f : itemScale) - itemW) * 0.5f;
-@@ -2217,6 +3431,7 @@ void NanoMenu::renderEsde() {
+@@ -2217,6 +3576,7 @@ void NanoMenu::renderEsde() {
                  }
                  float cellW = itemW * scale, cellH = itemH * scale;
                  float bx = ccx - cellW * 0.5f, by = ccy - cellH * 0.5f;
@@ -35489,7 +35720,7 @@ index 857edadb1e6..02d4dd97c50 100644
                  // ES-DE grid selector (GridComponent): a selectorImage tinted by selectorColor if the
                  // theme sets one, else a selectorColor rounded rect. selectorLayer chooses the draw
                  // order relative to the cell background box and the cell art (GridComponent.h
-@@ -2303,8 +3518,10 @@ void NanoMenu::renderEsde() {
+@@ -2303,8 +3663,10 @@ void NanoMenu::renderEsde() {
                      EsdeSvg a{};
                      if (cellSys >= 0 && !tmpl.empty())
                          a = esdeArtTex(esdeResolveSystemPath(tmpl, cellSys), bW, bH);
@@ -35502,7 +35733,7 @@ index 857edadb1e6..02d4dd97c50 100644
                          // The focused cell uses imageSelectedColor (adroit tints it dark so the
                          // logo reads against the light selector); others use imageColor.
                          float ic[4] = {1, 1, 1, 1};
-@@ -2482,6 +3699,7 @@ void NanoMenu::renderEsde() {
+@@ -2482,6 +3844,7 @@ void NanoMenu::renderEsde() {
              lineSp = lineSp < 0.5f ? 0.5f : (lineSp > 3.0f ? 3.0f : lineSp);
              float rowH = fontPx(primary, 0.045f) * FONT_CHAR_H * lineSp;
              if (rowH < 1) rowH = mHeight * 0.06f;
@@ -35510,7 +35741,7 @@ index 857edadb1e6..02d4dd97c50 100644
              // ES-DE TextListComponent fits ceil-ish rows: floor((size.y + lineSpacingHeight/2) /
              // entrySize) where lineSpacingHeight = entrySize - fontSize. This can fit one more row
              // than a plain floor(h/entrySize) when the remainder is at least half the extra spacing.
-@@ -2537,6 +3755,7 @@ void NanoMenu::renderEsde() {
+@@ -2537,6 +3900,7 @@ void NanoMenu::renderEsde() {
              for (int r = 0; r < rows && first + r < count; r++) {
                  int i = first + r;
                  float ry = y + r * rowH;
@@ -35518,7 +35749,7 @@ index 857edadb1e6..02d4dd97c50 100644
                  bool cur = (i == sel);
                  std::string lbl = label(i);
                  esdeLetterCase(lbl, tlCase);
-@@ -2666,10 +3885,9 @@ void NanoMenu::renderEsde() {
+@@ -2666,10 +4030,9 @@ void NanoMenu::renderEsde() {
          }
      };
  
@@ -35532,7 +35763,7 @@ index 857edadb1e6..02d4dd97c50 100644
  
      // ES-DE's SystemView/GamelistView keep exactly ONE primary navigation element per view (the
      // first textlist/carousel/grid by name, skipping the rest), so a variant that layers a
-@@ -2711,7 +3929,7 @@ void NanoMenu::renderEsde() {
+@@ -2711,7 +4074,7 @@ void NanoMenu::renderEsde() {
      // --- draw every element in zIndex order ---
      for (const nanoesde::Element* e : view->drawOrder) {
          if (!e->getB("visible", true)) continue;
@@ -35541,7 +35772,7 @@ index 857edadb1e6..02d4dd97c50 100644
          // scope=none hides an element in this view (ABN hides the clock in gamelist);
          // scope=menu elements only show over a menu, which this view path never draws.
          const std::string& scope = e->getS("scope", std::string());
-@@ -2815,6 +4033,7 @@ void NanoMenu::renderEsde() {
+@@ -2815,6 +4178,7 @@ void NanoMenu::renderEsde() {
                                      ? esdeResolveSystemPath(rawPath, focSys) : rawPath;
                  if (boxW >= 1.0f && boxH >= 1.0f && !p.empty()) {
                      EsdeSvg a = esdeArtTex(p, (int)boxW, (int)boxH);   // loads tex + caches native dims
@@ -35549,7 +35780,7 @@ index 857edadb1e6..02d4dd97c50 100644
                      if (a.tex) {
                          int iw = a.w, ih = a.h;                        // fall back to fitted aspect
                          auto dit = mEsdePngDims.find(p);
-@@ -2880,6 +4099,7 @@ void NanoMenu::renderEsde() {
+@@ -2880,6 +4244,7 @@ void NanoMenu::renderEsde() {
                  if (szx == 0.0f && szy > 0.0f) rw = (int)(h * 8.0f);
                  else if (szy == 0.0f && szx > 0.0f) rh = (int)(w * 8.0f);
                  EsdeSvg a = esdeArtTex(p, rw, rh);
@@ -35557,7 +35788,7 @@ index 857edadb1e6..02d4dd97c50 100644
                  if (!a.tex) return false;
                  if (stretch) {
                      drawImg(a.tex, x + xoff, y, w, h, c[0], c[1], c[2], c[3], rotRad);
-@@ -2910,6 +4130,7 @@ void NanoMenu::renderEsde() {
+@@ -2910,6 +4275,7 @@ void NanoMenu::renderEsde() {
              if (!rawPath.empty() && drawSysImage(focSys, 0.0f)) continue;
              // No static art: bind the scraped cover (gamelist imageType), else the default.
              GLuint tex = 0; float coverAr = 1.0f;
@@ -35565,7 +35796,7 @@ index 857edadb1e6..02d4dd97c50 100644
              if (e->has("imageType")) {
                  // The navigated game, or a gameselector-picked game (system-view background art).
                  std::string iRom = curRom;
-@@ -2927,6 +4148,7 @@ void NanoMenu::renderEsde() {
+@@ -2927,6 +4293,7 @@ void NanoMenu::renderEsde() {
                  if (!iRom.empty())
                      tex = esdeGameMediaTex(iRom, imgType, &coverAr);
              }
@@ -35573,7 +35804,7 @@ index 857edadb1e6..02d4dd97c50 100644
              if (!tex) {
                  // ES-DE loads <default> through the SAME setImage/resize path as the resolved media
                  // (ImageComponent::setDefaultImage), so the fallback honors the element's size/maxSize/
-@@ -3115,7 +4337,7 @@ void NanoMenu::renderEsde() {
+@@ -3115,7 +4482,7 @@ void NanoMenu::renderEsde() {
                  // metadata, so the counter matches the control and the textlist star indicator.
                  for (const auto& r : sys.roms) {
                      const ScrapeEntry* se = esdeMetaFor(r);
@@ -35582,7 +35813,7 @@ index 857edadb1e6..02d4dd97c50 100644
                  }
                  s = "\xEF\x84\x9B " + std::to_string(total) +      // U+F11B controller
                      "  \xEF\x80\x85 " + std::to_string(favs);      // U+F005 star
-@@ -3200,17 +4422,19 @@ void NanoMenu::renderEsde() {
+@@ -3200,17 +4567,19 @@ void NanoMenu::renderEsde() {
                      int favs = 0;
                      for (const auto& r : sys.roms) {
                          const ScrapeEntry* se = esdeMetaFor(r);
@@ -35608,7 +35839,7 @@ index 857edadb1e6..02d4dd97c50 100644
                  }
              }
              // ES-DE: a metadata/systemdata-bound text with no value falls back to <defaultValue>
-@@ -3229,7 +4453,7 @@ void NanoMenu::renderEsde() {
+@@ -3229,7 +4598,7 @@ void NanoMenu::renderEsde() {
                      const std::string& md = e->getS("metadata", std::string());
                      if (md == "genre" || md == "developer" || md == "publisher" ||
                          md == "players" || md == "playtime")
@@ -35617,7 +35848,7 @@ index 857edadb1e6..02d4dd97c50 100644
                  }
              }
              if (!s.empty()) {
-@@ -3418,16 +4642,19 @@ void NanoMenu::renderEsde() {
+@@ -3418,16 +4787,19 @@ void NanoMenu::renderEsde() {
              if (noImageType) {
                  float vsx = e->getPair("size", 0, 0.0f), vsy = e->getPair("size", 1, 0.0f);
                  if (vsx * vsy >= 0.2f) {
@@ -35644,7 +35875,7 @@ index 857edadb1e6..02d4dd97c50 100644
                      }
                  }
              }
-@@ -3476,11 +4703,6 @@ void NanoMenu::renderEsde() {
+@@ -3476,11 +4848,6 @@ void NanoMenu::renderEsde() {
              // than standing in with the scraped cover, matching what the control shows when a game
              // has no video (aura/xmb-menu/ps5-menu game-video regions). A mixed list keeps its
              // cover-family fallback below; only the whole-string "none" is suppressed.
@@ -35656,7 +35887,7 @@ index 857edadb1e6..02d4dd97c50 100644
              std::string vRom = curRom;
              if (vRom.empty()) {
                  std::string gs = e->getS("gameselector", std::string());
-@@ -3491,7 +4713,69 @@ void NanoMenu::renderEsde() {
+@@ -3491,7 +4858,69 @@ void NanoMenu::renderEsde() {
              const bool fullBg = (boxW <= 1.0f || boxH <= 1.0f);
              if (fullBg) { boxW = (float)mWidth; boxH = (float)mHeight; }
              bool drewVideo = false;
@@ -35727,7 +35958,7 @@ index 857edadb1e6..02d4dd97c50 100644
                  float ar = 1.0f;
                  GLuint tex = esdeGameMediaTex(vRom, vImgType, &ar);
                  if (tex && ar > 0.0f) {
-@@ -3644,21 +4928,15 @@ void NanoMenu::renderEsde() {
+@@ -3644,21 +5073,15 @@ void NanoMenu::renderEsde() {
                  }
              }
  
@@ -35754,7 +35985,7 @@ index 857edadb1e6..02d4dd97c50 100644
                  // datetime: a per-game metadata date, NOT the current time. nano shows the scraped
                  // release date and the ES-DE gamelist lastplayed (playtime is a text element below).
                  const std::string& md = e->getS("metadata", std::string());
-@@ -3713,13 +4991,13 @@ void NanoMenu::renderEsde() {
+@@ -3713,13 +5136,13 @@ void NanoMenu::renderEsde() {
                      // With no <defaultValue>, a relative lastplayed on a never-played game reads
                      // "never" (DateTimeComponent.cpp:96).
                      if (s.empty() && md == "lastplayed" && e->getB("displayRelative", true))
@@ -35770,7 +36001,7 @@ index 857edadb1e6..02d4dd97c50 100644
                  }
              }
              // ES-DE datetime/clock inherit TextComponent's letterCase (uppercase/lowercase/
-@@ -3742,9 +5020,8 @@ void NanoMenu::renderEsde() {
+@@ -3742,9 +5165,8 @@ void NanoMenu::renderEsde() {
                  // the box to one line. A datetime value that sits just below a label (showcase's
                  // RELEASED: over its release year) must therefore centre in its size box, or it rides
                  // up and overlaps the label. Reuse the text branch's centre seating for the sized box;
@@ -35782,7 +36013,7 @@ index 857edadb1e6..02d4dd97c50 100644
                  if (sizedDate) {
                      float emPx = sc * (float)FONT_CHAR_H;
                      int capRpx = (int)lroundf(emPx); if (capRpx < 6) capRpx = 6;
-@@ -3811,12 +5088,12 @@ void NanoMenu::renderEsde() {
+@@ -3811,12 +5233,12 @@ void NanoMenu::renderEsde() {
              std::vector<ActiveBadge> active;
              for (auto& slot : slots) {
                  bool on = false; std::string ctrl;
@@ -35797,7 +36028,7 @@ index 857edadb1e6..02d4dd97c50 100644
                  else if (slot == "controller") { if (meta && !meta->controller.empty()) { on = true; ctrl = meta->controller; } }
                  // folder / collection: nano's ES-DE gamelist has no folder entries or collection
                  // editing, so those slots never activate (matches an empty-metadata game).
-@@ -3910,7 +5187,7 @@ void NanoMenu::renderEsde() {
+@@ -3910,7 +5332,7 @@ void NanoMenu::renderEsde() {
      // cluster (top-right Bluetooth / Wi-Fi / battery icon + battery %) is gated only by hardware
      // presence and the SystemStatus* settings, all of which default ON, so a theme like SimpleMenu
      // that omits <systemstatus> still shows the status bar on real ES-DE. The default clock is gated
@@ -35806,7 +36037,7 @@ index 857edadb1e6..02d4dd97c50 100644
      // default element and route it through the same draw path so every theme matches the control.
      bool viewHasStatus = false, viewHasClock = false;
      for (const nanoesde::Element* e : view->drawOrder) {
-@@ -3936,10 +5213,10 @@ void NanoMenu::renderEsde() {
+@@ -3936,10 +5358,10 @@ void NanoMenu::renderEsde() {
      if (!viewHasClock && esdeShowClock) {
          // DateTimeComponent clock defaults (DateTimeComponent.cpp:191-204): pos {0.018,0.016},
          // origin {0,0}, FONT_SIZE_SMALL (0.035*min(W,H)), white, format "%H:%M".
@@ -35821,7 +36052,7 @@ index 857edadb1e6..02d4dd97c50 100644
      }
      mTextOutlineMode = esdePrevOutline;
  }
-@@ -3991,6 +5268,7 @@ std::string NanoMenu::esdeHelpIconPath(const std::string& id) {
+@@ -3991,6 +5413,7 @@ std::string NanoMenu::esdeHelpIconPath(const std::string& id) {
          {"x", "button_x_XBOX.svg"}, {"y", "button_y_XBOX.svg"},
          {"start", "button_start_XBOX.svg"}, {"back", "button_back_XBOX.svg"},
          {"left/right", "dpad_leftright.svg"}, {"up/down", "dpad_updown.svg"},
@@ -35829,7 +36060,7 @@ index 857edadb1e6..02d4dd97c50 100644
          {"up/down/left/right", "dpad_all.svg"}, {"lr", "button_lr.svg"},
          {"ltrt", "button_ltrt.svg"}, {"l", "button_l.svg"}, {"r", "button_r.svg"},
          {"lt", "button_lt.svg"}, {"rt", "button_rt.svg"}, {"thumbstickclick", "thumbstick.svg"},
-@@ -4030,6 +5308,7 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
+@@ -4030,6 +5453,7 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
      // theme's <entries> list then selects which of these actually show (ABN trims the gamelist
      // bar to back,start,a = OPTIONS MENU SELECT); "all"/absent keeps every prompt.
      std::vector<std::pair<std::string, std::string>> prompts;
@@ -35837,7 +36068,7 @@ index 857edadb1e6..02d4dd97c50 100644
      // When the ES-DE options menu is open its help bar replaces the view's, exactly as ES-DE's
      // HelpComponent shows the top GUI's prompts. Build the menu prompts (per focused row) and render
      // them through this same glyph + helpsystem-style path so the menu legend matches the control.
-@@ -4054,10 +5333,10 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
+@@ -4054,10 +5478,10 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
          prompts.push_back({"a", "select"});
          prompts.push_back({"b", "back"});
          prompts.push_back({"x", "view media"});
@@ -35850,7 +36081,7 @@ index 857edadb1e6..02d4dd97c50 100644
      } else {
          // The "choose" icon tracks the system view's primary: a vertical carousel or a textlist
          // navigates up/down, a horizontal carousel left/right, a grid all four directions.
-@@ -4072,14 +5351,9 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
+@@ -4072,14 +5496,9 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
          }
          prompts.push_back({chooseIcon, "choose"});
          prompts.push_back({"a", "select"});
@@ -35868,7 +36099,7 @@ index 857edadb1e6..02d4dd97c50 100644
      }
  
      // Apply the helpsystem's <entries> allow-list (icon ids, whitespace or comma separated). The
-@@ -4134,6 +5408,19 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
+@@ -4134,6 +5553,19 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
          }
          prompts.swap(dd);
      }
@@ -35888,7 +36119,7 @@ index 857edadb1e6..02d4dd97c50 100644
      if (prompts.empty()) return;
  
      float fs = e->getF("fontSize", 0.035f);
-@@ -4165,20 +5452,28 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
+@@ -4165,20 +5597,28 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
  
      struct Ent { GLuint tex; float iw, ih; std::string label; float lw; };
      std::vector<Ent> ents; ents.reserve(prompts.size());
@@ -35920,7 +36151,7 @@ index 857edadb1e6..02d4dd97c50 100644
          esdeLetterCase(en.label, lc);
          en.lw = measureText(en.label.c_str(), sc, face);
          total += (en.tex ? en.iw + iconTextSp : 0.0f) + en.lw;
-@@ -4201,7 +5496,9 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
+@@ -4201,7 +5641,9 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
      esdeDrawPlate(e, x0, yTop, total, rowH);
  
      float cx = x0;
@@ -35931,7 +36162,7 @@ index 857edadb1e6..02d4dd97c50 100644
          if (en.tex) {
              drawIconTex(en.tex, cx, yTop + (rowH - en.ih) * 0.5f, en.iw, en.ih,
                          iconC[0], iconC[1], iconC[2], iconC[3]);
-@@ -4209,13 +5506,89 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
+@@ -4209,13 +5651,89 @@ void NanoMenu::esdeDrawHelp(const nanoesde::Element* e, bool gamelist,
          }
          drawText(en.label.c_str(), cx, yTop + (rowH - glyphH) * 0.5f, sc,
                   textC[0], textC[1], textC[2], textC[3], face);
@@ -36022,7 +36253,7 @@ index 857edadb1e6..02d4dd97c50 100644
  void NanoMenu::esdeDrawSystemStatus(const nanoesde::Element* e) {
      // ES-DE's SystemStatusComponent default textRelativeScale is 0.9 (applyTheme), not 1.0.
      float rel = e->getF("textRelativeScale", 0.9f);
-@@ -4251,9 +5624,16 @@ void NanoMenu::esdeDrawSystemStatus(const nanoesde::Element* e) {
+@@ -4251,9 +5769,16 @@ void NanoMenu::esdeDrawSystemStatus(const nanoesde::Element* e) {
      };
  
      // Assemble items left-to-right in ES-DE's order: bluetooth, wifi, battery icon, battery percent.
@@ -36040,7 +36271,7 @@ index 857edadb1e6..02d4dd97c50 100644
      auto addIcon = [&](const std::string& path) {
          if (path.empty()) return;
          EsdeSvg a = esdeArtTex(path, (int)iconBox, (int)iconBox);
-@@ -4313,7 +5693,7 @@ void NanoMenu::esdeDrawSystemStatus(const nanoesde::Element* e) {
+@@ -4313,7 +5838,7 @@ void NanoMenu::esdeDrawSystemStatus(const nanoesde::Element* e) {
          } else {
              drawText(it.text.c_str(), cx, yTop + (rowH - glyphH) * 0.5f, sc,
                       col[0], col[1], col[2], col[3], statusFace);
@@ -36049,7 +36280,7 @@ index 857edadb1e6..02d4dd97c50 100644
          }
      }
  }
-@@ -4372,6 +5752,7 @@ bool NanoMenu::esdeGamelistIsHorizontal() {
+@@ -4372,6 +5897,7 @@ bool NanoMenu::esdeGamelistIsHorizontal() {
  // dx: system change (system view) / unused in gamelist; dy: row move. Kept simple and
  // self-contained; launching reuses the shared launchXmbGame() path.
  void NanoMenu::esdeNav(int dx, int dy) {
@@ -36057,7 +36288,7 @@ index 857edadb1e6..02d4dd97c50 100644
      if (mEsdeXsActive) return;                 // ignore navigation while a view transition plays
      esdeRebuildSysList();
      if (mEsdeSysList.empty()) return;
-@@ -4448,8 +5829,11 @@ bool NanoMenu::esdeSelect() {
+@@ -4448,8 +5974,11 @@ bool NanoMenu::esdeSelect() {
      if (mEsdeGameSel >= 0 && mEsdeGameSel < (int)sys.roms.size()) {
          mXmbSystemIndex = mEsdeSysList[mEsdeSysSel];
          mXmbGameIndex = mEsdeGameSel;
@@ -36069,7 +36300,7 @@ index 857edadb1e6..02d4dd97c50 100644
      }
      return true;
  }
-@@ -4460,6 +5844,194 @@ bool NanoMenu::esdeBack() {
+@@ -4460,6 +5989,194 @@ bool NanoMenu::esdeBack() {
      return false;   // at system root: let the caller handle (e.g. nothing / exit gesture)
  }
  
