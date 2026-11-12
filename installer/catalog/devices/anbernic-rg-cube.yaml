@@ -55,7 +55,7 @@ flash:
   method: spd
   fdl: [FDL, FDL2]
   # Update mode (already unlocked, keeps data): only what Thimsy changes.
-  update: [Super, VENDORBOOT, VENDORBOOT_B, BootLogo]
+  update: [Super, VENDORBOOT, VENDORBOOT_B, BootLogo, Fastboot_Logo]
   # Fresh install: erased like the vendor tool does; Android formats them on first boot.
   erase_full: [userdata, metadata]
   # Device-unique or diagnostic data: never written, even on a fresh install.
