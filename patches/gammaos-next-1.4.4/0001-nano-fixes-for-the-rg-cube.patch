@@ -84107,7 +84107,7 @@ index 00000000000..e72045c5771
 +    }
 +}
 diff --git a/frameworks/base/services/core/java/com/android/server/policy/PhoneWindowManager.java b/frameworks/base/services/core/java/com/android/server/policy/PhoneWindowManager.java
-index 0d7e69d0a6b..9835dc46992 100644
+index 0d7e69d0a6b..c8a476af154 100644
 --- a/frameworks/base/services/core/java/com/android/server/policy/PhoneWindowManager.java
 +++ b/frameworks/base/services/core/java/com/android/server/policy/PhoneWindowManager.java
 @@ -533,8 +533,6 @@ public class PhoneWindowManager implements WindowManagerPolicy {
@@ -84287,7 +84287,7 @@ index 0d7e69d0a6b..9835dc46992 100644
          // Cancel any pending emergency exit timer
          mHandler.removeCallbacks(mNanoBackEmergencyRunnable);
          mNanoBackEmergencyPending = false;
-@@ -2608,6 +2620,251 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -2608,6 +2620,252 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                          "init.svc.gammaos-nano-overlay", ""));
      }
  
@@ -84418,7 +84418,8 @@ index 0d7e69d0a6b..9835dc46992 100644
 +
 +    // A two-finger tap over an app (two fingers down together and lifted together, without moving)
 +    // raises the Quick Menu as the Anbernic button does. The app gets the touches too; a listener
-+    // only watches them. persist.gammaos.nano.two_finger_quickmenu=false turns it off.
++    // only watches them. Off unless persist.gammaos.nano.two_finger_quickmenu=true: a game's own
++    // two-thumb touch controls would raise it mid-game.
 +    private final class NanoTwoFingerTap implements WindowManagerPolicyConstants.PointerEventListener {
 +        private final float mSlop = ViewConfiguration.get(mContext).getScaledTouchSlop() * 2f;
 +        private long mDownAt, mTwoAt;
@@ -84456,7 +84457,7 @@ index 0d7e69d0a6b..9835dc46992 100644
 +                case MotionEvent.ACTION_UP:
 +                    if (mTwo && !mSpoilt && e.getEventTime() - mTwoAt < 400) {
 +                        mHandler.post(() -> {
-+                            if (SystemProperties.getBoolean("persist.gammaos.nano.two_finger_quickmenu", true)
++                            if (SystemProperties.getBoolean("persist.gammaos.nano.two_finger_quickmenu", false)
 +                                    && nanoOverApp(mDefaultDisplayPolicy.isAwake() ? FLAG_INTERACTIVE : 0)) {
 +                                nanoSummonQuickMenu("two-finger tap");
 +                            }
@@ -84539,7 +84540,7 @@ index 0d7e69d0a6b..9835dc46992 100644
      // GammaOS Nano: schedule (on key-down) or cancel (on key-up) the 10s emergency-recovery
      // hold. Shared by BACK and BTN_MODE so either can trigger it - the retro gamepad emits
      // BTN_MODE (Generic.kl -> BUTTON_MODE), not a BACK keycode, so MODE is the reachable key
-@@ -2766,14 +3023,12 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -2766,14 +3024,12 @@ public class PhoneWindowManager implements WindowManagerPolicy {
      // it is deliberately NOT folded into ensureRetroarchEntryState(), which only runs on the first
      // key from each device (consumedKeys==null) - that made the reset fire once and then never
      // again, so the stuck state came back on the second exit.
@@ -84560,7 +84561,7 @@ index 0d7e69d0a6b..9835dc46992 100644
      }
  
      // GammaOS Nano: nano (the home, its overlay, or a drastic-nano DS session presenting as the
-@@ -6417,11 +6672,6 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -6417,11 +6673,6 @@ public class PhoneWindowManager implements WindowManagerPolicy {
              mNanoSelectHeld = false;
              mNanoSelectDownTime = 0;
          }
@@ -84572,7 +84573,7 @@ index 0d7e69d0a6b..9835dc46992 100644
          // Release any BTN_SELECT that the RetroArch back-override synthesized, at the evdev level,
          // so the app does not see SELECT stuck down either (mirrors the BACK-up release path).
          if (mRetroarchSelectDown) {
-@@ -6799,6 +7049,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -6799,6 +7050,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                  } else {
                      android.os.SystemProperties.set("persist.gammaos.shader.enable", "0");
                      Slog.i(TAG, "GammaOS Nano: Power+Select -> display shader disabled (escape hatch)");
@@ -84580,7 +84581,7 @@ index 0d7e69d0a6b..9835dc46992 100644
                      return 0; // consume; do not sleep/wake on this press
                  }
              }
-@@ -6825,6 +7076,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -6825,6 +7077,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                          "sys.gammaos.nano.app_launched", "0"))
                  && !"1".equals(android.os.SystemProperties.get(
                          "sys.gammaos.nano.show_overlay", "0"))) {
@@ -84588,7 +84589,7 @@ index 0d7e69d0a6b..9835dc46992 100644
              return 0; // consume: don't queue, don't wake, don't sleep
          }
          // Keep an accurate "physical BACK" signal for combo logic
-@@ -6872,6 +7124,151 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -6872,6 +7125,151 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                  || keyCode == KeyEvent.KEYCODE_BUTTON_MODE) {
              nanoEmergencyHoldKey(down);
          }
@@ -84740,7 +84741,7 @@ index 0d7e69d0a6b..9835dc46992 100644
          boolean isWakeKey = (policyFlags & WindowManagerPolicy.FLAG_WAKE) != 0
                  || event.isWakeKey();
  
-@@ -7056,14 +7453,6 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -7056,14 +7454,6 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                  break;
              }
  
@@ -84755,7 +84756,7 @@ index 0d7e69d0a6b..9835dc46992 100644
              case KeyEvent.KEYCODE_VOLUME_DOWN:
              case KeyEvent.KEYCODE_VOLUME_UP:
              case KeyEvent.KEYCODE_VOLUME_MUTE: {
-@@ -7085,18 +7474,16 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -7085,18 +7475,16 @@ public class PhoneWindowManager implements WindowManagerPolicy {
                      final boolean drmOwnsPanel = android.os.SystemProperties
                              .getBoolean("sys.gammaos.nano.drm_active", false);
                      if (down && keyCode != KeyEvent.KEYCODE_VOLUME_MUTE) {
@@ -84781,7 +84782,7 @@ index 0d7e69d0a6b..9835dc46992 100644
                              int direction = (keyCode == KeyEvent.KEYCODE_VOLUME_UP) ? 1 : -1;
                              adjustScreenBrightness(direction);
                              if (!drmOwnsPanel) {
-@@ -7301,6 +7688,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -7301,6 +7689,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
              }
  
              case KeyEvent.KEYCODE_POWER: {
@@ -84789,7 +84790,7 @@ index 0d7e69d0a6b..9835dc46992 100644
                  // GammaOS Nano: in the DRM-home XMB the home nano owns the power
                  // button over evdev (short press = sleep, hold = shutdown), but only
                  // when it grabs input exclusively (persist.gammaos.nano.grab_input),
-@@ -8797,6 +9185,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
+@@ -8797,6 +9186,7 @@ public class PhoneWindowManager implements WindowManagerPolicy {
          // In normal flow, systemReady is called before other system services are ready.
          // So it is better not to bind keyguard here.
          mKeyguardDelegate.onSystemReady();
