@@ -625,8 +625,8 @@ The tools it uses:
   the power button every 100 ms, before it starts Android. The bootloader is
   signed, so that can't be changed, and nothing of Thimsy's runs yet. Tapping
   power once pauses the wait and tapping it again ends it at once, so the
-  bootloader's picture says "Tap the power button twice to skip the wait".
-  One tap alone leaves it paused until the second.
+  bootloader's picture says "Tap the power button repeatedly to skip the
+  wait". One tap alone leaves it paused until the next.
 - The boot screen redraws at full rate until the home has settled under it
   (then at 10 fps while it waits only for the startup sound). The ES-DE home's
   idle pacing (one redraw a second when nothing moves) applied to it too, so

@@ -171,7 +171,7 @@ if [[ -n "${SYSTEM_IMG:-}" ]]; then
   python3 -I "$ROOT/scripts/pactool.py" extract "$WORK/pac/$NAME.pac" logo.img "$logo"
   # The unlocked bootloader waits about 10 s on this picture; a second press of power ends the wait.
   nano-bootlogo "$BOOT_LOGO_SVG" "$BOOT_LOGO_FONT" 720 720 "$logo.rgba" \
-    "Tap the power button twice to skip the wait"
+    "Tap the power button repeatedly to skip the wait"
   python3 -I "$ROOT/scripts/bootlogo.py" "$logo" "$logo.rgba" "$logo.new"
   python3 -I "$ROOT/scripts/pactool.py" replace "$pac.partial" logo.img "$logo.new"
   rm -f "$logo" "$logo.rgba" "$logo.new"
