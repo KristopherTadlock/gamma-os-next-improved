@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Builds out/RG_Cube_Thimsy_OS_v1.0.pac from the official release.
 #
-# Needs: curl, 7zz (or 7z), xz, zstd, unzip, e2fsck, resize2fs, setfattr, cc,
-# python3, and sudo for loop-mounting the system image.
+# Needs: curl, 7zz (or 7z), xz, zstd, unzip, e2fsck, resize2fs, dumpe2fs,
+# setfattr, cc, python3, and sudo for loop-mounting the system image.
 #
 # Set SYSTEM_IMG=/path/to/system.img to use a GammaOS Next 1.4.4 system image
 # built from source instead of the release's 1.2 system (the RG Cube's vendor,
@@ -135,9 +135,8 @@ done
 [[ -z "$(sudo losetup -j "$system")" ]] || { echo "the system image is still in use after unmounting" >&2; exit 1; }
 e2fsck -fn "$system"
 # Deleted and replaced files leave their old contents in the free blocks, which
-# the PAC carries and 7-Zip compresses (about 500 MB of the download). Discard
-# punches them out of the image file, so they read back as zeros.
-e2fsck -fp -E discard "$system" >/dev/null || (($? == 1))
+# the PAC carries and 7-Zip compresses (about 500 MB of the download).
+python3 -I "$ROOT/scripts/zero_free_blocks.py" "$system"
 python3 -I "$ROOT/scripts/check_image_files.py" "$system" "$written"
 
 pac="$OUT/RG_Cube_Thimsy_OS_v$VERSION$VARIANT.pac"
