@@ -281,7 +281,10 @@ It also changes Nano:
   player. Before, each screen worked out its own layout again for touch, and
   taps could land on the wrong item. In the ES-DE system view a swipe moves
   one system, with no fling. A two-finger tap opens or closes the Quick Menu,
-  as the Anbernic button does, wherever Nano is on screen.
+  as the Anbernic button does, wherever Nano is on screen, and over a game
+  (PhoneWindowManager watches the touches without taking them from the game;
+  not in the DS emulator; `persist.gammaos.nano.two_finger_quickmenu=false`
+  turns that off).
 - **Touch on the RG Cube:** its touchscreen is mounted a quarter turn from the
   picture (`ro.input_flinger.primary_touch_orientation=ORIENTATION_90`).
   Android turns touches around for apps, but Nano and drastic-nano read the
