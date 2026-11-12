@@ -33,6 +33,6 @@ if [[ ! -f "$cached" ]]; then
   fi
   mv "$cached.partial" "$cached"
 fi
-echo "$SHA256  $cached" | sha256sum -c --quiet
+echo "$SHA256  $cached" | sha256sum -c --quiet || { rm -f "$cached"; echo "checksum mismatch: $cached (deleted from the cache)" >&2; exit 1; }
 install_system_file "$cached" "$dest/esde_boot.mp3"
 echo "installed the ES-DE startup sound"

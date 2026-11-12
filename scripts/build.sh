@@ -8,7 +8,7 @@
 # built from source instead of the release's 1.2 system (the RG Cube's vendor,
 # kernel and bootloader stay). That builds ..._v1.0a.pac.
 #
-# Set ESDE_APK=/path/to/ES-DE.apk to replace Daijisho with ES-DE
+# Set ESDE_APK=/path/to/ES-DE.apk to make ES-DE the home app
 # (mods/37-esde.sh, 1.2 base only); that also needs aapt.
 #
 # The vendor kernel's DisplayPort driver is patched (scripts/sprd_drm.py) in
@@ -170,9 +170,7 @@ rm -f "$vendor_boot" "$vendor_boot.patched"
 if [[ -n "${SYSTEM_IMG:-}" ]]; then
   logo="$WORK/images/logo.img"
   python3 -I "$ROOT/scripts/pactool.py" extract "$WORK/pac/$NAME.pac" logo.img "$logo"
-  # The unlocked bootloader waits about 10 s on this picture; a second press of power ends the wait.
-  nano-bootlogo "$BOOT_LOGO_SVG" "$BOOT_LOGO_FONT" 720 720 "$logo.rgba" \
-    "Tap the power button repeatedly to skip the wait"
+  nano-bootlogo "$BOOT_LOGO_SVG" "$BOOT_LOGO_FONT" 720 720 "$logo.rgba"
   python3 -I "$ROOT/scripts/bootlogo.py" "$logo" "$logo.rgba" "$logo.new"
   python3 -I "$ROOT/scripts/pactool.py" replace "$pac.partial" logo.img "$logo.new"
   rm -f "$logo" "$logo.rgba" "$logo.new"

@@ -15,8 +15,8 @@ mkdir -p "$work"
 list="$MODS/bundled-roms.txt"
 nano=()
 if is_nano_base "$1"; then
-  # Daijisho's launch files (.dpt) do nothing without it; ScummVM lists its game itself.
-  grep -v '\.dpt  ' "$list" >"$work/bundled-roms.txt"
+  # ES-DE's launch files (.scummvm) do nothing beside Nano; ScummVM lists its game itself.
+  grep -v '\.scummvm  ' "$list" >"$work/bundled-roms.txt"
   list="$work/bundled-roms.txt"
   nano=(nano)
 fi

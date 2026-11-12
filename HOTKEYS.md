@@ -25,6 +25,7 @@ Hold the **Anbernic button**, or **Start + Select**, in a game and press another
 - Anbernic + Start opens the Applications view, and closes it again. Over a game the overlay rises on it, and closing it (Anbernic + Start, Start or B) returns to the game. In drastic-nano it does nothing: Nano's overlay can't show during a DS session.
 - Neither is a hotkey: both work with Universal Hotkeys off, the Quick Menu does not open on that release, and the game never sees that Start or Select. Start and Select can't be hotkey buttons.
 - With Start + Select, the game still sees Start and Select: they can't be held back without delaying them. Start + Select is not a chord when another pad button is already held (A + B + Start + Select resets many games).
+- On the touchscreen, a two-finger tap opens or closes the Quick Menu, and a three-finger tap opens or closes the Applications view, in Nano's own menus (not over a game or app).
 
 Each emulator has its own hotkeys, or none. A per-emulator **profile** turns the five actions into whatever that emulator understands. Adding an emulator means adding a profile file, with no code change.
 

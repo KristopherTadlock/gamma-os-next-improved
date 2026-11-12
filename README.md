@@ -33,8 +33,8 @@ The RetroArch cores are cut down to a curated set (see
 (local network or internet) is available through the DoubleCherryGB and gpSP
 cores. Edit `mods/retroarch-cores.txt` to change the selection.
 
-Daijisho's default player for each platform follows the cores marked `D - `
-in that file:
+The cores marked `D - ` in that file are each system's default emulator in
+Nano and ES-DE. Where they differ from upstream v1.2's defaults (Daijisho's):
 
 | Platform | Upstream v1.2 | This build |
 |---|---|---|
@@ -56,17 +56,25 @@ Other apps:
 
 | App | Upstream v1.2 | This build |
 |---|---|---|
-| Daijisho | 1.4.80 | 1.5.0 |
+| Daijisho | 1.4.80 | removed |
+| MiXplorer | 6.64.3 | removed |
 | Aurora Store | 4.6.4 | 4.8.4 |
 | Firefox | 139.0 | replaced by [Brave](https://github.com/brave/brave-browser) 1.99.55 |
+| — | — | [Fulguris](https://github.com/Slion/Fulguris) 2.1.2 (F-Droid build), 1.4.4 base, only on devices with 1.3 GB of RAM or less |
+
+Daijisho and MiXplorer are closed apps with no grant to redistribute them, so
+they are removed (`mods/15-update-apps.sh`). Android's home is Trebuchet,
+LineageOS's launcher, which both bases ship. Files are managed in Android's
+own Files app, or in Nano's File Explorer on the 1.4.4 base.
 
 Brave is the default browser, set by a fresh setup (`mods/15-update-apps.sh`),
-so a browser chosen later stays chosen.
+so a browser chosen later stays chosen. Setup skips Brave on devices with
+1.3 GB of RAM or less; on the 1.4.4 base they get Fulguris, a lighter browser,
+as their default instead (the `maxmem:` condition in `apps.list`).
 
 Aurora Store comes from IzzyOnDroid, which only keeps recent versions, so its
 link in `mods/15-update-apps.sh` will need updating for later builds.
-MiXplorer stays at 6.64.3 because newer builds are only posted on its XDA
-thread. Magisk stays at 30.6, the version the boot image is patched with, and
+Magisk stays at 30.6, the version the boot image is patched with, and
 can update itself after setup. See `mods/15-update-apps.sh`.
 
 **No Google apps.** Upstream's Full image carries Google Play Store, Play
@@ -130,15 +138,15 @@ Edit `mods/added-apps.txt` to change the apps.
 
 ### ES-DE
 
-Building with `ESDE_APK=/path/to/ES-DE.apk` replaces Daijisho with
-[ES-DE](https://es-de.org) (`mods/37-esde.sh`). ES-DE's Android app is paid
+Building with `ESDE_APK=/path/to/ES-DE.apk` adds
+[ES-DE](https://es-de.org) as the home app (`mods/37-esde.sh`). ES-DE's Android app is paid
 and partly closed source, so its APK isn't in this repository; the build
 takes it from that path and checks it's the version the build is set up for
 (3.5.0). First-boot setup installs it with storage access, makes it the home
 app, and puts its settings and game lists in `/sdcard/ES-DE`:
 
 - the ROMs folder, `/sdcard/ROMs`, and the touch overlay turned off;
-- for each system, the emulator Daijisho used: the `D - ` core from
+- for each system, the build's default emulator: the `D - ` core from
   `mods/retroarch-cores.txt` or the standalone app (`mods/esde-emulators.txt`);
 - the pack-in games, with KłełeAtoms launching from its folder and Beneath
   a Steel Sky as the `.scummvm` file ES-DE launches ScummVM games with.
@@ -149,7 +157,8 @@ Magisk module for an ES-DE theme download error on some devices
 (`MAGISK_ES-DE_fix.zip`) is copied to `/sdcard/Download`; install it in
 Magisk only if theme downloads fail with "Failed to lock file".
 
-Without `ESDE_APK`, the build keeps Daijisho, set up as below.
+Without `ESDE_APK`, the 1.2 build has no game frontend: the home is
+Trebuchet, and games start from RetroArch and the emulator apps.
 
 ### 1.4.4 base and the Nano home
 
@@ -159,9 +168,8 @@ system image built from GammaOS's source
 target `arm64_bgN`) in place of the release's 1.2 system. The RG Cube's
 vendor, kernel and bootloader stay. The changes above apply to it too, adapted
 to 1.4.4's zstd payloads and its app list (`/system/etc/gammaos/apps.list`),
-except the Daijisho changes and ES-DE's app: GammaOS Nano replaces Daijisho,
-which is removed, along with Beneath a Steel Sky's Daijisho launch file
-(ScummVM lists the game itself).
+except ES-DE's app: GammaOS Nano is the home, and Beneath a Steel Sky's ES-DE
+launch file is left out (ScummVM lists the game itself).
 
 Apply `patches/thimsy/0001-thimsy.patch` to the
 source tree (`git apply`, from its root) before building the system image. It
@@ -189,8 +197,8 @@ fixes GammaOS Nano bugs:
 - the Wi-Fi and Bluetooth wizards' result screens (Save completed, the
   connection test result, Register completed), in setup and in Settings,
   showed B for OK, but B went back a screen; they now show A, which continues;
-- small text in the theme's own fonts (the game list's Gilroy, ES-DE's
-  Akrobat) was fully hinted, which left its edges stair-stepped; glyphs are now
+- small text in the theme's own fonts (the game list's font, ES-DE's
+  default face) was fully hinted, which left its edges stair-stepped; glyphs are now
   light-hinted, snapping only vertically.
 
 It also changes Nano:
@@ -294,7 +302,9 @@ It also changes Nano:
   as the Anbernic button does, wherever Nano is on screen. Over a game or app
   it does nothing, so a game's two-thumb touch controls never raise the menu
   (`persist.gammaos.nano.two_finger_quickmenu=true` turns it on over apps and
-  games other than the DS emulator).
+  games other than the DS emulator). A three-finger tap opens or closes the
+  Applications view, as Anbernic + Start does, in Nano's own menus only. Neither
+  tap also taps what is under the fingers.
 - **Touch on the RG Cube:** its touchscreen is mounted a quarter turn from the
   picture (`ro.input_flinger.primary_touch_orientation=ORIENTATION_90`).
   Android turns touches around for apps, but Nano and drastic-nano read the
@@ -560,13 +570,21 @@ It also changes Nano:
 1.4.4 adds GammaOS Nano, a console-style home. The build makes the device
 boot into it from the first boot, where Nano's setup wizard runs first-boot
 setup; **Boot Android** in the power menu switches to normal Android (with
-its own launcher), and **Boot Nano** back. `mods/50-nano.sh` sets it up:
+its own launcher, Trebuchet), and **Boot Nano** back. `mods/50-nano.sh` sets it up:
 
 - the home theme is Nano's ES-DE theme engine, with
   [Colorful (Simplified)](https://github.com/anthonycaccese/colorful-simplified-es-de)
   with its Colorful (Dark) color scheme and the Theme Aspect Ratio on
   Automatic, which picks the theme's layout for the screen's shape (1:1 on
   the Cube's square screen);
+- the theme's fonts are open ones: its commercial Gilroy is replaced by
+  [Urbanist](https://github.com/coreyhu/Urbanist), whose letter sizes and
+  line height match it, and Akrobat, in the theme and as ES-DE's default face
+  in Nano, by [Barlow](https://github.com/jpt/barlow) Semi Condensed, both
+  under the SIL Open Font License and downloaded at build time with their
+  licenses. Its Quake picture, a Quake Champions render, is left out, so a
+  Quake system would show the theme's default picture. Both changes are noted
+  in the theme's README;
 - the settings screens (Nano Settings and the Quick Menu) have the Minima
   theme's look on a Midnight background (**Theme Settings → Settings Theme**
   sets it back to the XMB's, **Background Colour** changes the colour);
@@ -596,34 +614,6 @@ Nano shows new games after its next scan (at boot, or **Rescan Games**).
 Building it needs a JDK 17 (`javac`, `keytool`), the Android build tools
 `aapt2`, `d8`, `zipalign` and `apksigner`, and `ANDROID_JAR` set to an API 34
 `android.jar`; a GammaOS source tree has all of them after a build.
-
-### Daijisho platforms
-
-Daijisho gets 11 more platforms, each from Daijisho's official definition:
-GameCube, Wii, 3DS, Xbox and ScummVM for the added emulators, and Virtual Boy,
-32X, TurboGrafx-16 (PC Engine HuCards), Atari 2600, Atari 5200 and Atari 7800,
-which have pack-in games and RetroArch cores but no platform upstream. Systems
-that need a BIOS (TurboGrafx-CD, Saturn, Lynx, 3DO, ColecoVision) and MSX keep
-their RetroArch cores but get no platform or pack-in game. Edit
-`mods/daijisho-platforms.txt` to change them.
-
-GammaOS's platform wallpapers come from the "BB-1 Dark" pack by
-BrunoBelmonte in Daijisho's wallpaper pack collection, and the new platforms
-get theirs from the same pack (`mods/daijisho-wallpapers.txt`). The pack has
-no Xbox wallpaper, so `scripts/make_wallpapers.py` draws one in its layout
-with Second Reality's title picture. The pack's wallpapers for the systems
-that need a BIOS are copied to `/sdcard/Daijisho/Wallpapers/`, to use if you
-add one of those platforms to Daijisho later.
-
-Daijisho's player lists drop the players that can't work here: the
-32-bit and Play Store RetroArch players (only the 64-bit RetroArch is
-installed) and RetroArch players for cores that aren't shipped. Players for
-standalone apps stay, since you can install those apps.
-
-Upstream ships Daijisho with its game library already synced, listing the
-removed games. The build rebuilds the library from the games it ships, and
-makes Daijisho skip the license and `systeminfo.txt` files in the ROMs
-folders when you sync again.
 
 ### Pack-in games
 
@@ -687,6 +677,8 @@ The tools it uses:
   compiled in full (`speed`), every other installed app gets `verify`. It sets
   `persist.thimsy.dexopt_done` when every app compiled, and runs again at the
   next boot otherwise.
+- No launch fade: a launch hands off to the game or app at once in every theme
+  (the 0.26 s fade and the DSi tile-lift effect are removed).
 - The startup sound is decoded while Android is still starting, then waits for
   AudioService, so the home and its sound come about 0.4 s sooner.
 - AppStandbyController asks for the network score service, which the minimal
@@ -715,13 +707,30 @@ The tools it uses:
   the vector logo and Android's Roboto, at the screen's own size, so they look
   the same and stay sharp on any screen, 640x480 included. The charging
   pictures and the fastboot logo are Anbernic's.
+- **Android's boot animation**, shown when the console boots into full
+  Android, is the Thimsy logo fading in on the same midnight blue, in place
+  of GammaOS's cube (`mods/58-bootanimation.sh`). It is drawn from the vector
+  logo by `tools/bootanimation/make_bootanimation.py`:
+
+  ```sh
+  python3 tools/bootanimation/make_bootanimation.py \
+      "$AOSP/frameworks/base/cmds/gammaos-nano/bootscreen/thimsy.svg" \
+      mods/bootanimation/bootanimation.zip "$AOSP/vendor/lineage/bootanimation"
+  ```
+
+  The last argument also writes the animation into an AOSP tree
+  (`bootanimation.tar` and `desc.txt`). Lineage's makefile does not rebuild
+  the zip when they change, so delete
+  `out/target/product/tdgsi_arm64_ab/obj/BOOTANIMATION/bootanimation.zip`
+  first. The mod puts the animation in the image either way, since the patch
+  can only carry text.
 - **Bootloader wait:** the RG Cube's bootloader is unlocked (Thimsy needs
   that), so at every boot it waits about 10.5 s on the boot picture, checking
   the power button every 100 ms, before it starts Android. The bootloader is
   signed, so that can't be changed, and nothing of Thimsy's runs yet. Tapping
-  power once pauses the wait and tapping it again ends it at once, so the
-  bootloader's picture says "Tap the power button repeatedly to skip the
-  wait". One tap alone leaves it paused until the next.
+  power once pauses the wait and tapping it again ends it at once; one tap
+  alone leaves it paused until the next. The boot picture itself shows only
+  the Thimsy title and logo.
 - The boot screen redraws at full rate until the home has settled under it
   (then at 10 fps while it waits only for the startup sound). The ES-DE home's
   idle pacing (one redraw a second when nothing moves) applied to it too, so
@@ -846,4 +855,10 @@ Flashing erases all user data.
 
 ## License
 
-Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Apache License 2.0. See [LICENSE](LICENSE) and [NOTICE](NOTICE). The Thimsy
+logo and the pictures drawn from it are under
+[CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/): free to use
+and redistribute, with credit to the Thimsy OS project, but not for commercial
+use.
+[ATTRIBUTION.md](ATTRIBUTION.md) credits the art, fonts and sounds in the
+image.

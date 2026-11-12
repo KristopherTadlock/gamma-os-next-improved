@@ -28,5 +28,5 @@ for entry in "${PARTS[@]}"; do
     curl -fL --retry 3 -o "$DEST/$file.partial" "$BASE/$file"
     mv "$DEST/$file.partial" "$DEST/$file"
   fi
-  echo "$sha  $DEST/$file" | sha256sum -c --quiet
+  echo "$sha  $DEST/$file" | sha256sum -c --quiet || { rm -f "$DEST/$file"; echo "checksum mismatch: $DEST/$file (deleted)" >&2; exit 1; }
 done

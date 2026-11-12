@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Replaces Daijisho with ES-DE when the build is given ES-DE's APK
+# Adds ES-DE as the home app when the build is given ES-DE's APK
 # (ESDE_APK=/path/to/ES-DE.apk). First-boot setup installs ES-DE, makes it the
 # home app, and puts its settings and game lists in /sdcard/ES-DE: the ROMs
 # folder, the emulator for each system from esde-emulators.txt, and the
-# pack-in games. Beneath a Steel Sky's Daijisho template becomes the .scummvm
-# file ES-DE launches. GammaOS's Magisk module for ES-DE theme downloads goes
-# to /sdcard/Download for devices that need it. Runs after 30-bundled-roms.sh.
+# pack-in games. GammaOS's Magisk module for ES-DE theme downloads goes to
+# /sdcard/Download for devices that need it. Runs after 15-update-apps.sh,
+# which removes Daijisho, and 30-bundled-roms.sh.
 #
 # Usage: 37-esde.sh SYSTEM_DIR CACHE_DIR
 set -euo pipefail
@@ -24,7 +24,7 @@ cache="$(realpath -m "$2")/esde"
 work="$cache/work"
 
 if [[ -z "${ESDE_APK:-}" ]]; then
-  echo "ESDE_APK isn't set; keeping Daijisho"
+  echo "ESDE_APK isn't set; skipping"
   exit 0
 fi
 if [[ -f "$ETC/gammaos/apps.list" ]]; then
@@ -35,8 +35,8 @@ fi
 rm -rf "$work"
 mkdir -p "$work/tree"
 fetch() {
-  [[ -f "$cache/$3" ]] || { curl -fsSL --retry 3 -o "$cache/$3.partial" "$1" && mv "$cache/$3.partial" "$cache/$3"; }
-  echo "$2  $cache/$3" | sha256sum -c --quiet
+  [[ -f "$cache/$3" ]] || { curl -fsSL --retry 3 -o "$cache/$3.partial" "$1" && mv "$cache/$3.partial" "$cache/$3"; } || { echo "download failed: $1" >&2; exit 1; }
+  echo "$2  $cache/$3" | sha256sum -c --quiet || { rm -f "$cache/$3"; echo "checksum mismatch: $cache/$3 (deleted from the cache)" >&2; exit 1; }
 }
 fetch "$SYSTEMS_URL" "$SYSTEMS_SHA256" es_systems.xml
 fetch "$FIX_URL" "$FIX_SHA256" "$FIX"
@@ -55,7 +55,6 @@ python3 -I "$MODS/../scripts/esde_config.py" "$cache/es_systems.xml" "$MODS/esde
   "$MODS/retroarch-cores.txt" "$ETC/roms.tar.xz" "$work/tree"
 (cd "$work/tree" && tar -cf "$work/esde.tar" --owner=0 --group=0 -- *)
 
-sudo rm -f "$ETC"/daijisho*.apk "$ETC/daijisho.tar.xz" "$ETC/daijisho-wallpapers.tar"
 add() {
   sudo install -m 644 -o root -g root "$1" "$ETC/$2"
   sudo setfattr -n security.selinux -v u:object_r:system_file:s0 "$ETC/$2"
@@ -66,40 +65,32 @@ add "$cache/$FIX" "$FIX"
 
 sudo cat "$SETUP" >"$work/setup.sh"
 python3 -I - "$work/setup.sh" "$pkg" "$home" "$FIX" <<'PYEOF'
-import re, sys
+import sys
 path, pkg, home, fix = sys.argv[1:5]
 s = open(path).read()
 
-daijisho = re.compile(r'echo "Installing Daijisho\." && \\\npm install /system/etc/daijisho[^\n]*\.apk\n'
-                      r'cd /\n(?:[^\n]*com\.magneticchen\.daijishou[^\n]*\n|tar -xJvf /system/etc/daijisho\.tar\.xz[^\n]*\n)+')
-s, n = daijisho.subn(f'echo "Installing ES-DE." && \\\npm install /system/etc/es-de.apk && \\\n'
-                     f'appops set --uid {pkg} MANAGE_EXTERNAL_STORAGE allow\ncd /\n', s)
-assert n == 1, "setup.sh: Daijisho install block not found"
+aurora = 'echo "Installing Aurora Store." && \\\n'
+assert s.count(aurora) == 1, "setup.sh: Aurora Store install not found"
+s = s.replace(aurora, f'echo "Installing ES-DE." && \\\npm install /system/etc/es-de.apk && \\\n'
+                      f'appops set --uid {pkg} MANAGE_EXTERNAL_STORAGE allow\n\n' + aurora)
 
-home_lines = ("cmd package set-home-activity com.magneticchen.daijishou/.app.HomeActivity\n"
-              "pm set-home-activity com.magneticchen.daijishou/.app.HomeActivity -user --user 0\n")
-assert s.count(home_lines) == 1, "setup.sh: Daijisho home lines not found"
-s = s.replace(home_lines, f"cmd package set-home-activity {pkg}/{home}\n"
-                          f"pm set-home-activity {pkg}/{home} -user --user 0\n")
+grants = 'echo "Granting permissions to applications."\n'
+assert s.count(grants) == 1, "setup.sh: permissions line not found"
+s = s.replace(grants, grants + f"cmd package set-home-activity {pkg}/{home}\n"
+                               f"pm set-home-activity {pkg}/{home} -user --user 0\n")
 
 marker = 'echo "Granting read/write permissions to RetroArch."\n'
 assert s.count(marker) == 1, "setup.sh: RetroArch permissions line not found"
 steps = f'''echo "Setting up ES-DE."
 tar -xf /system/etc/esde.tar -C /sdcard
-for f in /sdcard/ROMs/scummvm/*.dpt; do
-  [ -f "$f" ] || continue
-  rm "$f"
-  [ -f "$f.license.txt" ] && mv "$f.license.txt" "${{f%.dpt}}.scummvm.license.txt"
-done
 cp /system/etc/{fix} /sdcard/Download/
-chown -R "$(stat -c %u:%g /sdcard/Download)" /sdcard/ES-DE /sdcard/ROMs/scummvm /sdcard/Download/{fix}
+chown -R "$(stat -c %u:%g /sdcard/Download)" /sdcard/ES-DE /sdcard/Download/{fix}
 
 '''
 s = s.replace(marker, steps + marker)
-assert "daijisho" not in s.lower(), "setup.sh still mentions Daijisho"
 open(path, "w").write(s)
 PYEOF
 # Writing through the existing file keeps its owner, mode, and SELinux label.
 sudo cp --no-preserve=all "$work/setup.sh" "$SETUP"
 rm -rf "$work"
-echo "ES-DE $version ($pkg) replaces Daijisho; home activity $home"
+echo "ES-DE $version ($pkg) is the home app; home activity $home"

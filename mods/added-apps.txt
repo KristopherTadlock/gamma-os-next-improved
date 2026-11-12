@@ -1,6 +1,5 @@
 # Apps added to /system/etc and installed by GammaOS's first-boot setup.
-# Comment a line out to drop it; a Daijisho platform that launches the app
-# stays until it's also removed from daijisho-platforms.txt.
+# Comment a line out to drop it.
 #
 #   apk   <file>  name=<shown in setup log>  package=<its package>  url=<download>  sha256=<of the file>  source=<source code>
 #       Installed with "pm install". Add game=1 to list it in Android Games.

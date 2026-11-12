@@ -2,7 +2,7 @@ Beneath a Steel Sky (CD version 1.2), (C) Revolution Software Ltd
 Download: https://www.scummvm.org/games/#games-sky
 
 Freeware. The game's files are installed in ScummVM's own storage, with this
-readme next to them; this file launches the game from Daijisho.
+readme next to them; this file launches the game from ES-DE.
 
 readme.txt from the release, unchanged:
 

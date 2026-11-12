@@ -6,13 +6,17 @@ This project modifies GammaOS Next by TheGammaSqueeze
 Apache License 2.0. It is not affiliated with or endorsed by the GammaOS
 project or Anbernic.
 
-mods/daijisho-wallpapers/xbox.png is drawn on the placeholder wallpaper of
-the "BB-1 Dark" pack by BrunoBelmonte, from Daijishou
-(https://github.com/TapiocaFox/Daijishou), Copyright (c) 2022 TapiocaFox
-(Yves Chen), MIT License. It also uses the title picture of Second Reality
-by Future Crew (https://github.com/mtuomi/SecondReality), as captured by
-the Xbox port (https://github.com/kooscode/SecondReality), both released
-under the Unlicense.
+ATTRIBUTION.md credits every image, font and sound in the image, with its
+author, source and license.
+
+The Thimsy logo (bootscreen/thimsy.svg in the Nano patch) and the pictures
+drawn from it (the boot screen, the bootloader's boot picture and Android's
+boot animation, mods/bootanimation/bootanimation.zip, drawn by
+tools/bootanimation/make_bootanimation.py) are by the Thimsy OS project and
+are licensed under the Creative Commons Attribution-NonCommercial 4.0
+International license (https://creativecommons.org/licenses/by-nc/4.0/): free
+to use, share and adapt, with credit to the Thimsy OS project, for
+non-commercial purposes only. No commercial use is permitted.
 
 With ES-DE, the build includes MAGISK_ES-DE_fix.zip from GammaOS Next
 (https://github.com/TheGammaSqueeze/GammaOSNext), unchanged, Copyright
@@ -22,12 +26,82 @@ On the 1.4.4 base, the build downloads and includes the Colorful (Simplified)
 theme for ES-DE (https://github.com/anthonycaccese/colorful-simplified-es-de)
 by ant, based on the Colorful theme by viking and faeran, under the Creative
 Commons Attribution-NonCommercial-ShareAlike 2.0 license; its README, with
-the full credits, is installed with it.
+the full credits, is installed with it. Its artwork credits, as the theme
+gives them:
 
-The build downloads platform wallpapers for Daijisho from the same "BB-1 Dark"
-pack (Daijishou, MIT License, Copyright (c) 2022 TapiocaFox (Yves Chen));
-they show artwork from the games and consoles they represent, which belongs
-to its respective owners.
+  Most artwork originally created by viking
+  (https://forums.launchbox-app.com/profile/70421-viking/) & faeran
+  (https://forums.launchbox-app.com/files/file/2081-colorful-bigbox-theme).
+  For systems that did not exist in the Colorful set, some were sourced from
+  the work done by g-spawn (https://github.com/g-spawnPL) for the ckau-book
+  theme (https://github.com/CkauNui/ckau-book/tree/master), edited to add
+  transparency.
+  OpenBOR sprites (openbor.webp) originally created by DOA687
+  (https://www.deviantart.com/doa687).
+  M.U.G.E.N. sprites (mugen.webp) originally created by mpadillathespriter
+  (https://www.deviantart.com/mpadillathespriter).
+  EasyRPG artwork (easyrpg.webp) originally created by SeraphCircle
+  (https://twitter.com/SeraphCircle).
+  Doom artwork (doom.webp) originally created by azakachi-rd-17
+  (https://www.deviantart.com/azakachi-rd-17).
+  LowresNX artwork (lowresnx.webp) by Duimon
+  (https://forums.libretro.com/t/duimon-hsm-mega-bezel-graphics-and-presets-feedback-and-updates/28146/1049).
+  The base folder image used to create the All Games, Favorites, Last Played
+  and Custom Collections images (auto-allgames.webp, auto-favorites.webp,
+  auto-lastplayed.webp, custom-collections.webp) was sourced from Rick
+  Patrick (https://www.softicons.com/designers/rick-patrick).
+  The icons on the folder images were sourced from FontAwesome
+  (https://fontawesome.com/search?o=r&m=free), Font Awesome Free, CC BY 4.0.
+
+Thimsy OS's copy of the theme is changed, as noted at the end of its README:
+  - the Gilroy font (Radomir Tinkov, commercial) is replaced by Urbanist
+    1.330 (https://github.com/coreyhu/Urbanist), Copyright 2024 The Urbanist
+    Project Authors, SIL Open Font License 1.1, installed with its OFL.txt;
+  - the help bar's Akrobat Bold (Fontfabric, whose free-font license does not
+    allow redistribution) is replaced by Barlow Semi Condensed Bold 1.422
+    (https://github.com/jpt/barlow), Copyright 2017 The Barlow Project
+    Authors, SIL Open Font License 1.1, installed with its OFL.txt;
+  - theme.xml names the new font files;
+  - quake.webp, a Quake Champions render (id Software) credited to noorkabir
+    (imgbin.com), is removed; a replacement is needed, and until then the
+    Quake system shows the theme's default picture.
+
+On the 1.4.4 base, Barlow Semi Condensed Medium and SemiBold also replace
+Nano's copies of Akrobat (/system/etc/nano_xmb/fonts/akrobat-regular.ttf and
+akrobat-semibold.ttf, ES-DE's default face), with Barlow's OFL.txt beside
+them.
+
+GammaOS Nano, on the 1.4.4 base, ships:
+  - the RetroArch "Monochrome" system icons from retroarch-assets
+    (https://github.com/libretro/retroarch-assets), by the libretro project
+    and its contributors, under the Creative Commons Attribution 4.0
+    International license (CC BY 4.0);
+  - Font Awesome 4.7.0 (https://github.com/FortAwesome/Font-Awesome), the
+    font by Dave Gandy, under the SIL Open Font License 1.1;
+  - Rounded M+ 1c Medium (http://jikasei.me/), Copyright 2016 The Rounded M+
+    Project Authors, under the SIL Open Font License 1.1;
+  - Earth maps from NASA's Blue Marble and Earth's City Lights
+    (https://visibleearth.nasa.gov), by NASA Goddard Space Flight Center,
+    in the public domain;
+  - "Retro Arcade Game Music" by original_soundtrack (Viacheslav Starostin)
+    (https://pixabay.com/music/upbeat-retro-arcade-game-music-408074/), as
+    GammaEQ's preview (preview.wav), under the Pixabay Content License.
+The build downloads "Computer Startup Sound Effect" by Dragon Studio
+(https://pixabay.com/sound-effects/film-special-effects-computer-startup-sound-effect-312870/)
+and installs it as the ES-DE home's startup sound (esde_boot.mp3), under the
+Pixabay Content License.
+
+GammaOS Nano also includes Slate, ES-DE's default theme, by the ES-DE
+project, based on recalbox-multi by the Recalbox community, with graphics by
+Rookervik, Bezza191 and Dan Patrick, under the Creative Commons
+Attribution-NonCommercial-ShareAlike 2.0 license (its LICENSE and CREDITS.md
+are in the zip). Its fonts are Exo 2 (https://github.com/googlefonts/Exo-2.0)
+by Natanael Gama, Copyright 2013 The Exo 2 Project Authors, SIL Open Font
+License 1.1.
+
+On the 1.4.4 base, Nano's emulator catalog (/system/etc/nano_xmb/daijishou)
+is Daijishou's platform data (https://github.com/TapiocaFox/Daijishou),
+Copyright (c) 2022 TapiocaFox (Yves Chen), MIT License.
 
 The build downloads C-BIOS 0.29a (https://cbios.sourceforge.net/) and installs
 its MSX, MSX2 and MSX2+ machines for RetroArch's blueMSX core, with its license

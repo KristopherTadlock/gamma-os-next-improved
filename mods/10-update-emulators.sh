@@ -34,13 +34,13 @@ mkdir -p "$CACHE"
 
 fetch() {
   local url="$1" out="$2"
-  [[ -f "$out" ]] || { curl -fsSL --retry 3 -o "$out.partial" "$url" && mv "$out.partial" "$out"; }
+  [[ -f "$out" ]] || { curl -fsSL --retry 3 -o "$out.partial" "$url" && mv "$out.partial" "$out"; } || { echo "download failed: $url" >&2; exit 1; }
 }
 
 for entry in "${APKS[@]}"; do
   IFS='|' read -r name url sha file old <<<"$entry"
   fetch "$url" "$CACHE/$file"
-  echo "$sha  $CACHE/$file" | sha256sum -c --quiet
+  echo "$sha  $CACHE/$file" | sha256sum -c --quiet || { rm -f "$CACHE/$file"; echo "checksum mismatch: $CACHE/$file (deleted from the cache)" >&2; exit 1; }
   matches=("$ETC"/$old)
   [[ ${#matches[@]} == 1 && -f "${matches[0]}" ]] || { echo "no single $old in $ETC" >&2; exit 1; }
   old="${matches[0]##*/}"

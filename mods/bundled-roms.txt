@@ -44,8 +44,8 @@ folder  xbox
 
 # --- ScummVM: Beneath a Steel Sky (CD version 1.2), Revolution Software. Freeware; may be included in larger distributions with its readme.
 # 46-scummvm-game.sh installs the game into ScummVM's own storage, since ScummVM can't read /sdcard/ROMs without
-# the user granting access. This file is Daijisho's launcher for it (scummvm_id "sky").
-local  scummvm/Beneath a Steel Sky.dpt  license=https://www.scummvm.org/games/#games-sky
+# the user granting access. This file is ES-DE's launcher for it (ScummVM game ID "sky"), left out on the 1.4.4 base.
+local  scummvm/Beneath a Steel Sky.scummvm  license=https://www.scummvm.org/games/#games-sky
 
 # --- NES (mesen): Lala the Magical, The Mojon Twins. CC BY-NC-SA 3.0.
 add  nes/Lala the Magical.nes  url=https://www.mojontwins.com/juegos/mojon-twins--lala-the-magical-(gnrom).nes  sha256=c76222d50efee0ac625a43d0c39ed91870342c02b2a64bd3923698de9551e0eb  license=https://www.mojontwins.com/licencia-mt/

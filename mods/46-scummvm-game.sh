@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Installs Beneath a Steel Sky into ScummVM's own storage and adds it to
-# ScummVM's game list as "sky", the ID Daijisho launches it with
-# (ROMs/scummvm/Beneath a Steel Sky.dpt). ScummVM can't read /sdcard/ROMs
+# ScummVM's game list as "sky", the ID ES-DE launches it with
+# (ROMs/scummvm/Beneath a Steel Sky.scummvm). ScummVM can't read /sdcard/ROMs
 # until the user grants it access, so the game can't live there. Runs after
 # 40-added-apps.sh.
 #
@@ -31,8 +31,8 @@ fi
 
 mkdir -p "$cache"
 zip="$cache/bass-cd-1.2.zip"
-[[ -f "$zip" ]] || { curl -fsSL --retry 3 -o "$zip.partial" "$URL" && mv "$zip.partial" "$zip"; }
-echo "$SHA256  $zip" | sha256sum -c --quiet
+[[ -f "$zip" ]] || { curl -fsSL --retry 3 -o "$zip.partial" "$URL" && mv "$zip.partial" "$zip"; } || { echo "download failed: $URL" >&2; exit 1; }
+echo "$SHA256  $zip" | sha256sum -c --quiet || { rm -f "$zip"; echo "checksum mismatch: $zip (deleted from the cache)" >&2; exit 1; }
 
 app="data/data/org.scummvm.scummvm"
 rm -rf "$work"

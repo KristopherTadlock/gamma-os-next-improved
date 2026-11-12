@@ -29,7 +29,7 @@ while IFS= read -r line; do
     curl -fsSL --retry 3 -o "$cached.partial" "${f[url]}"
     mv "$cached.partial" "$cached"
   fi
-  echo "${f[sha256]}  $cached" | sha256sum -c --quiet
+  echo "${f[sha256]}  $cached" | sha256sum -c --quiet || { rm -f "$cached"; echo "checksum mismatch: $cached (deleted from the cache)" >&2; exit 1; }
 
   install_system_file "$cached" "$ETC/$file"
 

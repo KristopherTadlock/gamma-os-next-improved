@@ -3,11 +3,8 @@
 # libretro buildbot (nightly/android/latest/arm64-v8a) can be added by name.
 # Listed cores are updated to the latest buildbot nightly at build time.
 #
-# The build sets each Daijisho platform's default player to its "D - " core,
-# and removes Daijisho players for cores that aren't listed. Dreamcast, N64,
-# DS, and PSP keep their standalone apps as the default. Dropping a platform's
-# default core stops the build with a message; change its line in
-# daijisho-platforms.txt too.
+# "D - " marks the core nano-systems.txt and esde-emulators.txt use for the
+# system. Dreamcast, N64, DS, and PSP use their standalone apps.
 # Sizes are uncompressed.
 
 
@@ -28,7 +25,7 @@ D - snes9x                   # 2.9 MB
 bsnes                  # 6.1 MB  cycle-accurate, heavy
 
 # --- Nintendo - Nintendo 64
-mupen64plus_next_gles3   # 6.9 MB  Daijisho uses the M64Plus FZ app by default
+mupen64plus_next_gles3   # 6.9 MB  the M64Plus FZ app is the default
 
 # --- Nintendo - Virtual Boy
 D - mednafen_vb              # 0.3 MB
@@ -44,7 +41,7 @@ D - yabasanshiro             # 1.9 MB
 mednafen_saturn        # 7.2 MB  heavy for the T820
 
 # --- Sega - Dreamcast / NAOMI
-flycast                  # 37.9 MB  Daijisho uses the Flycast app by default
+flycast                  # 37.9 MB  the Flycast app is the default
 
 # --- Sony - PlayStation
 pcsx_rearmed             # 1.5 MB  fastest; built-in BIOS replacement, a real BIOS improves compatibility

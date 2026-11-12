@@ -82,8 +82,9 @@ ScummVM
   copyright notices intact. All game content is (C) Revolution Software.
   Source: https://www.scummvm.org/games/#games-sky
   Note: installed into ScummVM's own storage (with its readme), because
-  ScummVM can't read /sdcard/ROMs without the user granting access. Daijisho
-  starts it through ROMs/scummvm/Beneath a Steel Sky.dpt. About 73 MB.
+  ScummVM can't read /sdcard/ROMs without the user granting access. ScummVM
+  lists it; ES-DE starts it through ROMs/scummvm/Beneath a Steel Sky.scummvm
+  (not shipped on the 1.4.4 base). About 73 MB.
 
 NES
   Lala the Magical, by The Mojon Twins

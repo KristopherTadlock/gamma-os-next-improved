@@ -1,6 +1,6 @@
 # The emulator ES-DE launches each system's games with, where it isn't
 # ES-DE's own default: the "D - " core from retroarch-cores.txt, or the
-# standalone app Daijisho used. Labels are ES-DE's (es_systems.xml). The build
+# system's standalone app. Labels are ES-DE's (es_systems.xml). The build
 # fails if a label doesn't exist, needs a core that isn't shipped, or a
 # system's ES-DE default needs an unshipped core while a shipped one exists.
 #
