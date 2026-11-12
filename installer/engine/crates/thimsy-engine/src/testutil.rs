@@ -190,13 +190,18 @@ pub fn build_7z(
         .collect()
 }
 
+/// A `file://` URL usable inside double-quoted YAML on every OS.
+pub fn file_url(path: &Path) -> String {
+    format!("file://{}", path.display().to_string().replace('\\', "/"))
+}
+
 pub fn artifact_yaml(id: &str, path: &Path) -> String {
     let data = std::fs::read(path).unwrap();
     format!(
-        "{{ id: {id}, file: {}, size: {}, sha256: \"{}\", urls: [\"file://{}\"] }}",
+        "{{ id: {id}, file: {}, size: {}, sha256: \"{}\", urls: [\"{}\"] }}",
         path.file_name().unwrap().to_string_lossy(),
         data.len(),
         sha256_hex(&data),
-        path.display()
+        file_url(path)
     )
 }

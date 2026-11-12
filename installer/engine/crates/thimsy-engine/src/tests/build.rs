@@ -90,10 +90,10 @@ pub fn fixture(expect_override: Option<&str>) -> Fixture {
     let sys_bytes = std::fs::read(&sys_path).unwrap();
     let mk_catalog = |expect: &str| {
         let root = format!(
-            "version: test\nrelease: Thimsy Test\nsystems: {{ heavy: sys }}\nartifacts:\n  - {{ id: sys, file: thimsy-system.img.zst, size: {}, sha256: \"{}\", urls: [\"file://{}\"], unpack: {{ format: zstd, size: {}, sha256: \"{}\" }} }}\n",
+            "version: test\nrelease: Thimsy Test\nsystems: {{ heavy: sys }}\nartifacts:\n  - {{ id: sys, file: thimsy-system.img.zst, size: {}, sha256: \"{}\", urls: [\"{}\"], unpack: {{ format: zstd, size: {}, sha256: \"{}\" }} }}\n",
             sys_bytes.len(),
             sha256_hex(&sys_bytes),
-            sys_path.display(),
+            file_url(&sys_path),
             system.len(),
             sha256_hex(&system)
         );
