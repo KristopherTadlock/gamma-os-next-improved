@@ -20,10 +20,11 @@ APKS=(
 )
 
 # RetroArch cores and their assets have no stable releases; this takes the
-# buildbot's current nightlies, the same files RetroArch's online updater uses.
-CORES_URL="https://buildbot.libretro.com/nightly/android/latest/arm64-v8a"
-INFO_URL="https://buildbot.libretro.com/assets/frontend/info.zip"
-PPSSPP_ASSETS_URL="https://buildbot.libretro.com/assets/system/PPSSPP.zip"
+# buildbot's nightlies, the same files RetroArch's online updater uses, pinned
+# in retroarch-cores.lock by scripts/refresh_cores.sh. REFRESH_CORES=1 runs it
+# first, to take the current ones; ALLOW_BUNDLED_CORES=1 lets a core that can't
+# be downloaded as locked keep the base image's copy.
+LOCK="$MODS/retroarch-cores.lock"
 RA_DATA="data/data/com.retroarch.aarch64"
 # C-BIOS (2-clause BSD), the free MSX BIOS: blueMSX runs MSX cartridge games
 # with it when no MSX BIOS was installed. Disk games still need the real one.
@@ -53,8 +54,7 @@ for entry in "${APKS[@]}"; do
       write_through "$CACHE/setup.sh" "$SYSTEM/bin/setup.sh"
     fi
   fi
-  # Writing through the existing file keeps its owner, mode, and SELinux label.
-  sudo cp --no-preserve=all "$CACHE/$file" "$ETC/$file"
+  write_through "$CACHE/$file" "$ETC/$file"
   echo "updated $name"
 done
 
@@ -66,33 +66,60 @@ payload_to_tar "$pack" "$work/in.tar"
 # setup.sh chowns these files after extracting them, so ownership is not kept.
 tar -xpf "$work/in.tar" --no-same-owner -C "$work/tree"
 
-fetch "$CORES_URL/.index-extended" "$work/index.txt"
+if [[ "${REFRESH_CORES:-}" == 1 ]]; then
+  bash "$MODS/../scripts/refresh_cores.sh" "$2"
+fi
+[[ -f "$LOCK" ]] || {
+  echo "no $LOCK: run scripts/refresh_cores.sh (or the build with REFRESH_CORES=1) to pin the buildbot's current cores" >&2
+  exit 1
+}
 cores_dir="$work/tree/$RA_DATA/cores"
-# Lines are "core" or "D - core", where D marks the platform's default core.
-mapfile -t wanted < <(sed 's/#.*//' "$MODS/retroarch-cores.txt" |
-  awk 'NF { core = ($1 == "D" && $2 == "-") ? $3 : $1; print core "_libretro_android.so" }')
+mapfile -t wanted < <(wanted_cores "$MODS/retroarch-cores.txt")
+((${#wanted[@]})) || { echo "retroarch-cores.txt lists no cores" >&2; exit 1; }
+if ! diff <(printf '%s.zip\n' "${wanted[@]}" | sort) \
+    <(awk '!/^#/ && $1 ~ /_libretro_android\.so\.zip$/ { print $1 }' "$LOCK" | sort) >/dev/null; then
+  echo "retroarch-cores.txt and $LOCK list different cores: run scripts/refresh_cores.sh" >&2
+  exit 1
+fi
 for so in "$cores_dir"/*_libretro_android.so; do
   if ! printf '%s\n' "${wanted[@]}" | grep -qxF "$(basename "$so")"; then
     rm "$so"
   fi
 done
 
+# Copies the locked file NAME to OUT: from the cache, or downloaded and checked
+# against the lock. Fails when it can't.
+fetch_locked() {
+  local name="$1" out="$2" sha url cached
+  read -r sha url < <(awk -v f="$name" '$1 == f { print $2, $3 }' "$LOCK") || true
+  [[ -n "$url" ]] || { echo "$name has no download in $LOCK" >&2; return 1; }
+  cached="$CACHE/buildbot/$sha"
+  if ! echo "$sha  $cached" | sha256sum -c --quiet 2>/dev/null; then
+    mkdir -p "$CACHE/buildbot"
+    buildbot_get "$url" "$cached.download" || return 1
+    if ! echo "$sha  $cached.download" | sha256sum -c --quiet; then
+      rm -f "$cached.download"
+      echo "$url is no longer the file in $LOCK: run scripts/refresh_cores.sh" >&2
+      return 1
+    fi
+    mv "$cached.download" "$cached"
+  fi
+  cp "$cached" "$out"
+}
+
 updated=0
 for core in "${wanted[@]}"; do
   so="$cores_dir/$core"
-  if ! grep -q " $core.zip$" "$work/index.txt"; then
+  if [[ "$(awk -v f="$core.zip" '$1 == f { print $2 }' "$LOCK")" == bundled ]]; then
     [[ -f "$so" ]] || { echo "unknown core ${core%_libretro_android.so}" >&2; exit 1; }
     echo "kept ${core%_libretro_android.so} (not on buildbot)"
     continue
   fi
-  # The buildbot briefly 404s while it replaces a nightly, so retry those too.
-  for attempt in 1 2 3 4 5; do
-    curl -fsSL --retry 3 -o "$work/cores/$core.zip" "$CORES_URL/$core.zip" && break
-    rm -f "$work/cores/$core.zip"
-    sleep $((attempt * 10))
-  done
-  if [[ ! -f "$work/cores/$core.zip" ]]; then
-    [[ -f "$so" ]] || { echo "failed to download $core" >&2; exit 1; }
+  if ! fetch_locked "$core.zip" "$work/cores/$core.zip"; then
+    if [[ "${ALLOW_BUNDLED_CORES:-}" != 1 || ! -f "$so" ]]; then
+      echo "failed to get ${core%_libretro_android.so} (ALLOW_BUNDLED_CORES=1 keeps the base's copy)" >&2
+      exit 1
+    fi
     echo "WARNING: kept bundled ${core%_libretro_android.so} (download failed)" >&2
     continue
   fi
@@ -100,14 +127,14 @@ for core in "${wanted[@]}"; do
   install -m 600 "$work/cores/$core" "$so"
   updated=$((updated + 1))
 done
-echo "shipping ${#wanted[@]} RetroArch cores, $updated updated to $(awk '{print $1}' "$work/index.txt" | sort | tail -1) nightlies"
+echo "shipping ${#wanted[@]} RetroArch cores, $updated updated to the $(sed -n 's/^# nightlies of //p' "$LOCK") nightlies"
 
-curl -fsSL --retry 3 -o "$work/info.zip" "$INFO_URL"
+fetch_locked info.zip "$work/info.zip"
 unzip -oq "$work/info.zip" -d "$work/tree/$RA_DATA/info"
 # The PPSSPP core's assets are only kept, refreshed, when that core ships.
 rm -rf "$work/tree/sdcard/RetroArch/system/PPSSPP"
 if [[ -f "$cores_dir/ppsspp_libretro_android.so" ]]; then
-  curl -fsSL --retry 3 -o "$work/ppsspp.zip" "$PPSSPP_ASSETS_URL"
+  fetch_locked PPSSPP.zip "$work/ppsspp.zip"
   unzip -oq "$work/ppsspp.zip" -d "$work/tree/sdcard/RetroArch/system"
   echo "updated RetroArch core info and PPSSPP core assets"
 else
@@ -142,15 +169,22 @@ echo "added C-BIOS 0.29a for blueMSX"
 python3 -I - "$work/tree/$RA_DATA/autoconfig/android/retrogame_joypad.cfg" \
   "$work/tree/sdcard/Android/data/com.retroarch.aarch64/files/retroarch.cfg" <<'PY'
 import re, sys
-swap = {"96": "97", "97": "96", "99": "100", "100": "99"}
-for path, key in zip(sys.argv[1:], (r"input_[abxy]_btn", r"input_player1_[abxy]_btn")):
+# Android key codes: BUTTON_A 96, BUTTON_B 97, BUTTON_X 99, BUTTON_Y 100.
+by_print = {"a": "96", "b": "97", "x": "99", "y": "100"}
+by_position = {"a": "97", "b": "96", "x": "100", "y": "99"}
+for path, prefix in zip(sys.argv[1:], ("input_", "input_player1_")):
     text = open(path).read()
-    new, n = re.subn(r'^(%s = ")(\d+)(")' % key,
-                     lambda m: m.group(1) + swap.get(m.group(2), m.group(2)) + m.group(3),
-                     text, flags=re.M)
-    if n != 4:
-        sys.exit("%s: %d face-button binds, expected 4" % (path, n))
-    open(path, "w").write(new)
+    pattern = r'^(%s([abxy])_btn = ")(\d+)(")' % prefix
+    binds = {m.group(2): m.group(3) for m in re.finditer(pattern, text, flags=re.M)}
+    if len(re.findall(pattern, text, flags=re.M)) != 4 or len(binds) != 4:
+        sys.exit("%s: %d face-button binds, expected 4" % (path, len(binds)))
+    if binds == by_position:
+        print("%s: face buttons already by position" % path)
+        continue
+    if binds != by_print:
+        sys.exit("%s: unexpected face-button binds %s" % (path, binds))
+    text = re.sub(pattern, lambda m: m.group(1) + by_position[m.group(2)] + m.group(4), text, flags=re.M)
+    open(path, "w").write(text)
 PY
 
 # RetroArch's copies of the 4:3 and 8:7 Cropped shaders.

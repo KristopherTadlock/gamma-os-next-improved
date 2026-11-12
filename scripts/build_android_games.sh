@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Builds the Android Games helper app (tools/android-games) into OUT_APK,
-# signed with KEYSTORE, which is created on first use.
+# signed with KEYSTORE. Set NEW_KEYSTORE=1 to create KEYSTORE when there is
+# none: devices only take an update signed with the key they have, so a new key
+# must be a choice, not the result of a wiped cache.
 #
 # Needs javac and keytool (JDK 17), the Android build tools aapt2, d8,
-# zipalign and apksigner on PATH, and ANDROID_JAR set to an android.jar for
-# API 34 (for example platforms/android-34/android.jar in the Android SDK).
+# zipalign and apksigner, and zip, on PATH, and ANDROID_JAR set to an
+# android.jar for API 34 (for example platforms/android-34/android.jar in the
+# Android SDK).
 #
 # Usage: build_android_games.sh OUT_APK KEYSTORE
 set -euo pipefail
@@ -13,16 +16,21 @@ SRC="$(cd "$(dirname "$0")/../tools/android-games" && pwd)"
 out="$(realpath -m "$1")"
 keystore="$(realpath -m "$2")"
 : "${ANDROID_JAR:?set ANDROID_JAR to an API 34 android.jar}"
-for tool in javac keytool aapt2 d8 zipalign apksigner; do
+if [[ ! -f "$keystore" && "${NEW_KEYSTORE:-}" != 1 ]]; then
+  echo "no keystore $keystore: restore it, or set NEW_KEYSTORE=1 to sign with a new key" >&2
+  exit 1
+fi
+for tool in javac keytool aapt2 d8 zipalign apksigner zip; do
   command -v "$tool" >/dev/null || { echo "$tool is required" >&2; exit 1; }
 done
 
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 mkdir -p "$work/classes" "$work/dex"
-javac -source 11 -target 11 -nowarn -classpath "$ANDROID_JAR" -d "$work/classes" \
-  $(find "$SRC/src" -name '*.java')
-d8 --release --min-api 25 --lib "$ANDROID_JAR" --output "$work/dex" $(find "$work/classes" -name '*.class')
+mapfile -d '' sources < <(find "$SRC/src" -name '*.java' -print0)
+javac -source 11 -target 11 -nowarn -classpath "$ANDROID_JAR" -d "$work/classes" "${sources[@]}"
+mapfile -d '' classes < <(find "$work/classes" -name '*.class' -print0)
+d8 --release --min-api 25 --lib "$ANDROID_JAR" --output "$work/dex" "${classes[@]}"
 aapt2 link -o "$work/unsigned.apk" -I "$ANDROID_JAR" --manifest "$SRC/AndroidManifest.xml"
 (cd "$work/dex" && zip -q -j "$work/unsigned.apk" classes.dex)
 zipalign -f -p 4 "$work/unsigned.apk" "$work/aligned.apk"

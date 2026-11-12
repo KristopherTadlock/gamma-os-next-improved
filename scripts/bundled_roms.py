@@ -97,7 +97,9 @@ def fetch(target, fields, cache):
             name = next(n for n in archive.getnames() if n == member or n.endswith("/" + member))
             data = archive.extractfile(name).read()
     if sha256(data) != want:
-        sys.exit(f"{target}: sha256 is {sha256(data)}, expected {want}")
+        # Otherwise the bad download would be reused, and fail, on every later build.
+        os.remove(download_path)
+        sys.exit(f"{target}: sha256 is {sha256(data)}, expected {want} (download deleted from the cache)")
     with open(cached, "wb") as f:
         f.write(data)
     return data
@@ -107,7 +109,8 @@ def fetch_tree(target, fields, cache):
     """Returns {path: data} for the files under member= in the archive."""
     path = download(fields["url"], cache)
     if sha256(open(path, "rb").read()) != fields["sha256"]:
-        sys.exit(f"{target}: archive sha256 doesn't match")
+        os.remove(path)
+        sys.exit(f"{target}: archive sha256 doesn't match (download deleted from the cache)")
     prefix = fields["member"].rstrip("/") + "/"
     archive = zipfile.ZipFile(path)
     files = {

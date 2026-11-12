@@ -1,0 +1,6 @@
+#!/bin/sh
+# Test shim: "avbtool info_image" prints $FAKE_AVBTOOL_INFO; other commands are logged.
+echo "avbtool $*" >>"${SHIM_LOG:-/dev/null}"
+case "$1" in
+  info_image) cat "$FAKE_AVBTOOL_INFO" ;;
+esac

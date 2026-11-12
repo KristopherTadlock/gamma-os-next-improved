@@ -1,0 +1,38 @@
+# The RetroArch cores and assets mods/10-update-emulators.sh takes from the
+# libretro buildbot: file, sha256 (or "bundled": the base image's own core
+# ships) and URL. Written by scripts/refresh_cores.sh; don't edit.
+# nightlies of 2026-11-12
+DoubleCherryGB_libretro_android.so.zip  3f3d57b5b8090530b832e9a04b8673c01095f4d3894046deb56c407ebd4a422d  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/DoubleCherryGB_libretro_android.so.zip
+sameboy_libretro_android.so.zip  e73af293fd8e23c36e410f13a07a83550d04a16121e2b20c988cb58e77e96d53  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/sameboy_libretro_android.so.zip
+gpsp_libretro_android.so.zip  19a609b65ec331d1f5c261ca982c710c9fc197786417aadb0778df9690d1f53d  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/gpsp_libretro_android.so.zip
+mgba_libretro_android.so.zip  dd102732b00ea119a15a7ea1ab859a9e56d7e8d858a6050e1804b146368dc1cc  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/mgba_libretro_android.so.zip
+mesen_libretro_android.so.zip  1a450970aa7f99998e51d7ca7a19c7377b427cbe039a096f42bc4dbeceddf269  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/mesen_libretro_android.so.zip
+fceumm_libretro_android.so.zip  ce396dd57fc4d4183f64a2d5f352fc2e4aa8bcc829bc48e280a0601fa46c6b9d  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/fceumm_libretro_android.so.zip
+snes9x_libretro_android.so.zip  dde1c05f77ec826fda570a03728d5ab95764a3a9fdf79f5582dddfe7b287994f  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/snes9x_libretro_android.so.zip
+bsnes_libretro_android.so.zip  7b3e779d05fcff3959c997488f7e50f956f05d0d591cfb9cc67b9e62fadec86e  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/bsnes_libretro_android.so.zip
+mupen64plus_next_gles3_libretro_android.so.zip  44e8e00cbfa98158a1813edaf1e0862cba5f7e5e04f310ed3ffee4710fe67d12  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/mupen64plus_next_gles3_libretro_android.so.zip
+mednafen_vb_libretro_android.so.zip  50b533d890feb550aeaf9f193c384276f2e660e981e7b37e3be99c93c55b59d8  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/mednafen_vb_libretro_android.so.zip
+genesis_plus_gx_libretro_android.so.zip  cf9ba013a2dc47ccef4448395025ade313277bcc6c30ea1d33064a25835dd1da  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/genesis_plus_gx_libretro_android.so.zip
+picodrive_libretro_android.so.zip  8d93599820d6d483256dc9aa93c8841e4f3180c323c5100a583d9f0f96fd4dbe  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/picodrive_libretro_android.so.zip
+yabasanshiro_libretro_android.so.zip  fe402096106cec51f0aa48be60856d7c0c839f796427a12e96fd5ff7d29f74e3  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/yabasanshiro_libretro_android.so.zip
+mednafen_saturn_libretro_android.so.zip  f1f79971c41b58237dbb786f85158d3dfa07a5c1ed73cc017c26fefa500f4c17  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/mednafen_saturn_libretro_android.so.zip
+flycast_libretro_android.so.zip  1cc2d385177d75ca5cd4302bdb221561252d92bfc0c6abd13790c3d8655ac675  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/flycast_libretro_android.so.zip
+pcsx_rearmed_libretro_android.so.zip  20a12d603e6b8cf9b6859bd6a703dad6e98e26c17d86da7972a08efd539c71fb  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/pcsx_rearmed_libretro_android.so.zip
+swanstation_libretro_android.so.zip  e9fdeb0e5186f5fbdd7fde9dab22fb91e69ceaf130ce3162205c6603d41eb28b  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/swanstation_libretro_android.so.zip
+mednafen_psx_hw_libretro_android.so.zip  f5390a67fd1b01a0d3a8fa5cf3b083cb2df4411f73a8cfe2e81c945d66779202  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/mednafen_psx_hw_libretro_android.so.zip
+fbneo_libretro_android.so.zip  e45f2060b469b2e43cb720509b5a47dd424739c93656bc4a224720cd1741fbc8  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/fbneo_libretro_android.so.zip
+mamearcade_libretro_android.so.zip  6c2c4e3cddf789185fca326d8df016003d6c4901e0c57aa840e23adb0fb9f3a3  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/mamearcade_libretro_android.so.zip
+mame2003_plus_libretro_android.so.zip  a5e747d0ecce3e42581997c28103e3bcc12aba9cbb10fe1ba3d6c46658299b1b  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/mame2003_plus_libretro_android.so.zip
+mednafen_ngp_libretro_android.so.zip  cb45f31f1ef350b9ca0ed4ce7792fbb98144601a55c44ee3855e64df3d955b17  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/mednafen_ngp_libretro_android.so.zip
+mednafen_pce_fast_libretro_android.so.zip  cc0827489ee079f80f50d9e485c87a30d40c8988bf3284fc6a45d3bd532a4827  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/mednafen_pce_fast_libretro_android.so.zip
+mednafen_wswan_libretro_android.so.zip  9428d33f7c8e0c490a7190fc7d0e90cae92db8e4724caddc6b8fae247d0e55ef  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/mednafen_wswan_libretro_android.so.zip
+stella_libretro_android.so.zip  d7eb5889ec7d717cc471b202834dc4b977b79a84db99e3fef70de92059a9115b  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/stella_libretro_android.so.zip
+a5200_libretro_android.so.zip  82a821cda56d740cfa7c78f7403bb26349eb0272d00fb1f0eaa67f0bf0c18cd4  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/a5200_libretro_android.so.zip
+prosystem_libretro_android.so.zip  febf58c32aaac73efe86e0492ae12e11393f676a4e40a45d4bfd2ffcda35d281  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/prosystem_libretro_android.so.zip
+mednafen_lynx_libretro_android.so.zip  21e0fa16c80b8f6c5d33d8d68253b1ff63ac80cf66425c14ba878ce319374fdd  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/mednafen_lynx_libretro_android.so.zip
+opera_libretro_android.so.zip  106248642cb433fc14ed8843a3a255c92f5ac4cd1a0fc80eb64ede1fe9a74c13  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/opera_libretro_android.so.zip
+gearcoleco_libretro_android.so.zip  90eb487275499e10e7197fbd55dd65561c2a97f3133d982b92059f7e2b3f21f4  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/gearcoleco_libretro_android.so.zip
+bluemsx_libretro_android.so.zip  846ed61694793d1068cff94218153c1d4e62b31a3a697ac9a64a77255587fb9e  https://buildbot.libretro.com/nightly/android/latest/arm64-v8a/bluemsx_libretro_android.so.zip
+fake08_libretro_android.so.zip  bundled
+info.zip  5016939fe5455948cc930470541b21e3f01cbfbc03dbeeb538c7cdc0080d0804  https://buildbot.libretro.com/assets/frontend/info.zip
+PPSSPP.zip  f718258be4fc63d9867edec096625258afdd4e5e1b7f8c5eb9116e967fd5581d  https://buildbot.libretro.com/assets/system/PPSSPP.zip

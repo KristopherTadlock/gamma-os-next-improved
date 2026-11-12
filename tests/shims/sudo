@@ -1,0 +1,3 @@
+#!/bin/sh
+# Test shim: the tests run as root in a user namespace (unshare -Ur), so sudo only runs its command.
+exec "$@"

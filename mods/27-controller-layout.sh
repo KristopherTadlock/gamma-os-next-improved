@@ -31,26 +31,40 @@ work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 pack="$(payload_path "$SYSTEM/etc" ppsspp)"
 payload_to_tar "$pack" "$work/in.tar"
-python3 -I - "$work/in.tar" "$work/out.tar" <<'PY'
+if python3 -I - "$work/in.tar" "$work/out.tar" <<'PY'
 import io, re, sys, tarfile
-swap = {"96": "97", "97": "96", "99": "100", "100": "99"}
-found = False
+# Android key codes: BUTTON_A 96, BUTTON_B 97, BUTTON_X 99, BUTTON_Y 100.
+by_print = {"Circle": "96", "Cross": "97", "Square": "100", "Triangle": "99"}
+by_position = {"Circle": "97", "Cross": "96", "Square": "99", "Triangle": "100"}
+pattern = r"^((Circle|Cross|Square|Triangle) = 10-)(\d+)"
+found = changed = False
 with tarfile.open(sys.argv[1]) as src, tarfile.open(sys.argv[2], "w", format=src.format) as dst:
     for m in src.getmembers():
         data = src.extractfile(m).read() if m.isfile() else None
         if m.isfile() and m.name.lstrip("./") == "sdcard/PSP/SYSTEM/controls.ini":
-            text, n = re.subn(r"^((?:Circle|Cross|Square|Triangle) = 10-)(\d+)",
-                              lambda g: g.group(1) + swap.get(g.group(2), g.group(2)),
-                              data.decode(), flags=re.M)
-            if n != 4:
-                sys.exit("controls.ini: %d face-button binds, expected 4" % n)
-            data = text.encode()
-            m.size = len(data)
+            text = data.decode()
+            binds = {g.group(2): g.group(3) for g in re.finditer(pattern, text, flags=re.M)}
+            if len(re.findall(pattern, text, flags=re.M)) != 4 or len(binds) != 4:
+                sys.exit("controls.ini: %d face-button binds, expected 4" % len(binds))
+            if binds == by_print:
+                text = re.sub(pattern, lambda g: g.group(1) + by_position[g.group(2)], text, flags=re.M)
+                data = text.encode()
+                m.size = len(data)
+                changed = True
+            elif binds != by_position:
+                sys.exit("controls.ini: unexpected face-button binds %s" % binds)
             found = True
         dst.addfile(m, io.BytesIO(data) if data is not None else None)
 if not found:
     sys.exit("no sdcard/PSP/SYSTEM/controls.ini in the PPSSPP payload")
+if not changed:
+    print("PPSSPP's controls are already by position")
+    sys.exit(3)
 PY
-tar_to_payload "$work/out.tar" "$work/${pack##*/}"
-write_through "$work/${pack##*/}" "$pack"
+then
+  tar_to_payload "$work/out.tar" "$work/${pack##*/}"
+  write_through "$work/${pack##*/}" "$pack"
+elif (($? != 3)); then
+  exit 1
+fi
 echo "the built-in controller reports its face buttons by position; PPSSPP's controls follow"

@@ -8,8 +8,8 @@ Daijisho platform definitions) the way Nano's emulator picker applies one: a
 RetroArch 64 player runs its core in Nano, any other player starts its app
 with the player's am start arguments. Fails when a core isn't in
 RETROARCH_CORES_TXT, an app isn't in APPS_LIST or the PACKAGEs (apps built
-into the image), or an icon doesn't exist, so the list can't drift from what
-the image ships.
+into the image), an icon doesn't exist, or a system has no file extensions, so
+the list can't drift from what the image ships.
 """
 
 import json
@@ -98,6 +98,9 @@ def main():
         if system["package"] and system["package"] not in packages:
             errors.append(f"line {n}: {system['package']} isn't installed by apps.list")
         system["extensions"] = exts.split(",")
+        if not any(system["extensions"]):
+            # Nano would list no games for the system.
+            errors.append(f"line {n}: no file extensions for {rom_dir}")
 
         kind, _, icon = f["icon"].partition(":")
         if kind == "retroarch" and not os.path.exists(os.path.join(icons_dir, icon + ".png")):

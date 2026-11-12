@@ -6,11 +6,13 @@
   pactool.py replace PAC FILE IMAGE
   pactool.py fixcrc PAC
   pactool.py setinfo PAC VERSION ALIAS
+  pactool.py verify PAC
 
 `replace` overwrites FILE's data and requires IMAGE to be exactly the same
 size, so no offsets change. Run `fixcrc` afterwards to update the data CRC.
 `setinfo` sets the product version and alias that flash tools show, and
 updates the header CRC.
+`verify` checks the header CRC (CRC1) and the data CRC (CRC2) against the file.
 Set CRC16ARC to the path of the compiled tools/crc16arc.c helper.
 """
 
@@ -89,6 +91,9 @@ def cmd_list(f):
 def cmd_extract(f, name, out_path):
     e = find(read_entries(f), name)
     f.seek(e["offset"])
+    # A new file, not the old one truncated: a loop device left on the old one keeps its own inode.
+    if os.path.lexists(out_path):
+        os.unlink(out_path)
     with open(out_path, "wb") as out:
         copy(f, out, e["size"])
 
@@ -126,15 +131,33 @@ def cmd_setinfo(f, version, alias):
     f.write(header[:CRC2_OFFSET])
 
 
-def cmd_fixcrc(f):
+def data_crc(f):
+    """CRC2: the CRC-16/ARC of everything after the header, from the C helper (the data is GBs)."""
     tool = os.environ.get("CRC16ARC", "crc16arc")
     out = subprocess.run(
         [tool, f.name, str(HEADER_SIZE)], check=True, capture_output=True, text=True
     )
-    crc = int(out.stdout, 16)
+    return int(out.stdout, 16)
+
+
+def cmd_fixcrc(f):
+    crc = data_crc(f)
     f.seek(CRC2_OFFSET)
     f.write(struct.pack("<H", crc))
     print(f"data crc {crc:04x}")
+
+
+def cmd_verify(f):
+    read_entries(f)
+    f.seek(0)
+    header = f.read(HEADER_SIZE)
+    crc1, crc2 = struct.unpack_from("<HH", header, CRC1_OFFSET)
+    want1, want2 = crc16arc(header[:CRC1_OFFSET]), data_crc(f)
+    if crc1 != want1:
+        sys.exit(f"{f.name}: header crc is {crc1:04x}, the header gives {want1:04x}")
+    if crc2 != want2:
+        sys.exit(f"{f.name}: data crc is {crc2:04x}, the data gives {want2:04x}")
+    print(f"header crc {crc1:04x}, data crc {crc2:04x}: ok")
 
 
 def main():
@@ -148,7 +171,10 @@ def main():
         "replace": cmd_replace,
         "fixcrc": cmd_fixcrc,
         "setinfo": cmd_setinfo,
+        "verify": cmd_verify,
     }
+    if cmd not in commands:
+        sys.exit(__doc__)
     with open(pac_path, mode) as f:
         commands[cmd](f, *args)
 

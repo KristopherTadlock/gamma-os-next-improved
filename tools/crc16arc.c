@@ -23,6 +23,7 @@ int main(int argc, char **argv) {
   size_t n;
   while ((n = fread(buf, 1, sizeof buf, f)) > 0)
     for (size_t i = 0; i < n; i++) crc = (crc >> 8) ^ table[(crc ^ buf[i]) & 0xff];
+  if (ferror(f)) { perror(argc > 1 ? argv[1] : "stdin"); return 1; }
   printf("%04x\n", crc);
   return 0;
 }

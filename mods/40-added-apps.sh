@@ -43,7 +43,9 @@ while IFS= read -r line; do
       ;;
     file)
       # Owned like the folders Android creates there, so the user can manage it.
-      printf 'mkdir -p "/sdcard/%s"\ncp /system/etc/%s "/sdcard/%s/"\nchown -R "$(stat -c %%u:%%g /sdcard/Download)" "/sdcard/%s"\n\n' \
+      # Only a fresh setup copies it, so a copy the user deleted or changed
+      # stays that way when setup runs again on a Nano/Android switch.
+      printf 'if [ "${FRESH_SETUP:-1}" = 1 ]; then\n    mkdir -p "/sdcard/%s"\n    cp /system/etc/%s "/sdcard/%s/"\n    chown -R "$(stat -c %%u:%%g /sdcard/Download)" "/sdcard/%s"\nfi\n\n' \
         "${f[dest]}" "$file" "${f[dest]}" "${f[dest]}" >>"$steps"
       ;;
     *)

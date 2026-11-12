@@ -14,6 +14,7 @@ SYSTEM="$1"
 ETC="$SYSTEM/etc"
 SETUP="$SYSTEM/bin/setup.sh"
 MODS="$(cd "$(dirname "$0")" && pwd)"
+source "$MODS/../scripts/modlib.sh"
 VERSION="3.5.0"
 SYSTEMS_URL="https://gitlab.com/es-de/emulationstation-de/-/raw/50e4b600ae533d772bae3ff880d11a09b05dbe84/resources/systems/android/es_systems.xml"
 SYSTEMS_SHA256="c959dbe2bf773c8b4e9e3fc19b1a59d4c92f2f13d84f3b08e9aa1f1316723869"
@@ -90,7 +91,6 @@ chown -R "$(stat -c %u:%g /sdcard/Download)" /sdcard/ES-DE /sdcard/Download/{fix
 s = s.replace(marker, steps + marker)
 open(path, "w").write(s)
 PYEOF
-# Writing through the existing file keeps its owner, mode, and SELinux label.
-sudo cp --no-preserve=all "$work/setup.sh" "$SETUP"
+write_through "$work/setup.sh" "$SETUP"
 rm -rf "$work"
 echo "ES-DE $version ($pkg) is the home app; home activity $home"

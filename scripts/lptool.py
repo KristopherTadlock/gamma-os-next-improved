@@ -15,6 +15,7 @@ BYTES, if smaller), and rewrites every metadata slot.
 """
 
 import hashlib
+import os
 import struct
 import sys
 
@@ -130,8 +131,12 @@ def cmd_list(f):
 
 
 def cmd_extract(f, name, out_path):
+    exts = get(read_partitions(f), name)
+    # A new file, not the old one truncated: a loop device left on the old one keeps its own inode.
+    if os.path.lexists(out_path):
+        os.unlink(out_path)
     with open(out_path, "wb") as out:
-        for _, offset, length in get(read_partitions(f), name):
+        for _, offset, length in exts:
             f.seek(offset)
             while length:
                 buf = f.read(min(length, CHUNK))
@@ -203,6 +208,8 @@ def main():
     cmd, super_path, *args = sys.argv[1:]
     mode = "r+b" if cmd in ("replace", "grow") else "rb"
     commands = {"list": cmd_list, "extract": cmd_extract, "replace": cmd_replace, "grow": cmd_grow}
+    if cmd not in commands:
+        sys.exit(__doc__)
     with open(super_path, mode) as f:
         commands[cmd](f, *args)
 

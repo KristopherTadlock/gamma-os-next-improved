@@ -10,6 +10,7 @@ PROP="$1/build.prop"
 VERSION="${THIMSY_BUILD_VERSION:-Thimsy_OS_v1.0}"
 THIMSY="${THIMSY_VERSION:-1.0}"
 work="$(realpath -m "$2")/version"
+source "$(dirname "$0")/../scripts/modlib.sh"
 
 mkdir -p "$work"
 sudo cat "$PROP" >"$work/build.prop"
@@ -24,7 +25,6 @@ sed -i -E \
   -e "/^ro\.thimsy\.version=/d" \
   "$work/build.prop"
 echo "ro.thimsy.version=$THIMSY" >>"$work/build.prop"
-# Writing through the existing file keeps its owner, mode, and SELinux label.
-sudo cp --no-preserve=all "$work/build.prop" "$PROP"
+write_through "$work/build.prop" "$PROP"
 rm -rf "$work"
 echo "version: $VERSION (ro.thimsy.version=$THIMSY)"

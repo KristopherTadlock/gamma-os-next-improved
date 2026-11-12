@@ -631,7 +631,7 @@ screenshots are captured from the games; `tools/pack-in-art` has the scripts.
 ## Building
 
 On Linux with `curl`, 7-Zip (`7zz` or `7z`), `xz`, `zstd`, `unzip`, `e2fsck` and
-`resize2fs`, `setfattr`, `cc`, `python3`, `sudo` (to loop-mount the system
+`resize2fs`, `setfattr`, `flock`, `cc`, `python3`, `sudo` (to loop-mount the system
 image), erofs-utils' `fsck.erofs` and `mkfs.erofs` (1.7 or later), AOSP's
 `unpack_bootimg`, `lz4` and `avbtool` on `PATH`, `MKBOOTIMG`
 naming AOSP's `mkbootimg` (or `mkbootimg.py`), `AVB_KEY` naming AOSP's
@@ -645,14 +645,37 @@ This downloads the official release, applies each script in `mods/` to its
 system partition, and writes `out/RG_Cube_Thimsy_OS_v1.0.pac`
 (`..._v1.0a.pac` with `SYSTEM_IMG`, and `..._v1.0_ES-DE.pac` with `ESDE_APK`).
 
+- `sudo` asks for its password once, at the start, and the build keeps it
+  valid until it ends (it refreshes it every minute in the background). A
+  build left unattended past a password prompt it can't answer, for example
+  one started without a terminal, needs `NOPASSWD` for the build user in
+  sudoers instead.
+- One build at a time uses `work/`; a second one stops at once. A build also
+  stops when an earlier one left its image mounted or on a loop device.
+- The release's PAC is checked against its own CRCs the first time it is used
+  (`pactool.py verify`), and its sha256 is recorded next to it; later builds
+  check that.
+- The RetroArch cores, their info files and the PPSSPP core's assets are the
+  libretro buildbot nightlies pinned, by sha256, in
+  `mods/retroarch-cores.lock`. `scripts/refresh_cores.sh` (or the build with
+  `REFRESH_CORES=1`) downloads the current ones into `work/cache` and rewrites
+  the lock. The buildbot keeps only its latest nightly, so a build without
+  those cached files fails once a core is rebuilt there, until the lock is
+  refreshed. `ALLOW_BUNDLED_CORES=1` lets a core that can't be downloaded as
+  pinned keep the base image's copy instead of failing.
+- The Android Games helper is signed with `work/cache/nano/android-games.keystore`.
+  When it is missing the build stops; `NEW_KEYSTORE=1` creates a new key,
+  which devices with the old one won't take as an update.
+
 The tools it uses:
 
 - `scripts/pactool.py` lists, extracts, and replaces images in the Unisoc
-  `.pac` firmware package, recomputes its CRCs, and sets the product version
-  and alias that flash tools such as ResearchDownload show.
+  `.pac` firmware package, checks and recomputes its CRCs, and sets the
+  product version and alias that flash tools such as ResearchDownload show.
 - `scripts/lptool.py` lists, extracts, and replaces logical partitions
   (`system_a`, `vendor_a`, ...) in the raw `super_full.img`.
-- `tools/crc16arc.c` is the CRC-16/ARC helper `pactool.py fixcrc` uses.
+- `tools/crc16arc.c` is the CRC-16/ARC helper `pactool.py fixcrc` and
+  `verify` use.
 - `scripts/sprd_drm.py` is the patch to the vendor kernel's DisplayPort driver
   (`sprd-drm.ko`). `scripts/patch_vendor_dlkm.py` applies it to the copy the
   kernel loads at boot, in the compressed EROFS `vendor_dlkm` partition, which
@@ -667,6 +690,27 @@ The tools it uses:
   policy hashes. Anbernic's odm carries the policy for the 1.2 system, so
   without this init compiled the policy at every boot, about a second before
   anything else could start.
+
+### Tests
+
+```sh
+tests/run.sh          # quick: under a minute; build.sh runs these first (SKIP_TESTS=1 skips them)
+tests/run.sh slow     # the slow ones (a PAC past 4 GiB, the mods that need the build cache)
+tests/run.sh all
+THIMSY_TEST_CACHE=work/cache tests/run.sh slow   # adds the mods that need downloads, from a copy of the cache
+```
+
+The tests use only Python's standard library (`python3 -I -m unittest discover
+-s tests -t .` runs the quick ones). `tests/unit` covers the scripts in
+`scripts/` and lints the data in `mods/`; `tests/e2e` runs the mods on fake
+system trees as root in a user namespace (`unshare -Ur`, with `sudo` and
+`setfattr` shimmed and no network), runs each twice to check a second run
+changes nothing, packs a tree through ext4, a super image and a PAC and reads
+it back, and runs first-boot `setup.sh` (from `~/gammaos-src/gammaos`, or
+`AOSP=<tree>`) in a chroot with fake Android commands. `tests/fixtures` builds
+the images they use. The ext4 tests need `mke2fs`, `debugfs`, `dumpe2fs` and
+`e2fsck` (on `PATH` or in the AOSP host build); the mod and `setup.sh` tests
+need user namespaces. Tests skip when what they need is missing.
 
 ### Boot time
 

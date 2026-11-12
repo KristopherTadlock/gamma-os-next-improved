@@ -1,0 +1,3 @@
+#!/bin/sh
+# Test shim: no waiting between retries.
+echo "sleep $*" >>"${SHIM_LOG:-/dev/null}"

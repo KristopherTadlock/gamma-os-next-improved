@@ -1,0 +1,5 @@
+#!/bin/sh
+# Test shim: "aapt dump xmltree APK AndroidManifest.xml" prints the file APK.xmltree.
+echo "aapt $*" >>"${SHIM_LOG:-/dev/null}"
+[ "$1 $2" = "dump xmltree" ] || { echo "aapt shim: unsupported: $*" >&2; exit 2; }
+cat "$3.xmltree"

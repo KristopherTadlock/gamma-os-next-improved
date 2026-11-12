@@ -10,7 +10,8 @@ the boot could run. It loads later, beside the other modules (patch_vendor_dlkm.
 loads it from here (modules.load.recovery).
 
 The ramdisk is otherwise byte-identical. The image is repacked and re-signed
-with the AOSP test key it was signed with, keeping its salt and properties.
+with the AOSP test key it was signed with, keeping its salt, properties, algorithm, flags, and
+rollback index and location.
 
 Needs on PATH: unpack_bootimg, lz4, avbtool. MKBOOTIMG names mkbootimg (or
 mkbootimg.py) and AVB_KEY the key (external/avb/test/data/testkey_rsa4096.pem).
@@ -39,8 +40,9 @@ def find_cpio_entry(cpio, name):
     pos = 0
     while pos + 110 <= len(cpio):
         hdr = cpio[pos:pos + 110]
-        if hdr[:6] not in (b"070701", b"070702"):
-            sys.exit("vendor ramdisk: bad cpio header at %d" % pos)
+        # 070702 entries carry a checksum of their data, which a patched entry would no longer match.
+        if hdr[:6] != b"070701":
+            sys.exit("vendor ramdisk: not a newc (070701) cpio header at %d" % pos)
         size = int(hdr[54:62], 16)
         namesize = int(hdr[94:102], 16)
         entry = cpio[pos + 110:pos + 110 + namesize - 1].decode()
@@ -58,8 +60,9 @@ def replace_cpio_entry(cpio, name, data):
     pos = 0
     while pos + 110 <= len(cpio):
         hdr = cpio[pos:pos + 110]
-        if hdr[:6] not in (b"070701", b"070702"):
-            sys.exit("vendor ramdisk: bad cpio header at %d" % pos)
+        # 070702 entries carry a checksum of their data, which a patched entry would no longer match.
+        if hdr[:6] != b"070701":
+            sys.exit("vendor ramdisk: not a newc (070701) cpio header at %d" % pos)
         size = int(hdr[54:62], 16)
         namesize = int(hdr[94:102], 16)
         entry = cpio[pos + 110:pos + 110 + namesize - 1].decode()
@@ -82,10 +85,19 @@ def drop_deferred(data):
     return ("\n".join(m for m in mods if m != DEFERRED) + "\n").encode()
 
 
+FOOTER_FIELDS = {
+    "Algorithm:": "algorithm",
+    "Rollback Index:": "rollback_index",
+    "Rollback Index Location:": "rollback_index_location",
+    "Flags:": "flags",
+}
+
+
 def footer_info(image):
+    """(salt, [(key, value)] properties, {add_hash_footer option: value}) of IMAGE's AVB footer."""
     out = run("avbtool", "info_image", "--image", image, capture_output=True, text=True).stdout
-    salt = props = None
-    props = []
+    salt = None
+    props, opts = [], {}
     for line in out.splitlines():
         line = line.strip()
         if line.startswith("Salt:"):
@@ -93,9 +105,16 @@ def footer_info(image):
         elif line.startswith("Prop:"):
             key, _, value = line[len("Prop:"):].strip().partition(" -> ")
             props.append((key, value.strip("'")))
+        else:
+            for label, opt in FOOTER_FIELDS.items():
+                if line.startswith(label) and opt not in opts:
+                    opts[opt] = line[len(label):].strip()
     if not salt:
         sys.exit("vendor_boot: no hash footer salt")
-    return salt, props
+    missing = sorted(set(FOOTER_FIELDS.values()) - set(opts))
+    if missing:
+        sys.exit("vendor_boot: avbtool info_image shows no %s" % ", ".join(missing))
+    return salt, props, opts
 
 
 def main():
@@ -108,7 +127,7 @@ def main():
     key = os.environ.get("AVB_KEY")
     if not key or not os.path.isfile(key):
         sys.exit("AVB_KEY must name the AOSP testkey_rsa4096.pem")
-    salt, props = footer_info(src)
+    salt, props, opts = footer_info(src)
 
     with tempfile.TemporaryDirectory() as tmp:
         unpacked = os.path.join(tmp, "unpacked")
@@ -134,8 +153,9 @@ def main():
 
         run(*mkbootimg, *args, "--vendor_boot", dst)
         cmd = ["avbtool", "add_hash_footer", "--image", dst, "--partition_name", "vendor_boot",
-               "--partition_size", str(PARTITION_SIZE), "--algorithm", "SHA256_RSA4096",
-               "--key", key, "--salt", salt]
+               "--partition_size", str(PARTITION_SIZE), "--key", key, "--salt", salt]
+        for opt, value in sorted(opts.items()):
+            cmd += ["--" + opt, value]
         for k, v in props:
             cmd += ["--prop", "%s:%s" % (k, v)]
         run(*cmd)

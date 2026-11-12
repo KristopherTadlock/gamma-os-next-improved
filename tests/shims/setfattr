@@ -1,0 +1,3 @@
+#!/bin/sh
+# Test shim: logs the call to $SHIM_LOG (security.* attributes can't be set in a user namespace).
+echo "setfattr $*" >>"${SHIM_LOG:-/dev/null}"

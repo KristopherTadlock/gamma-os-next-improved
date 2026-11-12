@@ -36,6 +36,36 @@ echo "$SHA256  $zip" | sha256sum -c --quiet || { rm -f "$zip"; echo "checksum mi
 
 app="data/data/org.scummvm.scummvm"
 rm -rf "$work"
+mkdir -p "$work"
+# The setup lines come first: when setup.sh already has them, this mod ran on
+# the image before.
+if is_nano_base "$SYSTEM"; then
+  setup_lines="$work/hook.sh"
+  cat >"$setup_lines" <<EOF
+post_scummvm() {
+    step "Adding Beneath a Steel Sky to ScummVM."
+    tar -xJf /system/etc/$PACK -C / && own_app_data org.scummvm.scummvm && \\
+        restorecon -R /$app/files
+}
+EOF
+else
+  setup_lines="$work/setup-steps.sh"
+  cat >"$setup_lines" <<EOF
+echo "Adding Beneath a Steel Sky to ScummVM."
+launcheruser=\$(stat -c "%U" /$app) && \\
+launchergroup=\$(stat -c "%G" /$app) && \\
+tar -xJf /system/etc/$PACK -C / && \\
+chown -R \$launcheruser:\$launchergroup /$app/files && \\
+restorecon -R /$app/files
+
+EOF
+fi
+if setup_has "$SYSTEM" "$setup_lines"; then
+  rm -rf "$work"
+  echo "ScummVM already lists Beneath a Steel Sky; left as it is"
+  exit 0
+fi
+
 mkdir -p "$work/tree/$app/files/$GAME_DIR"
 # The license asks for the readme to stay with the game, so it ships unchanged.
 unzip -q -j "$zip" -d "$work/tree/$app/files/$GAME_DIR"
@@ -61,35 +91,14 @@ find "$work/tree" -type f -exec chmod 660 {} +
 install_system_file "$work/$PACK" "$ETC/$PACK"
 
 if is_nano_base "$SYSTEM"; then
-  cat >"$work/hook.sh" <<EOF
-post_scummvm() {
-    step "Adding Beneath a Steel Sky to ScummVM."
-    tar -xJf /system/etc/$PACK -C / && own_app_data org.scummvm.scummvm && \\
-        restorecon -R /$app/files
-}
-EOF
-  add_setup_functions "$SYSTEM" "$work/hook.sh"
+  add_setup_functions "$SYSTEM" "$setup_lines"
   apps_list "$SYSTEM" hook org.scummvm.scummvm post_scummvm
-  echo "ScummVM will list Beneath a Steel Sky ($(stat -c %s "$work/$PACK") bytes compressed)"
-  rm -rf "$work"
-  exit 0
+else
+  sudo awk -v steps="$setup_lines" -v marker="$(setup_marker "$setup_lines")" '
+    { print }
+    /^pm install \/system\/etc\/scummvm-.*\.apk$/ { print ""; print marker; while ((getline line < steps) > 0) print line }
+  ' "$SETUP" >"$work/setup.sh"
+  write_through "$work/setup.sh" "$SETUP"
 fi
-
-steps="$work/setup-steps.sh"
-cat >"$steps" <<EOF
-echo "Adding Beneath a Steel Sky to ScummVM."
-launcheruser=\$(stat -c "%U" /$app) && \\
-launchergroup=\$(stat -c "%G" /$app) && \\
-tar -xJf /system/etc/$PACK -C / && \\
-chown -R \$launcheruser:\$launchergroup /$app/files && \\
-restorecon -R /$app/files
-
-EOF
-sudo awk -v steps="$steps" '
-  { print }
-  /^pm install \/system\/etc\/scummvm-.*\.apk$/ { print ""; while ((getline line < steps) > 0) print line }
-' "$SETUP" >"$work/setup.sh"
-# Writing through the existing file keeps its owner, mode, and SELinux label.
-sudo cp --no-preserve=all "$work/setup.sh" "$SETUP"
 echo "ScummVM will list Beneath a Steel Sky ($(stat -c %s "$work/$PACK") bytes compressed)"
 rm -rf "$work"

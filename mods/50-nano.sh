@@ -53,6 +53,17 @@ if ! is_nano_base "$SYSTEM"; then
   exit 0
 fi
 
+# Both property files get a block appended below; a second run on the same
+# image would add another.
+if sudo grep -qE '^(persist\.(bootanim\.skip_nano|gammaos\.nano\.(ndstheme|esde\.|nav_sounds|minima\.bg)|gammaos\.performance_mode|gammargb\.control|gammaos\.ext\.(primary|force_mirror))|ro\.gammaos\.nano\.no_slide)' "$SYSTEM/build.prop"; then
+  echo "build.prop already sets Nano's boot, theme, sounds, LEDs, performance mode or external display" >&2
+  exit 1
+fi
+if sudo grep -q '^persist\.gammaos\.qs\.override_default_tiles' "$SYSTEM/product/etc/build.prop"; then
+  echo "the product build.prop already sets the Quick Settings tiles" >&2
+  exit 1
+fi
+
 mkdir -p "$cache/fonts"
 rm -rf "$work"
 mkdir -p "$work"
@@ -155,7 +166,8 @@ sudo setfattr -n security.selinux -v u:object_r:system_file:s0 "$app_dir"
 install_system_file "$work/AndroidGames.apk" "$app_dir/AndroidGames.apk"
 # The apps setup installs are emulators and tools, not Android games, except
 # the added apps marked game=1.
-grep -E '^apk .*  game=1( |$)' "$MODS/added-apps.txt" | grep -oE 'package=[^ ]+' | cut -d= -f2 >"$work/added-games.txt"
+{ grep -E '^apk .*  game=1( |$)' "$MODS/added-apps.txt" || true; } |
+  sed -nE 's/.*(^| )package=([^ ]+).*/\2/p' >"$work/added-games.txt"
 sudo grep -v '^#' "$ETC/gammaos/apps.list" | cut -d'|' -f2 | grep . | grep -vxFf "$work/added-games.txt" \
   >"$work/android-games-exclude.txt"
 install_system_file "$work/android-games-exclude.txt" "$ETC/gammaos/android-games-exclude.txt"
@@ -185,10 +197,6 @@ EOF
 add_setup_steps "$SYSTEM" "$work/setup-steps.sh"
 
 sudo cat "$SYSTEM/build.prop" >"$work/build.prop"
-if grep -qE '^(persist\.(bootanim\.skip_nano|gammaos\.nano\.(ndstheme|esde\.|nav_sounds|minima\.bg)|gammaos\.performance_mode|gammargb\.control|gammaos\.ext\.(primary|force_mirror))|ro\.gammaos\.nano\.no_slide)' "$work/build.prop"; then
-  echo "build.prop already sets Nano's boot, theme, sounds, LEDs, performance mode or external display" >&2
-  exit 1
-fi
 cat >>"$work/build.prop" <<EOF
 
 # Thimsy OS: boot into Nano, with the ES-DE theme engine, Minima's

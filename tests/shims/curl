@@ -1,0 +1,5 @@
+#!/bin/sh
+# Test shim: the tests are offline, so any download is a failure the test can see.
+echo "curl shim: no network in tests: curl $*" >&2
+echo "curl $*" >>"${SHIM_LOG:-/dev/null}"
+exit 97
