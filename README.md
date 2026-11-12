@@ -620,6 +620,13 @@ The tools it uses:
   the vector logo and Android's Roboto, at the screen's own size, so they look
   the same and stay sharp on any screen, 640x480 included. The charging
   pictures and the fastboot logo are Anbernic's.
+- **Bootloader wait:** the RG Cube's bootloader is unlocked (Thimsy needs
+  that), so at every boot it waits about 10.5 s on the boot picture, checking
+  the power button every 100 ms, before it starts Android. The bootloader is
+  signed, so that can't be changed, and nothing of Thimsy's runs yet. Tapping
+  power once pauses the wait and tapping it again ends it at once, so the
+  bootloader's picture says "Tap the power button twice to skip the wait".
+  One tap alone leaves it paused until the second.
 - The boot screen redraws at full rate until the home has settled under it
   (then at 10 fps while it waits only for the startup sound). The ES-DE home's
   idle pacing (one redraw a second when nothing moves) applied to it too, so
