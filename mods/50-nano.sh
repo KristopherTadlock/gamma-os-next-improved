@@ -79,7 +79,7 @@ install_system_file "$work/nano_systems.json" "$ETC/gammaos/nano_systems.json"
 # reloads the file when it changes.
 cat >"$work/setup-steps.sh" <<EOF
 if [ "\$FRESH_SETUP" = 1 ]; then
-    step "Setting up the GammaOS Nano game systems."
+    step "Setting up the Nano game systems."
     cp /system/etc/gammaos/nano_systems.json /data/system/nano_systems.json
     chown root:root /data/system/nano_systems.json
     chmod 644 /data/system/nano_systems.json

@@ -6,8 +6,8 @@ module list.
 
 Applies sprd_drm.py's patch to the copy recovery loads from the vendor ramdisk. The first stage no
 longer loads the LED driver (cust-leds.ko): its probe takes a second, during which nothing else in
-the boot could run. It loads later, in the background, from vendor_dlkm (patch_vendor_dlkm.py);
-recovery still loads it from here (modules.load.recovery).
+the boot could run. It loads later, beside the other modules (patch_vendor_dlkm.py); recovery still
+loads it from here (modules.load.recovery).
 
 The ramdisk is otherwise byte-identical. The image is repacked and re-signed
 with the AOSP test key it was signed with, keeping its salt and properties.

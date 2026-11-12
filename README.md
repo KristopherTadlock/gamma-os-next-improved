@@ -280,6 +280,14 @@ It also changes Nano:
   ("B Back" goes back). Lists scroll with a drag and fling, in every theme and
   player. Before, each screen worked out its own layout again for touch, and
   taps could land on the wrong item.
+- **Touch on the RG Cube:** its touchscreen is mounted a quarter turn from the
+  picture (`ro.input_flinger.primary_touch_orientation=ORIENTATION_90`).
+  Android turns touches around for apps, but Nano and drastic-nano read the
+  touchscreen directly, so every touch arrived rotated: only the middle of the
+  screen worked and vertical drags read as sideways ones. They now turn the
+  raw axes back by that mounting, as Android's input reader does, unless the
+  device sets Nano's own `osk_touch_*` calibration
+  (`persist.gammaos.nano.touch_orientation` overrides it).
 - **Dialogs** wrap long text and shrink it to fit, at 640x480 too, in every
   theme; their buttons fit or stack.
 - **Nano Keyboard** is the system keyboard in Nano mode. When an app such as
@@ -601,8 +609,9 @@ The tools it uses:
   its jingle are removed in every theme, so the home, or the setup wizard on a
   new device, shows as soon as it is ready. The intro ran 13–17 s over a
   system that was ready sooner. Its sounds and images are no longer installed.
-- **Boot screen:** from power-on the screen shows "Thimsy OS", the logo and
-  "Loading...". The bootloader shows it until Android can draw (the BootLogo
+- **Boot screen:** from power-on the screen shows "Thimsy", the logo and
+  "Loading..." on midnight blue (#1a1a2e, Nano's "Midnight" background
+  colour). The bootloader shows it until Android can draw (the BootLogo
   partition's boot picture, `scripts/bootlogo.py`); Nano then draws the same
   picture with a line saying what the device is doing ("Starting Android",
   "Loading your theme", ...) and closes it as soon as the home can be drawn.
@@ -611,7 +620,16 @@ The tools it uses:
   the vector logo and Android's Roboto, at the screen's own size, so they look
   the same and stay sharp on any screen, 640x480 included. The charging
   pictures and the fastboot logo are Anbernic's.
-- **Boot sound:** with the ES-DE theme and navigation sounds on, the first 2 s
+- The boot screen redraws at full rate until the home has settled under it
+  (then at 10 fps while it waits only for the startup sound). The ES-DE home's
+  idle pacing (one redraw a second when nothing moves) applied to it too, so
+  the 8 frames it waits for under the home took about 7 s.
+- The ES-DE theme's pictures are decoded on four worker threads, at the size
+  they are drawn, and only uploaded on the drawing thread. They were decoded
+  there one batch per frame, at full size (1080x1080 for each system picture
+  of Colorful (Simplified)).
+- **Boot sound:** with the ES-DE theme and Startup Sound on (its own setting,
+  on by default, apart from the navigation sounds, which are off), the first 2 s
   of Pixabay's "Computer Startup Sound Effect" (Pixabay Content License) play
   as the boot screen gives way to the home. `mods/57-boot-sound.sh` downloads
   it at build time, checks its SHA-256 and installs it; the repository does
@@ -627,8 +645,18 @@ The tools it uses:
   on `/metadata` (deleted as it is read, a fresh one saved once the device is
   up); on a device whose generator is ready it does nothing.
 - The LED driver (`cust-leds.ko`) takes a second to start. It was loaded in the
-  first stage, where nothing else can run; it now loads last, in the
-  background (`scripts/patch_vendor_boot.py`, `scripts/patch_vendor_dlkm.py`).
+  first stage, where nothing else can run; it now loads in a process of its
+  own beside the vendor's module loader (`init.rc` in the Nano patch,
+  `scripts/patch_vendor_boot.py`, `scripts/patch_vendor_dlkm.py`). A build
+  without `SYSTEM_IMG` keeps the stock system, which lacks that, so the driver
+  loads at the end of the module list instead.
+- The RG Cube's board lists two touchscreen drivers, FocalTech and Goodix, on
+  the same I2C bus and the same reset and interrupt pins (it ships with either
+  panel). FocalTech loaded first and spent 1.3 s retrying a chip that is not
+  there before it gave the pins up, and the Goodix touch, the controls and the
+  charger waited behind it. Goodix now loads first: the fitted panel's driver
+  takes the pins and the other one fails at once. They can't load at the same
+  time, since both reset the same pin.
 - The background module list started with the Wi-Fi/Bluetooth base, which
   pulls in the PCIe driver, and that waits a second for a link the RG Cube
   does not have (nothing is on its PCIe). The display and GPU drivers, the
@@ -638,9 +666,15 @@ The tools it uses:
   composer, which started with the other vendor services: the early start
   list did not know the RG Cube's name for it, `vendor.hwcomposer-2-4`. On the
   RG Cube, the early start waits for the display and GPU drivers' device nodes
-  first.
-- A restart or power-off waited 3 s for `wificond`, which does not exit when
-  asked; it is now stopped outright.
+  first, and starts the power HAL with it: the composer waits for that before
+  it answers, and the vendor starts it only once `/data` is up, about 2 s later.
+- A restart or power-off waited 3 s for services that don't exit when asked:
+  `wificond`, and the vendor's GNSS daemon (`gpsd`), which ignores the request.
+  Both are now stopped outright. init's own messages during a restart also go
+  to pmsg, which pstore keeps across it, so the shutdown can be timed from
+  `/sys/fs/pstore` on the next boot (the kernel log does not survive it);
+  `nano-seedrng` logs the time from the start of a restart to the next kernel
+  starting.
 - Nano sets up the USB mode (MTP and the rest) in the background once
   system_server's USB service is up, with a cable in. Before that its helper,
   a Java process, could only fail and retry while the system was starting.

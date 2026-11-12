@@ -137,7 +137,7 @@ e2fsck -fn "$system"
 # Deleted and replaced files leave their old contents in the free blocks, which
 # the PAC carries and 7-Zip compresses (about 500 MB of the download). Discard
 # punches them out of the image file, so they read back as zeros.
-e2fsck -fp -E discard "$system" >/dev/null
+e2fsck -fp -E discard "$system" >/dev/null || (($? == 1))
 python3 -I "$ROOT/scripts/check_image_files.py" "$system" "$written"
 
 pac="$OUT/RG_Cube_Thimsy_OS_v$VERSION$VARIANT.pac"
@@ -145,7 +145,10 @@ echo "writing $pac"
 python3 -I "$ROOT/scripts/lptool.py" replace "$super" system_a "$system"
 dlkm="$WORK/images/vendor_dlkm_a.img"
 python3 -I "$ROOT/scripts/lptool.py" extract "$super" vendor_dlkm_a "$dlkm"
-python3 -I "$ROOT/scripts/patch_vendor_dlkm.py" "$dlkm" "$dlkm.patched"
+# Only the Nano patch's init.rc loads the LED driver beside the module list.
+leds=()
+[[ -n "${SYSTEM_IMG:-}" ]] || leds=(--load-leds)
+python3 -I "$ROOT/scripts/patch_vendor_dlkm.py" "${leds[@]}" "$dlkm" "$dlkm.patched"
 python3 -I "$ROOT/scripts/lptool.py" replace "$super" vendor_dlkm_a "$dlkm.patched"
 rm -f "$dlkm" "$dlkm.patched"
 odm="$WORK/images/odm_a.img"

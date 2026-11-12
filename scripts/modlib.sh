@@ -75,7 +75,8 @@ add_setup_steps() {
 # post-install hooks, so apps.list can name them.
 add_setup_functions() {
   local setup="$1/bin/setup.sh" funcs="$2"
-  local marker='step "Starting configuration of the GammaOS system..."'
+  local marker='step "Starting configuration of the Thimsy system..."'
+  sudo grep -qxF "$marker" "$setup" || marker='step "Starting configuration of the GammaOS system..."'
   sudo grep -qxF "$marker" "$setup" || { echo "setup.sh has no line: $marker" >&2; return 1; }
   sudo awk -v funcs="$funcs" -v marker="$marker" '
     $0 == marker { while ((getline line < funcs) > 0) print line; print "" }
