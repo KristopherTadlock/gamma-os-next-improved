@@ -257,6 +257,12 @@ pub fn build(cat: &Catalog, opts: &BuildOptions, rep: &Reporter) -> Result<JobRe
     // before anything is downloaded or written.
     let mut imports = opts.imports.clone();
     imports.extend(bundled_build_dirs());
+    // The unpacked official firmware in an import folder saves downloading
+    // and unpacking it (checked by size now, by sha256 once copied).
+    let unpacked = imports
+        .iter()
+        .map(|d| d.join(&src.contains))
+        .find(|p| fs::metadata(p).is_ok_and(|m| m.len() == src.container.size));
     let cache = Cache::new(opts.workspace.join("cache"), imports)?;
     let sc = check_space(
         cat,
@@ -276,9 +282,15 @@ pub fn build(cat: &Catalog, opts: &BuildOptions, rep: &Reporter) -> Result<JobRe
     }
 
     rep.stage("fetch", "Downloading");
+    let mut state = load_state(&dir);
+    if state.assembling || !working.exists() {
+        state.extracted = false;
+    }
     let mut parts = Vec::new();
-    for p in &src.parts {
-        parts.push(cache.get(p, rep)?);
+    if state.extracted || unpacked.is_none() {
+        for p in &src.parts {
+            parts.push(cache.get(p, rep)?);
+        }
     }
     let system_paths = match &system {
         Some(s) => Some(cache.get_all(s, rep)?),
@@ -289,14 +301,25 @@ pub fn build(cat: &Catalog, opts: &BuildOptions, rep: &Reporter) -> Result<JobRe
         arts.insert(a.id.clone(), (a.clone(), cache.get(a, rep)?));
     }
 
-    let mut state = load_state(&dir);
-    if state.assembling || !working.exists() {
-        state.extracted = false;
-    }
     if !state.extracted {
         rep.stage("extract", "Unpacking the firmware");
         let tmp = working.with_extension("partial");
-        match src.kind.as_str() {
+        let kind = if unpacked.is_some() {
+            "unpacked"
+        } else {
+            src.kind.as_str()
+        };
+        match kind {
+            "unpacked" => {
+                let from = unpacked.as_ref().expect("checked above");
+                rep.info(format!("Using {}", from.display()));
+                let mut i = File::open(from)?;
+                let mut o = File::create(&tmp)?;
+                let n = src.container.size;
+                util::copy_exact(&mut i, &mut o, n, &mut |d| {
+                    rep.progress("Copying firmware", d, n)
+                })?;
+            }
             "archive7z" => {
                 archive::extract_one(
                     &parts,

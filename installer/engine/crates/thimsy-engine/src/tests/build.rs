@@ -23,6 +23,7 @@ pub struct Fixture {
     pub system: Vec<u8>,
     pub vendor_new: Vec<u8>,
     pub odm_new: Vec<u8>,
+    pub src_pac: Vec<u8>,
     pub expected_sha: String,
 }
 
@@ -169,6 +170,7 @@ guides:
         system,
         vendor_new,
         odm_new,
+        src_pac,
         expected_sha,
     }
 }
@@ -318,6 +320,33 @@ fn interrupted_assembly_reextracts_instead_of_reapplying_steps() {
         .unwrap()
         .iter()
         .any(|e| matches!(e, Event::Stage { stage, .. } if stage == "extract")));
+}
+
+#[test]
+fn unpacked_official_firmware_in_an_import_folder_skips_the_download() {
+    let fx = good_fixture();
+    let imp = fx.dir.path().join("import");
+    std::fs::create_dir_all(&imp).unwrap();
+    std::fs::write(imp.join("firmware.pac"), &fx.src_pac).unwrap();
+    // The archive is gone: only the unpacked firmware can satisfy the build.
+    for i in 1..=3 {
+        let _ = std::fs::remove_file(fx.dir.path().join(format!("fw.7z.{i:03}")));
+    }
+    let mut o = opts(&fx.dir.path().join("ws"), false);
+    o.imports = vec![imp.clone()];
+    let (rep, _) = quiet();
+    let rec = job::build(&fx.catalog, &o, &rep).unwrap();
+    assert_eq!(rec.sha256, fx.expected_sha);
+
+    // A same-sized but different file is caught by the hash check.
+    let mut bad = fx.src_pac.clone();
+    bad[3000] ^= 0xFF;
+    std::fs::write(imp.join("firmware.pac"), &bad).unwrap();
+    let mut o = opts(&fx.dir.path().join("ws2"), false);
+    o.imports = vec![imp];
+    let (rep, _) = quiet();
+    let err = job::build(&fx.catalog, &o, &rep).unwrap_err();
+    assert_eq!(crate::error::code_of(&err).0, Code::HashMismatch, "{err:#}");
 }
 
 #[test]

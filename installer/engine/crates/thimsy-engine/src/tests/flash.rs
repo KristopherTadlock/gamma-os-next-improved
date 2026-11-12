@@ -16,7 +16,13 @@ fn rg_cube_recipe_never_writes_device_unique_partitions() {
     }
     assert_eq!(
         f.update,
-        ["Super", "VENDORBOOT", "VENDORBOOT_B", "BootLogo"]
+        [
+            "Super",
+            "VENDORBOOT",
+            "VENDORBOOT_B",
+            "BootLogo",
+            "Fastboot_Logo"
+        ]
     );
     assert_eq!(f.erase_full, ["userdata", "metadata"]);
     assert!(
