@@ -12,7 +12,8 @@ USB. Design: [`../universal_installer.md`](../universal_installer.md).
 | `app/` | Flutter app (Windows, macOS, Linux; Android shell) |
 | `catalog/` | Devices, profiles, shared system images, translations (`i18n/`). Embedded in the engine at build time |
 | `docs/engine-protocol.md` | The JSON Lines protocol between app and engine |
-| `tests/` | End-to-end test on real RG Cube firmware (`e2e.sh`) and a fake `spd_dump` |
+| `tests/` | End-to-end test on real RG Cube firmware (`e2e.sh`), the published-firmware check (`verify-drafts.sh`) and a fake `spd_dump` |
+| `tools/make-thimsy-build.sh` | Turns a firmware from `scripts/build.sh` into the Thimsy build the installer ships (system image + patches), checking the rebuild is byte-identical |
 | `tools/apply_pack.py` | Writes a device pack (`thimsy-installer dev pack`) into the catalog |
 
 ## Status (0.1.0 test 1)
@@ -42,7 +43,30 @@ cargo build --release
 byte-for-byte comparison, dry runs, a full flash through the fake `spd_dump`,
 host checks and cleanup.
 
-## Making a device pack
+## Making the Thimsy build
+
+`scripts/build.sh` still builds the full firmware as before. From its output:
+
+```sh
+installer/tools/make-thimsy-build.sh [--apply] out/RG_Cube_Thimsy_OS_v1.0a.pac ~/thimsy-build-out
+```
+
+This downloads the official GammaOS firmware (or takes `--source PAC`), makes
+the device pack, rebuilds the PAC with the installer and stops unless the
+result is byte-identical. `~/thimsy-build-out/thimsy-build/` then holds the
+system image (split under 2 GiB) and the device's patches: ship it next to the
+app (the engine looks in `<app>/thimsy-build`, and `THIMSY_BUILD_DIR`) or
+upload it to the installer release. `--apply` writes the result into
+`installer/catalog` so the next engine build embeds it.
+
+The build also accepts the unpacked official firmware (for example
+`RG_Cube_GammaOS_Next_Full_v1.2.pac`) in an import folder instead of
+downloading the 7z.
+
+`installer/tests/verify-drafts.sh WORKDIR SOURCE_PAC TAG...` repeats the
+byte-identity check for published firmware releases.
+
+## Making a device pack by hand
 
 ```sh
 thimsy-installer dev pack --source official.pac --reference thimsy.pac \

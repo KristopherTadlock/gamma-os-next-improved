@@ -1065,6 +1065,31 @@ runtime-detected and maps onto device-pack settings:
 | Joypad uevent fix-up | `gammaos-nano.rc:197`, `joypad_uevent_fixup.sh` | TrimUI Brick | Automatic (device-name-specific) |
 | RG Cube keylayout (positional ABXY), no-slide, LED/performance defaults, touch orientation, 720×720 crop shaders, DisplayPort driver fix | `thimsy/mods/27-*.sh`, `50-nano.sh`, `scripts/sprd_drm.py` | RG Cube | Today partly in the shared system (keylayout, props) and partly in the device pack (vendor deltas). **Next step:** move the keylayout and props from `/product` into the RG Cube odm overlay so the system image is truly device-independent |
 
+### 14.1 What the RG Cube device pack changes
+
+The base firmware is the official GammaOS release for the device, downloaded
+from its upstream GitHub release (decided: Thimsy never hosts a whole
+firmware). Compared with GammaOS 1.2, a Thimsy RG Cube PAC changes only the
+partitions below (from `scripts/build.sh`). Kernel, bootloader, `vendor_a`,
+`dtbo`, `init_boot` and every `vbmeta` stay stock.
+
+| Changed | What and why | Needed to boot Thimsy? | Changes with each Thimsy release? |
+|---|---|---|---|
+| `system_a` in `super` (grown, Thimsy written in) | Thimsy itself | **Yes** | Yes (the shared system image) |
+| PAC header CRCs | The flasher refuses the file otherwise | **Yes**, to flash | Yes |
+| `vendor_dlkm_a` | DisplayPort driver fix (a 4K monitor panicked the kernel), Goodix touch probed first (−1.3 s), radios last, LED driver deferred | No | No |
+| `VENDORBOOT`, `VENDORBOOT_B` | The same driver fix for recovery; LED driver out of the first stage (−1 s) | No | No |
+| `odm_a` | Precompiled SELinux policy matching the system, so init does not compile one every boot (−1 s) | No | **Yes**: its hashes must match the system |
+| `BootLogo`, `Fastboot_Logo` | Thimsy boot picture | No | Only if the logo changes |
+| PAC version and alias | Labels in the flash tool | No | Yes |
+
+Two couplings to keep in mind: the `odm` delta is rebuilt for every system
+image, and the deferred LED driver relies on Thimsy's `init.rc` loading it, so
+the `vendor_boot`/`vendor_dlkm` patches must not ship without a Thimsy system.
+For a new device the minimum is the same as the first two rows; driver fixes
+and the policy speed-up are optional per-device extras, provided the base
+firmware's vendor is compatible with Thimsy's system.
+
 ## 15. Open decisions
 
 1. **License** of `installer/`: GPL-3 with avbroot, a separate avbroot
@@ -1169,8 +1194,21 @@ Code lives in `installer/` (see `installer/README.md`).
 - **RG Cube:** the device pack (2.2 GB shared system image + 4 deltas, about
   400 KB) rebuilds the Thimsy 1.0a test 21 PAC from the official GammaOS 1.2
   download **byte for byte** in about 1.5 minutes.
+- **Checked against every published RG Cube firmware:** the same process
+  rebuilds 21 of the 22 releases on this repo byte for byte (GammaOS Next
+  Improved 1.0 and 1.4.4 test 1, Nano 2.0 tests 1–6 and 9–18, Thimsy 1.0a tests
+  19–21), each matching its release's SHA256SUMS. The 1.0a test 22 draft is
+  missing volumes; the same content, built locally, also rebuilds exactly
+  (`installer/tests/verify-drafts.sh`).
+- **Thimsy build scripts:** `scripts/build.sh` is unchanged and still makes the
+  full firmware. `installer/tools/make-thimsy-build.sh` turns its output into
+  the installer's Thimsy build (system image + patches, never a whole
+  firmware) and refuses to finish unless the installer's rebuild is
+  byte-identical. For now the build ships with the installer (the engine looks
+  in `<app>/thimsy-build`, or downloads it from the installer release); later
+  it becomes a separate GitHub release.
 - **Tests:**
-  - 66 unit and CLI tests on synthetic firmware, including a full synthetic
+  - 69 unit and CLI tests on synthetic firmware, including a full synthetic
     device build.
   - `installer/tests/e2e.sh` on real firmware with a fake `spd_dump`.
   - Flutter widget tests.
