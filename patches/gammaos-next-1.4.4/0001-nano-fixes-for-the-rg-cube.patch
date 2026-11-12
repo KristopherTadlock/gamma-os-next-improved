@@ -77,6 +77,22 @@ index e1874662bb8..41c31416cb7 100644
 +    fi
      exit
  fi
+diff --git a/device/phh/treble/vndk.rc b/device/phh/treble/vndk.rc
+index 896be0acc9d..b3b9fac17b9 100644
+--- a/device/phh/treble/vndk.rc
++++ b/device/phh/treble/vndk.rc
+@@ -88,8 +88,10 @@ on property:persist.sys.phh.disable_soundvolume_effect=*
+ #on property:ro.sf.lcd_density=*
+ #    restart surfaceflinger
+ 
++# In the background: on a normal boot it only checks the setting (it restarts audio itself when it
++# changes something), and init waited 150 ms for it.
+ on property:persist.bluetooth.system_audio_hal.enabled=*
+-    exec u:r:phhsu_daemon:s0 root -- /system/bin/phh-prop-handler.sh "persist.bluetooth.system_audio_hal.enabled"
++    exec_background u:r:phhsu_daemon:s0 root -- /system/bin/phh-prop-handler.sh "persist.bluetooth.system_audio_hal.enabled"
+ 
+ on property:init.svc.ril-proxy=stopped && property:persist.sys.phh.restart_ril=true
+     start ril-proxy
 diff --git a/frameworks/base/cmds/drastic-nano/DrasticAssets.cpp b/frameworks/base/cmds/drastic-nano/DrasticAssets.cpp
 index 5e34aa108f2..971d37abd51 100644
 --- a/frameworks/base/cmds/drastic-nano/DrasticAssets.cpp
@@ -89431,24 +89447,33 @@ index a9c1e362354..ccca744e355 100644
  
      bool is_thermal_shutdown = cmd == ANDROID_RB_THERMOFF;
 diff --git a/system/core/rootdir/init.rc b/system/core/rootdir/init.rc
-index 445a058d839..e43328a6292 100644
+index 445a058d839..a94d2a10303 100644
 --- a/system/core/rootdir/init.rc
 +++ b/system/core/rootdir/init.rc
-@@ -536,6 +536,32 @@ on early-fs
+@@ -536,6 +536,41 @@ on early-fs
      # Once metadata has been mounted, we'll need vold to deal with userdata checkpointing
      start vold
  
 +# RG Cube (Unisoc ums9620): the display (sprd-drm) and GPU (mali) drivers are loaded in the
-+# background by the vendor's module loader, so the composer and SurfaceFlinger, started early below,
-+# wait for their device nodes; this runs before the post-fs block that starts SurfaceFlinger. Its
-+# composer is AOSP's default (vendor.hwcomposer-2-4), which other devices also name theirs, so it is
-+# started early here only, with the power HAL it waits for before it registers (the hal class
-+# starts only after /data is up). Normal boots only: the factory calibration mode loads no display
-+# driver.
++# background by the vendor's module loader, so the composer, started early here, needs their device
++# nodes first. rgcube-display-wait waits for them (5 s at most) so init goes on meanwhile, and the
++# composer starts when they are there; SurfaceFlinger, started in the post-fs block below, waits for
++# the composer. Its composer is AOSP's default (vendor.hwcomposer-2-4), which other devices also name
++# theirs, so it is started early here only, with the power HAL it waits for before it registers (the
++# hal class starts only after /data is up). Normal boots only: the factory calibration mode loads no
++# display driver.
 +on post-fs && property:ro.product.vendor.model=RGCUBE && property:ro.bootmode=normal
 +    start vendor.power-default
-+    wait /dev/dri/card0 5
-+    wait /dev/mali0 5
++    start rgcube-display-wait
++
++service rgcube-display-wait /system/bin/sh -c "i=0; while { [ ! -e /dev/dri/card0 ] || [ ! -e /dev/mali0 ]; } && [ $$i -lt 500 ]; do sleep 0.01; i=$$((i + 1)); done; setprop sys.gammaos.rgcube.display_nodes 1"
++    user root
++    group root
++    disabled
++    oneshot
++    seclabel u:r:su:s0
++
++on property:sys.gammaos.rgcube.display_nodes=1
 +    start vendor.hwcomposer-2-4
 +
 +# RG Cube: its LED driver (cust-leds, a GPIO LED driver that spends about a second in its probe) loads
