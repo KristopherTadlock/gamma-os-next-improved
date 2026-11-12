@@ -279,7 +279,9 @@ It also changes Nano:
   keyboard keys, dialog buttons and the button hints, which press their button
   ("B Back" goes back). Lists scroll with a drag and fling, in every theme and
   player. Before, each screen worked out its own layout again for touch, and
-  taps could land on the wrong item.
+  taps could land on the wrong item. In the ES-DE system view a swipe moves
+  one system, with no fling. A two-finger tap opens or closes the Quick Menu,
+  as the Anbernic button does, wherever Nano is on screen.
 - **Touch on the RG Cube:** its touchscreen is mounted a quarter turn from the
   picture (`ro.input_flinger.primary_touch_orientation=ORIENTATION_90`).
   Android turns touches around for apps, but Nano and drastic-nano read the
@@ -299,6 +301,16 @@ It also changes Nano:
   half a minute while Android doesn't list it yet (`persist.gammaos.nano.ime=0`
   keeps Android's keyboard), and Boot Android switches back to another
   keyboard.
+- **Touch keyboard:** Nano's keyboard opens in one of two forms, by what
+  opened it. After a button press it is the controller keyboard (the
+  focus-driven grid with its button hints); after a touch, a tap on a field in
+  Nano or in an app, it is the touch keyboard: the full width of the screen,
+  keys as large as the screen allows with no gaps between them, and the key
+  under the finger lit. A button above the keyboard switches between the two,
+  and a d-pad or A press on the touch keyboard brings the controller one.
+- **Setup:** the first boot's Android setup no longer holds the setup wizard
+  on a "Please Wait" screen before Wi-Fi: the wizard goes on, and its Wi-Fi
+  scan waits for Android, scanning as soon as it can.
 - **Languages:** Nano's prompts, messages and menus, the ES-DE theme and the
   DS emulator's menu included, are translated into the 21 languages the Nano
   Keyboard types: Spanish, French, German, Italian, Portuguese, Dutch,
