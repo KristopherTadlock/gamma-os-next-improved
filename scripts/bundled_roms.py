@@ -8,9 +8,10 @@ OUT_TAR is xz-compressed when its name ends in .xz, and a plain tar otherwise.
 Keeps the pack's folders and systeminfo files, keeps only the "upstream" games
 the list names, adds each "add" game after checking its sha256, copies each
 "tree" folder out of an archive after checking the archive's sha256, adds each
-"local" file from LOCAL_DIR, and creates each "folder" line's folder. Every game
-gets its license file from LICENSES_DIR, either "<path>.license.txt" or a
-LICENSE.txt in the game's folder.
+"local" file from LOCAL_DIR, and creates each "folder" line's folder. A line with
+base=nano is only for the 1.4.4 (Nano) base, base=1.2 only for the 1.2 base.
+Every game gets its license file from LICENSES_DIR: "<path>.license.txt", a
+"tree" folder's own LICENSE.txt, or a LICENSE.txt in the game's folder.
 
 With MEDIA_LIST (pack-in-media.txt), each game's box art, screenshot, title
 screen and marquee (downloaded and checked the same way, or from pack-in-art/
@@ -212,8 +213,9 @@ def media_files(media, cache, art_dir, nano):
     return files
 
 
-def license_for(target, licenses):
-    for candidate in (target + ".license.txt", os.path.join(os.path.dirname(target), "LICENSE.txt")):
+def license_for(target, licenses, folder=False):
+    candidates = [target + ".license.txt"] + [os.path.join(target, "LICENSE.txt")] * folder
+    for candidate in candidates + [os.path.join(os.path.dirname(target), "LICENSE.txt")]:
         path = os.path.join(licenses, candidate)
         if os.path.exists(path):
             return candidate, open(path, "rb").read()
@@ -225,7 +227,8 @@ def main():
     media_path = sys.argv[7] if len(sys.argv) > 7 else None
     nano = sys.argv[8:9] == ["nano"]
     os.makedirs(cache, exist_ok=True)
-    entries = parse(list_path)
+    base = "nano" if nano else "1.2"
+    entries = [e for e in parse(list_path) if e[2].get("base", base) == base]
     upstream = {target for kind, target, _ in entries if kind == "upstream"}
 
     files = {}
@@ -239,7 +242,7 @@ def main():
             target = target.rstrip("/")
         elif kind == "local":
             files[target] = open(os.path.join(local, target), "rb").read()
-        name, text = license_for(target, licenses)
+        name, text = license_for(target, licenses, kind == "tree")
         files[name] = text
     extra = {}
     if media_path:

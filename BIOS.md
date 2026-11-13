@@ -1,15 +1,15 @@
 # BIOS and system files in Thimsy OS
 
-Some emulators in Thimsy OS need files from the original consoles (BIOS, boot ROMs, firmware) to run, or run better with them. Thimsy OS does not include or download any of them; you provide your own. This page lists every file Thimsy OS can install, how it recognises them and where each one goes.
+Some emulators in Thimsy OS need files from the original consoles (BIOS, boot ROMs, firmware) to run, or run better with them. Thimsy OS does not include, download or link to any of them (apart from the free C-BIOS for MSX, see [Bundled](#bundled)): you provide your own, dumped from consoles you own, and Thimsy OS copies them to the emulators that need them. Adding them is optional; most systems work without any. This page lists every file Thimsy OS can install, how it recognises them and where each one goes.
 
 ## Installing
 
 Put the files in a folder (any folder, any names, subfolders are fine), then either:
 
-- in the first-boot setup, at the BIOS step, choose **Install** and pick the folder (a folder named `bios` on the microSD card is offered first), or
-- any time later: **Game Settings > Install BIOS Files**.
+- in the first-boot setup, at the optional BIOS step (shown when a microSD card is in), choose **Select Folder** and pick the folder (a folder named `bios` on the microSD card is offered first), or **Skip** to do it later, or
+- any time later: **Game Settings > Install Your Own BIOS Files**.
 
-Thimsy OS looks through the whole folder, installs everything it recognises and shows a short report: installed, already installed, different file already there (kept), not recognised.
+Thimsy OS looks through the whole folder, copies everything it recognises to the emulators that need it and shows a short report: installed, already installed, different file already there (kept), not recognised. If nothing in the folder is recognised, the report says so and reminds you that you need to provide your own files.
 
 ## How files are recognised
 
@@ -47,7 +47,7 @@ These systems need no BIOS: PSP, Xbox, 3DS (decrypted games), N64 cartridges, Vi
 
 ## Listed in setup
 
-The setup step and Game Settings > Install BIOS Files list these (the files for your region are shown; the others are under Alternates). Everything in the next section is installed, listed or not.
+The setup step and Game Settings > Install Your Own BIOS Files list these (the files for your region are shown; the others are under Alternates). Everything in the next section is installed, listed or not.
 
 | | System | Emulators | Files |
 |---|---|---|---|

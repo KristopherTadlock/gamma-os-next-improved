@@ -1,8 +1,10 @@
 Beneath a Steel Sky (CD version 1.2), (C) Revolution Software Ltd
 Download: https://www.scummvm.org/games/#games-sky
 
-Freeware. The game's files are installed in ScummVM's own storage, with this
-readme next to them; this file launches the game from ES-DE.
+Freeware. Beneath a Steel Sky.scummvm holds the game's ScummVM ID (sky), which
+starts the game from Nano, ES-DE or RetroArch's ScummVM core. The game's files
+are in the "Beneath a Steel Sky" folder on the 1.4.4 base, and in ScummVM's own
+storage on 1.2, with this readme next to them.
 
 readme.txt from the release, unchanged:
 

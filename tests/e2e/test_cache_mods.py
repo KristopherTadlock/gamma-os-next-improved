@@ -78,17 +78,39 @@ class CacheMods(ModCase):
         self.assertLess(setup.index('mkdir -p "/sdcard/GPU Drivers"'), setup.index("mkdir -p /data/setupcompleted"))
         self.assertOk(self.run_mod("45"))
         self.assertIn("|com.armsx2|/system/etc/ARMSX2-2.9.2.apk||post_armsx2", self.apps())
+        bass = "sdcard/ROMs/scummvm/Beneath a Steel Sky"
+        systree.payload(f"{self.system}/etc/roms.tar.zst", {bass: None, f"{bass}/sky.dsk": b"dsk",
+                                                            f"{bass}.scummvm": b"sky\n"})
         self.assertOk(self.run_mod("46"))
         self.assertIn("|org.scummvm.scummvm|/system/etc/scummvm-2026.3.0.apk||post_scummvm", self.apps())
-        with tarfile.open(f"{self.system}/etc/scummvm-bass.tar.xz") as t:
-            names = t.getnames()
-        self.assertIn("data/data/org.scummvm.scummvm/files/scummvm.ini", names)
+        ini = systree.read_payload(f"{self.system}/etc/scummvm.tar.zst")["data/data/org.scummvm.scummvm/files/scummvm.ini"]
+        self.assertIn(b"path=/storage/emulated/0/ROMs/scummvm/Beneath a Steel Sky\n", ini)
         # A second run of 45 and 46 changes nothing; 40 refuses (its apps are listed).
         before = util.manifest(self.system)
         self.assertOk(self.run_mod("45"))
         self.assertOk(self.run_mod("46"))
         self.assertEqual(util.manifest(self.system), before)
         self.assertFails(self.run_mod("40"), "is already listed")
+        self.assertEqual(self.shim_calls("curl"), [])
+
+    def test_46_scummvm_12(self):
+        """1.2 keeps the game in ScummVM's own storage, from the cached zip."""
+        self.seed("scummvm")
+        self.system = systree.build(self.path("v12", "system"), False)
+        self.assertOk(self.run_mod("46"))
+        with tarfile.open(f"{self.system}/etc/scummvm-bass.tar.xz") as t:
+            names = t.getnames()
+            ini = t.extractfile("data/data/org.scummvm.scummvm/files/scummvm.ini").read().decode()
+        game = "data/data/org.scummvm.scummvm/files/games/Beneath a Steel Sky"
+        self.assertTrue({f"{game}/sky.dsk", f"{game}/sky.dnr", f"{game}/readme.txt"} <= set(names))
+        self.assertIn("versioninfo=2026.3.0\n", ini)
+        self.assertIn("path=/data/user/0/org.scummvm.scummvm/files/games/Beneath a Steel Sky\n", ini)
+        self.assertRegex(util.slurp(f"{self.system}/bin/setup.sh", text=True),
+                         r"pm install /system/etc/scummvm-2026\.3\.0\.apk\n\n# thimsy: 46-scummvm-game\.sh "
+                         r"[0-9a-f]{16}\necho \"Adding Beneath a Steel Sky to ScummVM\.\"\n")
+        before = util.manifest(self.system)
+        self.assertOk(self.run_mod("46"))
+        self.assertEqual(util.manifest(self.system), before)
         self.assertEqual(self.shim_calls("curl"), [])
 
     def test_57_boot_sound(self):
@@ -116,10 +138,13 @@ class CacheMods(ModCase):
         names = set(out)
         self.assertNotIn("sdcard/ROMs/gb/Removed Game.gb", names)
         for kind, target, _ in entries:
-            # ES-DE's launch files are left out beside Nano.
-            if kind in ("add", "local") and not target.endswith(".scummvm"):
+            if kind in ("add", "local"):
                 self.assertIn(f"sdcard/ROMs/{target}", names)
-        self.assertFalse([n for n in names if n.endswith(".scummvm")])
+        # Beneath a Steel Sky's files, beside the .scummvm file ScummVM and its RetroArch core open.
+        bass = "sdcard/ROMs/scummvm/Beneath a Steel Sky"
+        self.assertEqual(out[f"{bass}.scummvm"], b"sky\n")
+        for name in ("sky.dsk", "sky.dnr", "sky.cpt", "readme.txt", "LICENSE.txt"):
+            self.assertIn(f"{bass}/{name}", names)
         index = json.loads(out["data/system/nano_scrape/index.json"])
         self.assertTrue(index["items"])
         self.assertIn("setprop sys.gammaos.nano.scrape_reload", self.setup_sh())
@@ -181,6 +206,10 @@ class CacheMods(ModCase):
         self.assertEqual(out[f"{ra}/cores/fake08_libretro_android.so"], b"bundled fake08")
         self.assertIn('input_a_btn = "97"', out[f"{ra}/autoconfig/android/retrogame_joypad.cfg"].decode())
         self.assertIn("sdcard/RetroArch/system/Machines/MSX2 - C-BIOS/cbios_main_msx2.rom", out)
+        # The ScummVM core lists the ROM pack's Beneath a Steel Sky; neither the core nor its data ships.
+        self.assertIn(b"path=/storage/emulated/0/ROMs/scummvm/Beneath a Steel Sky\n",
+                      out["sdcard/RetroArch/system/scummvm.ini"])
+        self.assertFalse([n for n in out if n.endswith("scummvm_libretro_android.so") or n.startswith("sdcard/RetroArch/system/scummvm/")])
         self.assertEqual(self.shim_calls("curl"), [])
         self.assertIn("|/system/etc/ppsspp_1.20.4.apk|", self.apps())
 

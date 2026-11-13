@@ -141,6 +141,26 @@ else
   echo "updated RetroArch core info; removed the PPSSPP core's assets (core not shipped)"
 fi
 
+# RetroArch's ScummVM core isn't shipped. On the 1.4.4 base its settings list
+# Beneath a Steel Sky from the ROM pack's folder, as the ScummVM app's do
+# (46-scummvm-game.sh), so the game runs once RetroArch's online updater
+# downloads the core (the game carries its own sky.cpt; the core's themes and
+# other engines' data come from the updater's Core System Files Downloader).
+sv_ini="$work/tree/sdcard/RetroArch/system/scummvm.ini"
+if is_nano_base "$SYSTEM" && [[ ! -e "$sv_ini" ]]; then
+  cat >"$sv_ini" <<'EOF'
+[sky]
+description=Beneath a Steel Sky (CD/DOS/English)
+engineid=sky
+gameid=sky
+extra=CD
+language=en
+platform=pc
+path=/storage/emulated/0/ROMs/scummvm/Beneath a Steel Sky
+EOF
+  echo "listed Beneath a Steel Sky in the ScummVM core's settings"
+fi
+
 # blueMSX's Auto machine falls back to these three when there is no "MSX2+"
 # machine, for every game but a disk. Each folder gets its ROMs, laid out as the
 # release's configs/blueMSX/README.txt says, and the license.
@@ -199,6 +219,12 @@ c="sdcard/RetroArch/system/Machines"
 while [[ "$c" == */* ]] && ! grep -qxF "$c" "$work/roots"; do c="${c%/*}"; done
 grep -qxF "$c" "$work/roots" || grep -q '^sdcard/RetroArch/system/Machines/' "$work/roots" ||
   echo "sdcard/RetroArch/system/Machines" >>"$work/roots"
+# So is the ScummVM core's settings file.
+if [[ -e "$sv_ini" ]]; then
+  c="sdcard/RetroArch/system/scummvm.ini"
+  while [[ "$c" == */* ]] && ! grep -qxF "$c" "$work/roots"; do c="${c%/*}"; done
+  grep -qxF "$c" "$work/roots" || echo "sdcard/RetroArch/system/scummvm.ini" >>"$work/roots"
+fi
 (cd "$work/tree" && tar -cpf "$work/out.tar" --owner=u0_a188:10188 --group=u0_a188:10188 -T "$work/roots")
 tar_to_payload "$work/out.tar" "$work/${pack##*/}"
 echo "${pack##*/}: $(stat -c %s "$pack") -> $(stat -c %s "$work/${pack##*/}") bytes"

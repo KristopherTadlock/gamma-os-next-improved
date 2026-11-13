@@ -46,7 +46,8 @@ class Lists(util.TestCase):
         for kind, target, fields in entries:
             if kind == "folder":
                 continue
-            br.license_for(target.rstrip("/"), f"{M}/rom-licenses")
+            br.license_for(target.rstrip("/"), f"{M}/rom-licenses", kind == "tree")
+            self.assertIn(fields.get("base", "nano"), ("nano", "1.2"), target)
             if kind == "local":
                 self.assertTrue(os.path.isfile(f"{M}/rom-files/{target}"), target)
             if "sha256" in fields:

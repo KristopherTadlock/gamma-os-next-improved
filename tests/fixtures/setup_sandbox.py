@@ -139,9 +139,10 @@ class Sandbox:
         return Result(proc.returncode, log, lines("state/calls"), proc.stdout + proc.stderr)
 
 
-def add_setup_steps(parent, setup_text, steps_text, nano=True):
+def add_setup_steps(parent, setup_text, steps_text, nano=True, function="add_setup_steps"):
     """setup.sh text after the build's add_setup_steps (scripts/modlib.sh) inserted STEPS_TEXT,
-    run with sudo shimmed, on a system folder in PARENT. Returns (new text, CompletedProcess)."""
+    run with sudo shimmed, on a system folder in PARENT. Returns (new text, CompletedProcess).
+    function="add_setup_functions" inserts post-install hook functions instead."""
     system = os.path.join(parent, "system")
     os.makedirs(os.path.join(system, "bin"), exist_ok=True)
     os.makedirs(os.path.join(system, "etc/gammaos"), exist_ok=True)
@@ -157,8 +158,8 @@ def add_setup_steps(parent, setup_text, steps_text, nano=True):
     shims = os.path.join(parent, "shims")
     if not os.path.isdir(shims):
         util.shim_dir(parent, "sudo")
-    proc = util.run(["bash", "-c", 'set -euo pipefail; source "$1"; add_setup_steps "$2" "$3"', "bash",
-                     os.path.join(util.SCRIPTS, "modlib.sh"), system, steps], path_prepend=[shims])
+    proc = util.run(["bash", "-c", 'set -euo pipefail; source "$1"; "$4" "$2" "$3"', "bash",
+                     os.path.join(util.SCRIPTS, "modlib.sh"), system, steps, function], path_prepend=[shims])
     return util.slurp(setup, text=True), proc
 
 

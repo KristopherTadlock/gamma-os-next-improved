@@ -14,8 +14,8 @@
 #
 # The first 15 are Nano's own systems, in its order, with this project's
 # default emulators. The N64, PSP and Dreamcast intents are Nano's own.
-# ScummVM and PS Vita aren't listed: their players pass each game's ID, which
-# Nano can't, so those games start from the ScummVM and Vita3K apps.
+# PS Vita isn't listed: its player passes each game's title ID, which Nano
+# can't, so those games start from the Vita3K app.
 
 nes           name=NES                short=NES   icon=builtin:0   player=nes.ra64.mesen
 snes          name=SNES               short=SNES  icon=builtin:1   player=snes.ra64.snes9x
@@ -54,6 +54,12 @@ wonderswan    name=WonderSwan         short=WS    icon=retroarch:Bandai_-_Wonder
 wonderswancolor  name=WonderSwan Color  short=WSC  icon=retroarch:Bandai_-_WonderSwan_Color  player=wsc.ra64.mednafen_wswan
 fds           name=Famicom Disk System  short=FDS  icon=retroarch:Nintendo_-_Family_Computer_Disk_System  player=fds.ra64.mesen
 3do           name=3DO                short=3DO   icon=retroarch:The_3DO_Company_-_3DO  player=3do.ra64.opera
+# ScummVM games are .scummvm files holding the game's ID in ScummVM's game list
+# ({file.content}, as ES-DE reads them); the ScummVM app starts that game. The
+# Game Systems editor offers RetroArch's ScummVM core too, once it is
+# downloaded in RetroArch: it opens the same files, with each game's files in
+# the folder beside them or the game in its own scummvm.ini.
+scummvm       name=ScummVM            short=SVM   icon=retroarch:ScummVM  player=scummvm.org.scummvm.scummvm
 arcade        name=Arcade             short=ARC   icon=retroarch:MAME  player=mame.ra64.mamearcade
 fbneo         name=FinalBurn Neo      short=FBN   icon=retroarch:FBNeo_-_Arcade_Games  player=fbneo.ra64.fbneo
 neogeo        name=Neo Geo            short=NEO   icon=retroarch:SNK_-_Neo_Geo  player=neogeo.ra64.fbneo

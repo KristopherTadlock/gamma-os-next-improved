@@ -14,12 +14,7 @@ pack="$(payload_path "$ETC" roms)"
 mkdir -p "$work"
 list="$MODS/bundled-roms.txt"
 nano=()
-if is_nano_base "$1"; then
-  # ES-DE's launch files (.scummvm) do nothing beside Nano; ScummVM lists its game itself.
-  grep -v '\.scummvm  ' "$list" >"$work/bundled-roms.txt"
-  list="$work/bundled-roms.txt"
-  nano=(nano)
-fi
+is_nano_base "$1" && nano=(nano)
 payload_to_tar "$pack" "$work/in.tar"
 python3 -I "$MODS/../scripts/bundled_roms.py" "$list" \
   "$work/in.tar" "$work/out.tar" "$work/cache" "$MODS/rom-licenses" "$MODS/rom-files" \
@@ -27,7 +22,7 @@ python3 -I "$MODS/../scripts/bundled_roms.py" "$list" \
 tar_to_payload "$work/out.tar" "$work/${pack##*/}"
 echo "${pack##*/}: $(stat -c %s "$pack") -> $(stat -c %s "$work/${pack##*/}") bytes"
 write_through "$work/${pack##*/}" "$pack"
-rm -f "$work/in.tar" "$work/out.tar" "$work/${pack##*/}" "$work/bundled-roms.txt"
+rm -f "$work/in.tar" "$work/out.tar" "$work/${pack##*/}"
 
 if is_nano_base "$1"; then
   # The ROM pack brings Nano's box art index for the pack-in games. Nano may

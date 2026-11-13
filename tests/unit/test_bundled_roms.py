@@ -211,3 +211,35 @@ class Main(util.TestCase):
     def test_missing_license(self):
         os.remove(self.path("licenses/nes/LICENSE.txt"))
         self.assertFails(self.build()[0], "nes/New.nes: no license file")
+
+    def tree_archive(self):
+        z = self.path("dl/game.zip")
+        with zipfile.ZipFile(z, "w") as f:
+            f.writestr("game-1.0/", "")
+            f.writestr("game-1.0/game.dsk", b"DSK")
+            f.writestr("game-1.0/readme.txt", b"readme")
+        return z
+
+    def test_base_lines(self):
+        """base=nano lines ship only on the 1.4.4 base, base=1.2 lines only on 1.2."""
+        z = self.tree_archive()
+        self.write("licenses/scummvm/G/LICENSE.txt", "tree license")
+        with open(self.list, "a") as f:
+            f.write(f"tree  scummvm/G/  url=file://{z}  sha256={sha(open(z, 'rb').read())}  member=game-1.0"
+                    "  license=Freeware  base=nano\n")
+            f.write("local  scummvm/Old.scummvm  license=GPL  base=1.2\n")
+        self.write("local/scummvm/Old.scummvm", "old")
+        self.write("licenses/scummvm/Old.scummvm.license.txt", "old license")
+        for extra, nano in (((self.media, "nano"), True), ((self.media,), False)):
+            with self.subTest(nano=nano):
+                proc, out = self.build(*extra)
+                self.assertOk(proc)
+                with tarfile.open(out) as t:
+                    data = {m.name: t.extractfile(m).read() for m in t if m.isfile()}
+                tree = {"sdcard/ROMs/scummvm/G/game.dsk": b"DSK", "sdcard/ROMs/scummvm/G/readme.txt": b"readme",
+                        "sdcard/ROMs/scummvm/G/LICENSE.txt": b"tree license"}
+                for name, want in tree.items():
+                    self.assertEqual(data.get(name), want if nano else None, name)
+                self.assertEqual("sdcard/ROMs/scummvm/Old.scummvm" in data, not nano)
+                # A line without base= ships on both.
+                self.assertEqual(data["sdcard/ROMs/scummvm/G.scummvm"], b"sky")

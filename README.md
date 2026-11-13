@@ -145,7 +145,8 @@ is reconstructed from DraStic r2.6.0.4a. Install its APK (package
 `com.seedlessds.app`) and choose it for Nintendo DS or DSi in Nano's Game
 Systems editor; WatermelonDS stays the default. Nano starts each game in it by
 its file path, the universal hotkeys bind its quick save, quick load and fast
-forward, and Install BIOS Files gives it the DS BIOS and a 256 KB firmware.
+forward, and Install Your Own BIOS Files gives it the DS BIOS and a 256 KB
+firmware from your own dumps.
 
 ### ES-DE
 
@@ -179,8 +180,11 @@ system image built from GammaOS's source
 target `arm64_bgN`) in place of the release's 1.2 system. The RG Cube's
 vendor, kernel and bootloader stay. The changes above apply to it too, adapted
 to 1.4.4's zstd payloads and its app list (`/system/etc/gammaos/apps.list`),
-except ES-DE's app: GammaOS Nano is the home, and Beneath a Steel Sky's ES-DE
-launch file is left out (ScummVM lists the game itself).
+except ES-DE's app: GammaOS Nano is the home. Beneath a Steel Sky's files ship
+in `/sdcard/ROMs/scummvm/Beneath a Steel Sky/`, beside its `.scummvm` file
+(which holds its ScummVM ID, `sky`), in place of ScummVM's own storage:
+first-boot setup adds it to ScummVM's game list by that path, and
+RetroArch's ScummVM core, which isn't shipped, reads the same copy once its Online Updater downloads it.
 
 Apply `patches/thimsy/0001-thimsy.patch` to the
 source tree (`git apply`, from its root) before building the system image. It
@@ -522,21 +526,25 @@ It also changes Nano:
   files moves; an emulator that has none yet stays as it is. With nothing in
   the internal ES-DE folder and an `ES-DE` folder already on the card, Thimsy
   uses that one. Without a card, setup skips these steps and the BIOS step.
-- **BIOS dialog** (the last setup step with a card in, and **Install BIOS
-  Files** in Game Settings at any time): lists the files the emulators need
-  (required, then needed for some games), then the ones that only improve
-  compatibility or add features, each with its system, emulators, file name and
-  SHA-1. The version shown is the one for the system language's region;
-  **Alternates** on a row lists the other versions with their SHA-1. **this
-  list** opens All Supported Files: everything the installer accepts, by
-  system, with how each file is recognised and how to include it. **Install**
-  opens a folder browser (on the card's `bios` folder when there is one); every
-  file in the chosen folder is recognised by its contents, whatever its name,
-  and copied where each emulator looks for it, with progress and a short report
-  (installed, already installed, kept because a different file was there, not
-  recognised). **Skip** looks at nothing. Controller (d-pad or stick to move,
-  A, B, L1/R1 to page) and touch (tap, drag, fling) both work. BIOS files
-  installed before follow a later Move Emulator Files to microSD.
+- **BIOS dialog** (the last setup step with a card in, and **Install Your Own
+  BIOS Files** in Game Settings at any time): Thimsy includes no BIOS files,
+  and the dialog says so first; it copies files you have dumped from your own
+  consoles. In setup the step is marked optional (most systems work without
+  BIOS files) and points to Game Settings for later. It lists the files the
+  emulators need (required, then needed for some games), then the ones that
+  only improve compatibility or add features, each with its system, emulators,
+  file name and SHA-1. The version shown is the one for the system language's
+  region; **Alternates** on a row lists the other versions with their SHA-1.
+  **this list** opens All Supported Files: everything the installer accepts, by
+  system, with how each file is recognised and how to include it. **Select
+  Folder** opens a folder browser (on the card's `bios` folder when there is
+  one); every file in the chosen folder is recognised by its contents, whatever
+  its name, and copied where each emulator looks for it, with progress and a
+  short report (installed, already installed, kept because a different file was
+  there, not recognised; a folder with nothing recognised says so and that you
+  need to provide your own). **Skip** looks at nothing. Controller (d-pad or
+  stick to move, A, B, L1/R1 to page) and touch (tap, drag, fling) both work.
+  BIOS files installed before follow a later Move Emulator Files to microSD.
 - [BIOS.md](BIOS.md) lists every supported BIOS and firmware file, where each
   one is installed, and how it is matched.
 - **Storage access:** every emulator GammaOS ships is granted its storage
@@ -611,8 +619,10 @@ its own launcher, Trebuchet), and **Boot Nano** back. `mods/50-nano.sh` sets it 
   External Display tiles;
 - its game systems are the ones in `mods/nano-systems.txt`, with this
   build's default emulators: the `D - ` cores from `mods/retroarch-cores.txt`
-  (which Nano runs itself) and the standalone apps. ScummVM and PS Vita games
-  start from their apps, because their players need each game's ID.
+  (which Nano runs itself) and the standalone apps. ScummVM games are
+  `.scummvm` files holding the game's ID in ScummVM's game list, as ES-DE
+  uses them; Nano starts the ScummVM app on that game. PS Vita games start
+  from Vita3K, because its player needs each game's title ID.
 
 The boot mode, theme, sounds, LEDs and performance mode are `build.prop`
 defaults, so changes made in Nano stick.
@@ -669,8 +679,8 @@ system partition, and writes `out/RG_Cube_Thimsy_OS_v1.0.pac`
 - The release's PAC is checked against its own CRCs the first time it is used
   (`pactool.py verify`), and its sha256 is recorded next to it; later builds
   check that.
-- The RetroArch cores, their info files and the PPSSPP core's assets are the
-  libretro buildbot nightlies pinned, by sha256, in
+- The RetroArch cores, their info files and the PPSSPP core's
+  assets are the libretro buildbot nightlies pinned, by sha256, in
   `mods/retroarch-cores.lock`. `scripts/refresh_cores.sh` (or the build with
   `REFRESH_CORES=1`) downloads the current ones into `work/cache` and rewrites
   the lock. The buildbot keeps only its latest nightly, so a build without

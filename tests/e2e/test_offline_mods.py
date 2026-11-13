@@ -1,12 +1,14 @@
 """The mods that need no downloads, on both bases, each run twice: the second run must change nothing,
 or refuse loudly and leave the tree as it was."""
+import io
 import os
 import re
+import subprocess
 import tarfile
 
 from tests import util
 from tests.e2e.modrun import ModCase
-from tests.fixtures import systree
+from tests.fixtures import setup_sandbox, systree
 
 OFFLINE = ("05", "12", "25", "27", "37", "45", "55", "58")
 
@@ -142,6 +144,113 @@ class OfflineMods(ModCase):
         before = util.manifest(self.system)
         self.assertIn("skipping", self.assertOk(self.run_mod("45")).stdout)
         self.assertEqual(util.manifest(self.system), before)
+
+    SCUMMVM_APP = "ScummVM|org.scummvm.scummvm|/system/etc/scummvm-2026.3.0.apk||"
+    BASS = "sdcard/ROMs/scummvm/Beneath a Steel Sky"
+    SCUMMVM_INI = ("[scummvm]\nversioninfo=2026.3.0\n\n[sky]\ndescription=Beneath a Steel Sky (CD/DOS/English)\n"
+                   "engineid=sky\ngameid=sky\nextra=CD\nlanguage=en\nplatform=pc\n"
+                   "path=/storage/emulated/0/ROMs/scummvm/Beneath a Steel Sky\n")
+
+    def scummvm_nano(self, game=True):
+        """The 1.4.4 base as 46-scummvm-game.sh finds it: ScummVM listed, BASS in the ROM pack."""
+        self.build(True)
+        with open(f"{self.system}/etc/gammaos/apps.list", "a") as f:
+            f.write(self.SCUMMVM_APP + "\n")
+        files = {"sdcard/ROMs": None, "sdcard/ROMs/scummvm": None}
+        if game:
+            files.update({self.BASS: None, f"{self.BASS}/sky.dsk": b"dsk", f"{self.BASS}/sky.dnr": b"dnr",
+                          f"{self.BASS}.scummvm": b"sky\n"})
+        systree.payload(f"{self.system}/etc/roms.tar.zst", files)
+
+    def test_46_scummvm_nano(self):
+        """ScummVM's entry points at the ROM pack's copy, which RetroArch's core reads too."""
+        self.scummvm_nano()
+        self.assertOk(self.run_mod("46"))
+        app = "data/data/org.scummvm.scummvm"
+        out = systree.read_payload(f"{self.system}/etc/scummvm.tar.zst")
+        self.assertEqual(sorted(out), [f"{app}/files", f"{app}/files/scummvm.ini"])
+        self.assertEqual(out[f"{app}/files/scummvm.ini"].decode(), self.SCUMMVM_INI)
+        self.assertFalse(os.path.exists(f"{self.system}/etc/scummvm-bass.tar.xz"))
+        setup = self.setup_sh()
+        hook = setup.index("post_scummvm() {")
+        self.assertRegex(setup[:hook], r"# thimsy: 46-scummvm-game\.sh [0-9a-f]{16}\n$")
+        self.assertLess(hook, setup.index('step "Starting configuration of the Thimsy system..."'))
+        self.assertIn(f"[ -e /{app}/files/scummvm.ini ] && return 0", setup)
+        self.assertIn("extract_archive /system/etc/scummvm.tar.zst && own_app_data org.scummvm.scummvm", setup)
+        self.assertIn(self.SCUMMVM_APP + "post_scummvm",
+                      util.slurp(f"{self.system}/etc/gammaos/apps.list", text=True))
+        self.assertEqual(self.shim_calls("curl"), [])
+        before = util.manifest(self.system)
+        self.assertIn("left as it is", self.assertOk(self.run_mod("46")).stdout)
+        self.assertEqual(util.manifest(self.system), before)
+
+    def test_46_scummvm_payload_modes(self):
+        self.scummvm_nano()
+        self.assertOk(self.run_mod("46"))
+        raw = subprocess.run(["zstd", "-q", "-dc", f"{self.system}/etc/scummvm.tar.zst"],
+                             capture_output=True, check=True).stdout
+        with tarfile.open(fileobj=io.BytesIO(raw)) as t:
+            members = {m.name: m for m in t}
+        ini = members["data/data/org.scummvm.scummvm/files/scummvm.ini"]
+        folder = members["data/data/org.scummvm.scummvm/files"]
+        self.assertEqual((ini.mode, ini.uid, ini.gid), (0o660, 0, 0))
+        self.assertEqual((folder.mode, folder.uid), (0o771, 0))
+
+    def test_46_scummvm_nano_without_game(self):
+        self.scummvm_nano(game=False)
+        before = util.manifest(self.system)
+        self.assertIn("ScummVM is left to set itself up", self.assertOk(self.run_mod("46")).stdout)
+        self.assertEqual(util.manifest(self.system), before)
+
+    def test_46_skips_without_scummvm(self):
+        for nano in (True, False):
+            self.build(nano)
+            if not nano:
+                text = self.setup_sh().replace("pm install /system/etc/scummvm-2026.3.0.apk\n", "")
+                systree.write(f"{self.system}/bin/setup.sh", text, 0o755)
+            before = util.manifest(self.system)
+            self.assertIn("ScummVM isn't in added-apps.txt; skipping", self.assertOk(self.run_mod("46")).stdout)
+            self.assertEqual(util.manifest(self.system), before)
+
+    def test_46_hook_in_first_boot_setup(self):
+        """The hook in GammaOS's real setup.sh: writes the settings on a fresh install, then never again."""
+        if not setup_sandbox.available():
+            self.skipTest(f"no {setup_sandbox.SETUP_SOURCE}")
+        self.scummvm_nano()
+        self.assertOk(self.run_mod("46"))
+        setup = self.setup_sh()
+        start = setup.index("post_scummvm() {")
+        hook = setup[start:setup.index("\n}\n", start) + 3]
+        text, proc = setup_sandbox.add_setup_steps(self.path("build"), util.slurp(setup_sandbox.SETUP_SOURCE, text=True),
+                                                   hook, function="add_setup_functions")
+        self.assertOk(proc)
+        pack = util.slurp(f"{self.system}/etc/scummvm.tar.zst")
+        ini = "data/data/org.scummvm.scummvm/files/scummvm.ini"
+        for name, rerun in (("fresh", False), ("rerun", True)):
+            with self.subTest(name):
+                box = setup_sandbox.Sandbox(self.path(name), text)
+                box.apps([self.SCUMMVM_APP + "post_scummvm"])
+                with open(os.path.join(box.root, "system/etc/scummvm.tar.zst"), "wb") as f:
+                    f.write(pack)
+                if rerun:
+                    box.completed()
+                    box.installed("org.scummvm.scummvm")
+                    os.makedirs(os.path.join(box.root, os.path.dirname(ini)))
+                    with open(os.path.join(box.root, ini), "w") as f:
+                        f.write("[scummvm]\nmine=1\n")
+                result = box.run()
+                self.assertEqual(result.returncode, 0, result.output + result.log)
+                got = util.slurp(os.path.join(box.root, ini), text=True)
+                if rerun:
+                    self.assertEqual(got, "[scummvm]\nmine=1\n")
+                    self.assertNotIn("Adding Beneath a Steel Sky to ScummVM.", result.log)
+                else:
+                    self.assertEqual(got, self.SCUMMVM_INI)
+                    self.assertIn("Adding Beneath a Steel Sky to ScummVM.", result.log)
+                    self.assertIn("chown -R root:root /data/data/org.scummvm.scummvm", result.calls)
+                    self.assertIn("restorecon -R /data/data/org.scummvm.scummvm/files", result.calls)
+                    self.assertNotIn("scummvm.tar.zst", result.log)   # no missing-payload or extract warning
+                    self.assertNotIn("no owner captured", result.log)
 
     def test_55_hotkeys(self):
         self.build(True)
