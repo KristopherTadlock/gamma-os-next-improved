@@ -399,6 +399,7 @@ String errorMessage(AppLocalizations l, ErrorEvent e) {
     'engine_missing' => l.errEngineMissing,
     'cancelled' => l.errCancelled,
     'no_answer' => l.errNoAnswer,
+    'detect_stopped' => l.detectStopped,
     _ => e.message,
   };
 }
@@ -420,4 +421,35 @@ String describeError(AppLocalizations l, Object error) {
     return hint == null ? msg : '$msg\n$hint';
   }
   return '$error';
+}
+
+/// Shown on Connect and Review when the device watch ended by itself: no
+/// device list is shown from it any more, and "Try again" restarts it.
+class DetectErrorNotice extends StatelessWidget {
+  final AppState state;
+  const DetectErrorNotice(this.state, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final e = state.detectError;
+    if (e == null) return const SizedBox.shrink();
+    final l = AppLocalizations.of(context);
+    final message = errorMessage(l, e);
+    final hint = errorHint(l, e);
+    return Notice(
+      key: const ValueKey('detect-error'),
+      icon: Icons.usb_off,
+      title: l.detectStopped,
+      body: [
+        if (message != l.detectStopped) message,
+        ?hint,
+      ].where((t) => t.isNotEmpty).join('\n'),
+      color: Theme.of(context).colorScheme.error,
+      action: TextButton(
+        key: const ValueKey('detect-retry'),
+        onPressed: state.restartDetect,
+        child: Text(l.tryAgain),
+      ),
+    );
+  }
 }

@@ -170,5 +170,6 @@
   "errEngineMissing": "Die Installations-Engine konnte nicht gestartet werden.",
   "errEngineMissingHint": "Installieren Sie das Thimsy-Installationsprogramm neu. Die Engine wurde unter {path} erwartet.",
   "errNoAnswer": "Die Installations-Engine hat nicht geantwortet.",
-  "errCancelled": "Abgebrochen."
+  "errCancelled": "Abgebrochen.",
+  "detectStopped": "Die Suche nach dem Gerät wurde beendet."
 }

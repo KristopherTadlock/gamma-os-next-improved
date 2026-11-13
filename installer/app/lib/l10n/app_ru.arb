@@ -170,5 +170,6 @@
   "errEngineMissing": "Не удалось запустить движок установщика.",
   "errEngineMissingHint": "Переустановите установщик Thimsy. Движок ожидался в {path}.",
   "errNoAnswer": "Движок установщика не ответил.",
-  "errCancelled": "Отменено."
+  "errCancelled": "Отменено.",
+  "detectStopped": "Поиск устройства остановлен."
 }

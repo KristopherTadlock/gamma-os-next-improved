@@ -149,7 +149,9 @@ fn win_arg(a: &str) -> String {
 }
 
 /// The PowerShell command that runs `wdi-simple` elevated (one UAC prompt,
-/// no console window) for one USB ID and exits with its exit code.
+/// no console window) for one USB ID and exits with its exit code. Any
+/// PowerShell error (declining the UAC prompt throws) stops it with a
+/// failing exit code; no process object at all exits 1223 (`ERROR_CANCELLED`).
 pub fn ps_command(tool: &Path, vid: u16, pid: u16, label: &str, dest: &Path) -> String {
     let args = [
         "--vid".to_string(),
@@ -171,41 +173,81 @@ pub fn ps_command(tool: &Path, vid: u16, pid: u16, label: &str, dest: &Path) -> 
         .collect::<Vec<_>>()
         .join(",");
     format!(
-        "$p = Start-Process -FilePath {} -ArgumentList @({list}) -Verb RunAs -WindowStyle Hidden -Wait -PassThru; exit $p.ExitCode",
+        "$ErrorActionPreference='Stop'; $p = Start-Process -FilePath {} -ArgumentList @({list}) -Verb RunAs -WindowStyle Hidden -Wait -PassThru; if (-not $p) {{ exit 1223 }}; exit $p.ExitCode",
         ps_quote(&tool.display().to_string())
     )
 }
 
-#[cfg(windows)]
-pub fn install(d: &Device, rep: &Reporter) -> Result<()> {
-    use std::process::Command;
-    let tool = crate::tools::locate("wdi-simple")?;
-    let dest = std::env::temp_dir().join("thimsy-driver");
+/// `ERROR_CANCELLED`: the user declined the UAC prompt.
+#[cfg_attr(not(windows), allow(dead_code))]
+const DECLINED: i32 = 1223;
+
+/// Installs WinUSB for each ID not covered yet: `run_ps(command)` runs one
+/// PowerShell command and returns its exit code; `installed(vid, pid)`
+/// looks in the driver store. Every ID must be covered afterwards.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn install_ids(
+    d: &Device,
+    tool: &Path,
+    dest: &Path,
+    rep: &Reporter,
+    installed: &dyn Fn(u16, u16) -> bool,
+    run_ps: &mut dyn FnMut(&str) -> Result<Option<i32>>,
+) -> Result<()> {
     for u in &d.identify.usb {
+        if installed(u.vid, u.pid) {
+            rep.info(format!("WinUSB is already installed for {}", u.label));
+            continue;
+        }
         rep.info(format!(
             "Installing WinUSB for {} ({:04x}:{:04x}); Windows asks for permission",
             u.label, u.vid, u.pid
         ));
         // Elevate through PowerShell so only this step needs admin rights.
-        if winusb_installed(u.vid, u.pid) {
-            rep.info(format!("WinUSB is already installed for {}", u.label));
-            continue;
-        }
-        let ps = ps_command(&tool, u.vid, u.pid, &u.label, &dest);
-        let mut cmd = Command::new("powershell");
-        cmd.args(["-NoProfile", "-NonInteractive", "-Command", &ps]);
-        crate::tools::hide_window(&mut cmd);
-        let st = cmd.status()?;
-        if !st.success() {
+        let code = run_ps(&ps_command(tool, u.vid, u.pid, &u.label, dest))?;
+        if code != Some(0) {
+            let why = match code {
+                Some(DECLINED) => "the Windows permission prompt was declined".to_string(),
+                Some(c) => format!("exit code {c}"),
+                None => "stopped".to_string(),
+            };
             return Err(EngineError::new(
                 Code::ToolFailed,
-                format!("driver install for {} failed ({st})", u.label),
+                format!("driver install for {} failed ({why})", u.label),
+            )
+            .hint("Accept the Windows permission prompt, or install WinUSB with Zadig.")
+            .into());
+        }
+        if !installed(u.vid, u.pid) {
+            return Err(EngineError::new(
+                Code::ToolFailed,
+                format!(
+                    "the driver installer finished, but Windows still has no WinUSB driver for {} ({:04x}:{:04x})",
+                    u.label, u.vid, u.pid
+                ),
             )
             .hint("Accept the Windows permission prompt, or install WinUSB with Zadig.")
             .into());
         }
     }
     Ok(())
+}
+
+#[cfg(windows)]
+pub fn install(d: &Device, rep: &Reporter) -> Result<()> {
+    use std::process::{Command, Stdio};
+    let tool = crate::tools::locate("wdi-simple")?;
+    let dest = std::env::temp_dir().join("thimsy-driver");
+    install_ids(d, &tool, &dest, rep, &winusb_installed, &mut |ps| {
+        let mut cmd = Command::new("powershell");
+        cmd.args(["-NoProfile", "-NonInteractive", "-Command", ps])
+            // Never holds the app's pipes open.
+            .stdin(Stdio::null())
+            .stdout(Stdio::null())
+            .stderr(Stdio::null());
+        crate::tools::hide_window(&mut cmd);
+        Ok(cmd.status()?.code())
+    })
 }
 
 #[cfg(not(windows))]
@@ -248,9 +290,9 @@ mod tests {
         assert_eq!(
             cmd,
             concat!(
-                r"$p = Start-Process -FilePath 'C:\Users\Ann O''Neil\Thimsy Installer\tools\wdi-simple.exe' ",
+                r"$ErrorActionPreference='Stop'; $p = Start-Process -FilePath 'C:\Users\Ann O''Neil\Thimsy Installer\tools\wdi-simple.exe' ",
                 r#"-ArgumentList @('--vid','0x1782','--pid','0x4d00','--type','0','--name','"Unisoc download mode"','--inf','thimsy_1782_4d00.inf','--dest','"C:\Users\Ann O''Neil\AppData\Local\Temp\thimsy-driver"') "#,
-                "-Verb RunAs -WindowStyle Hidden -Wait -PassThru; exit $p.ExitCode"
+                "-Verb RunAs -WindowStyle Hidden -Wait -PassThru; if (-not $p) { exit 1223 }; exit $p.ExitCode"
             )
         );
         // Windows command-line quoting: quotes escaped, trailing backslashes doubled.
@@ -258,5 +300,50 @@ mod tests {
         assert_eq!(win_arg(r"C:\dir with space\"), r#""C:\dir with space\\""#);
         assert_eq!(win_arg(""), r#""""#);
         assert_eq!(win_arg("plain"), "plain");
+    }
+
+    #[test]
+    fn declined_or_ineffective_driver_installs_fail_clearly() {
+        let cat = crate::catalog::Catalog::bundled().unwrap();
+        let d = cat.device("anbernic-rg-cube").unwrap();
+        let rep = Reporter::new(std::sync::Arc::new(crate::events::MemorySink::default()));
+        let tool = Path::new(r"C:\Thimsy\tools\wdi-simple.exe");
+        let dest = Path::new(r"C:\Temp\thimsy-driver");
+        let tool_failed = |e: &anyhow::Error| crate::error::code_of(e).0 == Code::ToolFailed;
+        // UAC declined.
+        let mut ran = Vec::new();
+        let err = install_ids(d, tool, dest, &rep, &|_, _| false, &mut |ps| {
+            ran.push(ps.to_string());
+            Ok(Some(DECLINED))
+        })
+        .unwrap_err();
+        assert!(
+            tool_failed(&err) && err.to_string().contains("declined"),
+            "{err}"
+        );
+        assert!(ran[0].starts_with("$ErrorActionPreference='Stop'; "));
+        // PowerShell stopped by an error (what declining does under Stop).
+        let err =
+            install_ids(d, tool, dest, &rep, &|_, _| false, &mut |_| Ok(Some(1))).unwrap_err();
+        assert!(err.to_string().contains("exit code 1"), "{err}");
+        // Reported success, but Windows still has no driver for the ID.
+        let err =
+            install_ids(d, tool, dest, &rep, &|_, _| false, &mut |_| Ok(Some(0))).unwrap_err();
+        assert!(
+            tool_failed(&err) && err.to_string().contains("still has no WinUSB driver"),
+            "{err}"
+        );
+        // Installed for real.
+        let done = std::cell::Cell::new(false);
+        install_ids(d, tool, dest, &rep, &|_, _| done.get(), &mut |_| {
+            done.set(true);
+            Ok(Some(0))
+        })
+        .unwrap();
+        // Already there: nothing runs.
+        install_ids(d, tool, dest, &rep, &|_, _| true, &mut |_| {
+            panic!("nothing to install")
+        })
+        .unwrap();
     }
 }

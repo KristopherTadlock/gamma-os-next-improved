@@ -155,6 +155,37 @@ fn pair_checks_order() {
     )
     .unwrap();
     assert!(pac::pair(&p, &bad).is_err());
+    // Counts that differ are an error, not a silently shorter list: a
+    // config that stops early (Super would get no partition)...
+    let short = Config::parse(
+        std::str::from_utf8(&config_xml(&[
+            ("FDL", "FDL", None, 0x5500, false),
+            ("EraseUBOOTLOG", "EraseFlash2", Some("uboot_log"), 0, false),
+            ("UBOOTLoader", "UBOOT_LOADER2", Some("uboot_a"), 0, false),
+        ]))
+        .unwrap(),
+    )
+    .unwrap();
+    let err = pac::pair(&p, &short).unwrap_err().to_string();
+    assert!(
+        err.contains("UBOOTLoader") && err.contains("no file"),
+        "{err}"
+    );
+    // ...or lists more files than the PAC has entries.
+    let mut files = vec![
+        ("FDL", "FDL", None, 0x5500, false),
+        ("EraseUBOOTLOG", "EraseFlash2", Some("uboot_log"), 0, false),
+        ("UBOOTLoader", "UBOOT_LOADER2", Some("uboot_a"), 0, false),
+        ("UBOOTLoader", "UBOOT_LOADER2", Some("uboot_b"), 0, false),
+        ("Super", "YAFFS_IMG2", Some("super"), 0, false),
+    ];
+    files.extend([
+        ("", "X", None, 0, false),
+        ("Extra", "CODE2", Some("x"), 0, false),
+    ]);
+    let long = Config::parse(std::str::from_utf8(&config_xml(&files)).unwrap()).unwrap();
+    let err = pac::pair(&p, &long).unwrap_err().to_string();
+    assert!(err.contains("7 files but the PAC has only 6"), "{err}");
     assert!(Config::parse("<not xml").is_err());
     assert!(Config::parse("<BMAConfig/>").is_err(), "no files");
 }

@@ -75,9 +75,13 @@ for i in range(count):
             b = f.read(min(size, 1 << 22)); d.update(b); size -= len(b)
         print(d.hexdigest()); break" "$JOB/job.json")
 grep -q "^sha256 super $want\$" "$FAKE_SPD_LOG" && pass "leftover same-size super.img replaced by this image's" || fail "stale super.img was flashed"
-[ "$(stat -c %s "$JOB/backup/prodnv.img")" = 67108864 ] && pass "prodnv backup is the whole 64 MiB partition" || fail "prodnv backup size"
-[ "$(stat -c %s "$JOB/backup/miscdata.img")" = 1048576 ] && pass "miscdata backup is the whole 1 MiB partition" || fail "miscdata backup size"
+RUN1=$(tail -1 "$WS/flash.jsonl" | python3 -I -c "import json, sys; print(json.load(sys.stdin)['backup'])")
+case "$RUN1" in "$JOB/backup/run-"*) pass "backups read into their own run folder";; *) fail "backup folder $RUN1";; esac
+[ "$(stat -c %s "$RUN1/prodnv.img")" = 67108864 ] && pass "prodnv backup is the whole 64 MiB partition" || fail "prodnv backup size"
+[ "$(stat -c %s "$RUN1/miscdata.img")" = 1048576 ] && pass "miscdata backup is the whole 1 MiB partition" || fail "miscdata backup size"
 [ ! -d "$JOB/flash" ] && pass "flash scratch cleaned up" || fail "scratch left behind"
+# Backup runs that read something (a run cut short before it reads stays empty).
+runs() { ls "$JOB"/backup/run-*/prodnv.img* 2>/dev/null | wc -l; }
 
 # 5. A device whose partition table differs (another model on the same USB
 # ID, or a stock layout): refused before the first write, nothing written.
@@ -96,26 +100,66 @@ grep -q '"code":"wrong_device"' "$WS/wrong.jsonl" && pass "different partition t
 grep -q 'super is 4096 MiB on the device' "$WS/wrong.jsonl" && pass "wrong_device names the difference" || fail "wrong_device message"
 grep -q '^read_part prodnv' "$FAKE_SPD_LOG" && ! grep -q '^write_part\|^erase_part' "$FAKE_SPD_LOG" \
   && pass "nothing written or erased on the wrong device" || fail "wrong device was written"
-[ "$(stat -c %s "$JOB/backup/prodnv.img")" = 67108864 ] && [ "$(ls "$JOB/backup" | grep -c '^prodnv-')" = 1 ] \
+[ "$(runs)" = 2 ] && [ "$(stat -c %s "$RUN1/prodnv.img")" = 67108864 ] \
+  && [ "$(stat -c %s "$(ls "$JOB"/backup/run-*/prodnv.img | grep -v "^$RUN1/")")" = 67108864 ] \
   && pass "its backup kept beside the first, not over it" || fail "backups after wrong device"
 
-# 6. The engine killed while spd_dump waits for the device (what the app's
-# Cancel does): spd_dump dies with it and nothing is written.
+# 5b. The device stops answering halfway through a partition: spd_dump logs
+# it and would carry on (exit 0); the flash stops there and fails.
 rm -f "$FAKE_SPD_LOG"
-FAKE_SPD_WAIT=60 THIMSY_TOOLS_DIR="$HERE/fake-tools" "$ENGINE" --json flash --job "$JOB" --mode full > "$WS/killed.jsonl" &
+FAKE_SPD_SHORT_WRITE=logo THIMSY_TOOLS_DIR="$HERE/fake-tools" "$ENGINE" --json flash --job "$JOB" --mode full > "$WS/short-write.jsonl" \
+  && fail "a partial write must fail the flash" || true
+grep -q '"code":"tool_failed"' "$WS/short-write.jsonl" && grep -q 'unexpected response' "$WS/short-write.jsonl" \
+  && pass "partial write: tool_failed" || fail "partial write code"
+grep -q '^write_part logo .* short$' "$FAKE_SPD_LOG" && [ "$(grep '^write_part' "$FAKE_SPD_LOG" | tail -1 | cut -d' ' -f2)" = logo ] \
+  && ! grep -q '^erase_part' "$FAKE_SPD_LOG" && pass "nothing written after the partial write" || fail "kept writing after a partial write"
+
+# 5c. An spd_dump that writes without asking (old or forked): stopped at its
+# first write, never treated as a checked flash.
+rm -f "$FAKE_SPD_LOG"
+FAKE_SPD_NO_PROMPT=1 THIMSY_TOOLS_DIR="$HERE/fake-tools" "$ENGINE" --json flash --job "$JOB" --mode full > "$WS/no-prompt.jsonl" \
+  && fail "a tool that never asks must fail" || true
+grep -q '"code":"tool_failed"' "$WS/no-prompt.jsonl" && grep -q 'without asking first' "$WS/no-prompt.jsonl" \
+  && pass "tool that never asks: tool_failed" || fail "no-prompt code"
+[ "$(grep -c '^write_part' "$FAKE_SPD_LOG")" -le 1 ] && ! grep -q '^erase_part' "$FAKE_SPD_LOG" \
+  && pass "tool that never asks stopped at its first write" || fail "no-prompt tool kept writing"
+
+# 5d. A backup read short: nothing is confirmed; the file is kept, marked
+# incomplete, and the earlier backups are untouched.
+rm -f "$FAKE_SPD_LOG"
+FAKE_SPD_SHORT_READ=prodnv THIMSY_TOOLS_DIR="$HERE/fake-tools" "$ENGINE" --json flash --job "$JOB" --mode full > "$WS/short-read.jsonl" \
+  && fail "an incomplete backup must stop the flash" || true
+grep -q 'backup of prodnv is incomplete' "$WS/short-read.jsonl" && pass "short backup refused" || fail "short backup message"
+! grep -q '^write_part\|^erase_part' "$FAKE_SPD_LOG" && pass "nothing written with an incomplete backup" || fail "written with an incomplete backup"
+[ "$(runs)" = 5 ] && [ "$(stat -c %s "$JOB"/backup/run-*/prodnv.img.incomplete)" = 33554432 ] \
+  && [ "$(stat -c %s "$RUN1/prodnv.img")" = 67108864 ] && pass "incomplete backup kept as .incomplete" || fail "incomplete backup files"
+
+# 6. The engine killed while spd_dump waits for the device (what the app's
+# Cancel does): spd_dump dies with it and nothing is written. The "device"
+# connects after 8 s: the log is read well after that, so a surviving
+# spd_dump would have had time to write.
+rm -f "$FAKE_SPD_LOG"
+FAKE_SPD_WAIT=8 THIMSY_TOOLS_DIR="$HERE/fake-tools" "$ENGINE" --json flash --job "$JOB" --mode full > "$WS/killed.jsonl" &
 engine=$!
 for _ in $(seq 1 600); do grep -q 'Waiting for connection' "$WS/killed.jsonl" 2>/dev/null && break; sleep 0.5; done
 pgrep -f "$HERE/fake-tools/spd_dump" > /dev/null && pass "spd_dump waiting for the device" || fail "spd_dump never started"
 kill -TERM "$engine"; wait "$engine" 2>/dev/null || true
 sleep 1
 pgrep -f "$HERE/fake-tools/spd_dump" > /dev/null && { pkill -f "$HERE/fake-tools/spd_dump"; fail "spd_dump outlived the engine"; } || pass "spd_dump died with the engine"
-! grep -q '^write_part\|^erase_part' "$FAKE_SPD_LOG" && pass "nothing written after the engine died" || fail "written after the engine died"
+sleep 12
+[ -f "$FAKE_SPD_LOG" ] && ! grep -q '^fdl\|^write_part\|^erase_part' "$FAKE_SPD_LOG" \
+  && pass "nothing written after the engine died (checked past the device's connect time)" || fail "written after the engine died"
 
 # 7. Host checks.
 "$ENGINE" --host android --json flash --job "$JOB" --mode full > "$WS/android.jsonl" 2>&1 && fail "android flash should fail" || true
 grep -q '"code":"unsupported_host"' "$WS/android.jsonl" && pass "android: unsupported_host" || fail "android host"
 "$ENGINE" --host macos --json resolve --device anbernic-rg557 --profile heavy | grep -q 'Windows PC' && pass "macOS: needs Windows message" || fail "needs windows"
 
-# 8. Clean (dry run lists items; image kept).
+# 8. Clean (dry run lists items; image kept). Scratch cleaning never touches
+# backups.
 "$ENGINE" --json clean --workspace "$WS" --dry-run | grep -q '"kind":"image"' && pass "clean lists the image" || fail "clean"
+"$ENGINE" --json clean --workspace "$WS" --scratch > "$WS/clean.jsonl"
+n=$(runs)
+[ ! -d "$JOB/flash" ] && [ "$n" = 5 ] && [ "$(stat -c %s "$RUN1/prodnv.img")" = 67108864 ] \
+  && pass "clean --scratch keeps every backup" || fail "clean --scratch and backups ($n runs)"
 echo "ALL PASS"

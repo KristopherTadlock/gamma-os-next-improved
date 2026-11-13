@@ -172,6 +172,21 @@ class _ProcessRun implements EngineRun {
   Process? _process;
   bool _cancelled = false;
 
+  /// Completed by [cancel].
+  final Completer<void> _cancelRequested = Completer<void>();
+
+  /// Completed when the run has ended and its events are closed.
+  final Completer<void> _ended = Completer<void>();
+
+  /// How long a cancelled run's output is still read after the engine has
+  /// exited (its last lines), before the stream is closed regardless: a
+  /// tool the engine started may still hold stdout open.
+  static const _drainAfterExit = Duration(milliseconds: 500);
+
+  /// How long [cancel] waits for the engine to exit before killing it
+  /// outright.
+  static const _exitWait = Duration(seconds: 5);
+
   _ProcessRun._();
 
   factory _ProcessRun.start(
@@ -191,32 +206,66 @@ class _ProcessRun implements EngineRun {
   ) async {
     var sawResult = false;
     ErrorEvent? lastError;
+    // Ends the run with an error and a failed result, unless it already
+    // has its result.
+    void fail(ErrorEvent e) {
+      if (sawResult || _out.isClosed) return;
+      _out.add(e);
+      _out.add(ResultEvent(false, {'type': 'result', 'ok': false}));
+      sawResult = true;
+    }
+
+    StreamSubscription<EngineEvent>? out;
+    StreamSubscription<String>? err;
     try {
       final proc = await Process.start(exe, args);
       _process = proc;
       // Cancelled while the process was starting: stop it now.
       if (_cancelled) proc.kill();
-      final err = proc.stderr
-          .transform(utf8.decoder)
+      // Malformed UTF-8 (a tool's raw bytes) becomes U+FFFD, never an
+      // error that would end the run without a result.
+      err = proc.stderr
+          .transform(const Utf8Decoder(allowMalformed: true))
           .transform(const LineSplitter())
-          .listen(onStderr);
-      await for (final e
-          in proc.stdout
-              .transform(utf8.decoder)
-              .transform(const JsonLinesDecoder())) {
-        if (e is ResultEvent) sawResult = true;
-        if (e is ErrorEvent) lastError = e;
-        _out.add(e);
+          .listen(onStderr, onError: (Object _) {});
+      final stdoutDone = Completer<void>();
+      out = proc.stdout
+          .transform(const Utf8Decoder(allowMalformed: true))
+          .transform(const JsonLinesDecoder())
+          .listen(
+            (e) {
+              if (e is ResultEvent) sawResult = true;
+              if (e is ErrorEvent) lastError = e;
+              _out.add(e);
+            },
+            onError: (Object e, StackTrace st) {
+              if (!stdoutDone.isCompleted) stdoutDone.completeError(e, st);
+            },
+            onDone: () {
+              if (!stdoutDone.isCompleted) stdoutDone.complete();
+            },
+            cancelOnError: true,
+          );
+      // Normally the run ends when the engine closes stdout. Once
+      // cancelled, it ends when the engine exits: a tool it started may
+      // keep stdout open long after.
+      final exitedAfterCancel = _cancelRequested.future.then(
+        (_) => proc.exitCode,
+      );
+      await Future.any([stdoutDone.future, exitedAfterCancel]);
+      if (!stdoutDone.isCompleted) {
+        await stdoutDone.future.timeout(_drainAfterExit, onTimeout: () {});
       }
+      await out.cancel();
+      out = null;
       final code = await proc.exitCode;
       await err.cancel();
+      err = null;
       if (!sawResult) {
         if (_cancelled) {
-          _out.add(
-            const ErrorEvent(code: 'cancelled', message: '', local: true),
-          );
+          fail(const ErrorEvent(code: 'cancelled', message: '', local: true));
         } else if (lastError == null) {
-          _out.add(
+          fail(
             ErrorEvent(
               code: 'engine_crashed',
               message: 'exit code $code',
@@ -224,11 +273,12 @@ class _ProcessRun implements EngineRun {
               args: {'exit': '$code'},
             ),
           );
+        } else {
+          _out.add(ResultEvent(false, {'type': 'result', 'ok': false}));
         }
-        _out.add(ResultEvent(false, {'type': 'result', 'ok': false}));
       }
     } on ProcessException catch (e) {
-      _out.add(
+      fail(
         ErrorEvent(
           code: 'engine_missing',
           message: e.message,
@@ -236,18 +286,39 @@ class _ProcessRun implements EngineRun {
           args: {'path': exe},
         ),
       );
-      _out.add(ResultEvent(false, {'type': 'result', 'ok': false}));
+    } catch (e) {
+      // Anything else unexpected (unreadable output, a parse failure):
+      // still an error and a failed result, never a silent end.
+      fail(
+        ErrorEvent(
+          code: 'engine_crashed',
+          message: '$e',
+          local: true,
+          args: {'exit': '?'},
+        ),
+      );
+      _process?.kill();
     } finally {
+      await out?.cancel();
+      await err?.cancel();
       await _out.close();
+      if (!_ended.isCompleted) _ended.complete();
     }
   }
 
   @override
   Stream<EngineEvent> get events => _out.stream;
 
+  /// Kills the engine and waits (a few seconds at most) for the run to end;
+  /// an engine that hasn't exited by then is killed outright.
   @override
   Future<void> cancel() async {
     _cancelled = true;
+    if (!_cancelRequested.isCompleted) _cancelRequested.complete();
     _process?.kill();
+    await _ended.future.timeout(
+      _exitWait,
+      onTimeout: () => _process?.kill(ProcessSignal.sigkill),
+    );
   }
 }

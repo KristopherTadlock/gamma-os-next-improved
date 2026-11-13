@@ -170,5 +170,6 @@
   "errEngineMissing": "Impossibile avviare il motore di installazione.",
   "errEngineMissingHint": "Reinstalla il programma di installazione Thimsy. Il motore era previsto in {path}.",
   "errNoAnswer": "Il motore di installazione non ha risposto.",
-  "errCancelled": "Annullato."
+  "errCancelled": "Annullato.",
+  "detectStopped": "La ricerca del dispositivo si è interrotta."
 }

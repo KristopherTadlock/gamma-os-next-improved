@@ -4,11 +4,13 @@
 import 'dart:async';
 import 'dart:ui' show AppExitResponse;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';
 import 'package:thimsy_installer/engine/engine.dart';
 import 'package:thimsy_installer/engine/fake_engine.dart';
 import 'package:thimsy_installer/main.dart';
+import 'package:thimsy_installer/screens/home_shell.dart';
 import 'package:thimsy_installer/state/app_state.dart';
 
 Finder key(String k) => find.byKey(ValueKey(k));
@@ -38,12 +40,22 @@ class HeldRun implements EngineRun {
 /// The fake engine, with builds, flashes, space checks and plan resolves the
 /// test can hold and release.
 class ControlledEngine extends FakeEngine {
-  ControlledEngine() : super(step: Duration.zero);
+  ControlledEngine({super.host}) : super(step: Duration.zero);
 
   bool holdBuild = false;
   bool holdFlash = false;
+  bool holdDetect = false;
+  bool holdUnlock = false;
   final List<HeldRun> builds = [];
   final List<HeldRun> flashes = [];
+  final List<HeldRun> detects = [];
+  final List<HeldRun> unlocks = [];
+
+  /// When set, `drivers` waits for it.
+  Completer<void>? driverGate;
+
+  /// The engine language each `resolve` was made in.
+  final List<String> resolveLanguages = [];
 
   /// When set, `space` waits for it.
   Completer<void>? spaceGate;
@@ -60,8 +72,36 @@ class ControlledEngine extends FakeEngine {
     required String profile,
     Map<String, String> overrides = const {},
   }) async {
+    resolveLanguages.add(language);
     await resolveGates[device]?.future;
     return super.resolve(device: device, profile: profile);
+  }
+
+  @override
+  EngineRun detect() {
+    if (!holdDetect) return super.detect();
+    calls.add('detect');
+    final run = HeldRun();
+    detects.add(run);
+    return run;
+  }
+
+  @override
+  EngineRun unlock({required String device}) {
+    if (!holdUnlock) return super.unlock(device: device);
+    calls.add('unlock $device');
+    final run = HeldRun();
+    unlocks.add(run);
+    return run;
+  }
+
+  @override
+  Future<ResultEvent> drivers({
+    required String device,
+    bool install = false,
+  }) async {
+    await driverGate?.future;
+    return super.drivers(device: device, install: install);
   }
 
   @override
@@ -137,6 +177,13 @@ ResultEvent buildOk(String device) => ResultEvent(true, {
 /// Lets the fake engine's zero-length timers and microtasks run.
 Future<void> settle() => Future<void>.delayed(const Duration(milliseconds: 20));
 
+/// Waits (up to 2 s) for [condition], for steps that take several turns.
+Future<void> until(bool Function() condition) async {
+  for (var i = 0; i < 400 && !condition(); i++) {
+    await Future<void>.delayed(const Duration(milliseconds: 5));
+  }
+}
+
 /// Device → Profile → Journey → Build, as state calls.
 Future<AppState> toBuild(
   ControlledEngine engine, {
@@ -155,14 +202,33 @@ Future<AppState> toBuild(
   return s;
 }
 
+/// Build (done) → Backup → Unlock → Connect → Review, as state calls.
+Future<void> toReviewState(AppState s) async {
+  expect(s.buildCurrent, isTrue);
+  s.next(); // backup
+  s.setBackedUp(true);
+  s.next(); // unlock
+  s.setUnlockConfirmed(true);
+  s.next(); // connect: the watch starts
+  await settle();
+  s.next(); // review
+  expect(s.step, WizardStep.review);
+}
+
 // ------------------------------------------------------------ widget helpers
 
-Future<AppState> startApp(WidgetTester tester, FakeEngine engine) async {
+Future<AppState> startApp(
+  WidgetTester tester,
+  FakeEngine engine, {
+  bool? guardWindowClose,
+}) async {
   tester.view.physicalSize = const Size(1600, 1400);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final state = AppState(engine, onAndroid: false);
-  await tester.pumpWidget(ThimsyInstallerApp(state: state));
+  await tester.pumpWidget(
+    ThimsyInstallerApp(state: state, guardWindowClose: guardWindowClose),
+  );
   await tester.pumpAndSettle();
   return state;
 }
@@ -374,7 +440,8 @@ void main() {
       ]);
     });
 
-    test('Check again after a flash space error keeps the dry run', () async {
+    /// A dry run that stopped on not enough space (the dialog is up).
+    Future<(FakeEngine, AppState)> drySpaceFailure() async {
       final engine = FakeEngine(step: Duration.zero, flashSpaceFailures: 1);
       final s = AppState(engine, onAndroid: false, workspace: '/ws');
       await s.loadCatalog();
@@ -391,8 +458,11 @@ void main() {
       s.install();
       await settle();
       expect(s.spaceProblem?.kind, SpaceProblemKind.flash);
-      // Dry run switched off afterwards: the retry is still the dry run.
-      s.setDryRun(false);
+      return (engine, s);
+    }
+
+    test('Check again after a flash space error repeats the dry run', () async {
+      final (engine, s) = await drySpaceFailure();
       await s.recheckSpace();
       await settle();
       expect(engine.calls.where((c) => c.startsWith('flash')), [
@@ -402,6 +472,49 @@ void main() {
       expect(s.flashRun.ok, isTrue);
       expect(s.flashRunDry, isTrue);
     });
+
+    test(
+      'Check again after dry run was switched off goes back to Review',
+      () async {
+        final (engine, s) = await drySpaceFailure();
+        // Switched off afterwards: neither the dry run nor a real install
+        // (never confirmed) is started; Review asks again.
+        s.setDryRun(false);
+        expect(s.canRunAgain, isFalse);
+        await s.recheckSpace();
+        await settle();
+        expect(engine.calls.where((c) => c.startsWith('flash')), [
+          'flash full dry',
+        ]);
+        expect(s.step, WizardStep.review);
+        expect(s.flashRun.result, isNull);
+      },
+    );
+
+    test('turning Dry run on clears a confirmed real install', () async {
+      final engine = ControlledEngine();
+      final s = await toBuild(engine);
+      await s.startBuild();
+      await settle();
+      await toReviewState(s);
+      s.install();
+      await settle();
+      expect(engine.calls, contains('flash full'));
+      expect(s.flashRun.ok, isTrue);
+      expect(s.canProceed(WizardStep.install), isTrue);
+      expect(s.canRunAgain, isTrue);
+
+      s.goTo(WizardStep.review);
+      s.setDryRun(true);
+      expect(s.flashRun.result, isNull);
+      expect(s.canRunAgain, isFalse);
+      expect(s.canProceed(WizardStep.install), isFalse);
+      expect(s.furthest, WizardStep.review);
+      // Setting it to the confirmed value again doesn't bring it back.
+      s.setDryRun(false);
+      expect(s.canRunAgain, isFalse);
+      expect(s.flashRun.result, isNull);
+    });
   });
 
   group('Stop during a real install', () {
@@ -409,8 +522,9 @@ void main() {
       WidgetTester tester,
       ControlledEngine engine, {
       bool dry = false,
+      bool? guardWindowClose,
     }) async {
-      await startApp(tester, engine);
+      await startApp(tester, engine, guardWindowClose: guardWindowClose);
       await toReview(tester);
       if (dry) {
         await tap(tester, find.text('Advanced'));
@@ -473,7 +587,9 @@ void main() {
       tester,
     ) async {
       final engine = ControlledEngine()..holdFlash = true;
-      final run = await startInstall(tester, engine);
+      // Guarded explicitly: the default depends on the platform (none on
+      // macOS, where CI also runs this).
+      final run = await startInstall(tester, engine, guardWindowClose: true);
       run.add(const StageEvent('check', 'Checking the image'));
       run.add(const StageEvent('flash', 'Writing Thimsy'));
       await pumpFor(tester);
@@ -493,6 +609,303 @@ void main() {
       await run.finish(ResultEvent(false, {'type': 'result', 'ok': false}));
       await tester.pumpAndSettle();
     });
+
+    testWidgets('closing the window during the checks stops the install', (
+      tester,
+    ) async {
+      final engine = ControlledEngine()..holdFlash = true;
+      final s = await startApp(tester, engine, guardWindowClose: true);
+      await toReview(tester);
+      await tap(tester, key('install-button'));
+      await tester.tap(key('confirm-install-yes'));
+      await pumpFor(tester);
+      final run = engine.flashes.single;
+      run.add(const StageEvent('check', 'Checking the image'));
+      await pumpFor(tester);
+      expect(s.stopNeedsConfirmation, isFalse);
+
+      final exit = tester.binding.handleRequestAppExit();
+      await pumpFor(tester);
+      expect(key('confirm-stop'), findsNothing);
+      expect(await exit, AppExitResponse.exit);
+      // Not left running behind the closed window, able to start writing.
+      expect(run.cancelled, isTrue);
+      await run.finish(ResultEvent(false, {'type': 'result', 'ok': false}));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('closing the window stops a running build', (tester) async {
+      final engine = ControlledEngine()..holdBuild = true;
+      await startApp(tester, engine, guardWindowClose: true);
+      await tap(tester, key('device-$cube'));
+      await next(tester);
+      await next(tester);
+      await tap(tester, key('journey-first_time'));
+      await next(tester);
+      await tester.enterText(key('workspace-field'), '/tmp/thimsy-ws');
+      await tester.pumpAndSettle();
+      await tapRunning(tester, key('start-build'));
+      final run = engine.builds.single;
+
+      expect(await tester.binding.handleRequestAppExit(), AppExitResponse.exit);
+      expect(run.cancelled, isTrue);
+      await run.finish(ResultEvent(false, {'type': 'result', 'ok': false}));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets(
+      'macOS default: closing doesn\'t ask, but still stops the install',
+      (tester) async {
+        expect(HomeShell.defaultGuardWindowClose, isFalse);
+        final engine = ControlledEngine()..holdFlash = true;
+        // No guardWindowClose: the platform default.
+        final run = await startInstall(tester, engine);
+        run.add(const StageEvent('check', 'Checking the image'));
+        run.add(const StageEvent('flash', 'Writing Thimsy'));
+        await pumpFor(tester);
+
+        final exit = tester.binding.handleRequestAppExit();
+        await pumpFor(tester);
+        expect(key('confirm-stop'), findsNothing);
+        expect(await exit, AppExitResponse.exit);
+        expect(run.cancelled, isTrue);
+        await run.finish(ResultEvent(false, {'type': 'result', 'ok': false}));
+        await tester.pumpAndSettle();
+      },
+      variant: TargetPlatformVariant.only(TargetPlatform.macOS),
+    );
+
+    test('the window close is guarded by default on Windows and Linux', () {
+      try {
+        for (final (platform, guarded) in [
+          (TargetPlatform.windows, true),
+          (TargetPlatform.linux, true),
+          (TargetPlatform.macOS, false),
+        ]) {
+          debugDefaultTargetPlatformOverride = platform;
+          expect(
+            HomeShell.defaultGuardWindowClose,
+            guarded,
+            reason: '$platform',
+          );
+        }
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+
+    testWidgets('the engines are stopped when the window goes away', (
+      tester,
+    ) async {
+      // macOS may quit without asking: the shell's dispose still stops them.
+      final engine = ControlledEngine()..holdFlash = true;
+      final run = await startInstall(tester, engine);
+      run.add(const StageEvent('check', 'Checking the image'));
+      run.add(const StageEvent('flash', 'Writing Thimsy'));
+      await pumpFor(tester);
+      await tester.pumpWidget(const SizedBox());
+      expect(run.cancelled, isTrue);
+      await run.finish(ResultEvent(false, {'type': 'result', 'ok': false}));
+    });
+  });
+
+  group('a dry run is never reported as installed', () {
+    testWidgets('after a dry run, Next stays off on Install', (tester) async {
+      final engine = ControlledEngine();
+      final s = await startApp(tester, engine);
+      await toReview(tester);
+      await tap(tester, find.text('Advanced'));
+      await tap(tester, key('dry-run'));
+      await tap(tester, key('install-button'));
+      await tap(tester, key('confirm-install-yes'));
+      expect(engine.calls, contains('flash update dry'));
+      expect(s.flashRun.ok, isTrue);
+      expect(s.canProceed(WizardStep.install), isFalse);
+      expect(tester.widget<FilledButton>(key('next')).onPressed, isNull);
+      s.next();
+      expect(s.step, WizardStep.install);
+      expect(find.text('Thimsy is installed'), findsNothing);
+    });
+  });
+
+  group('the device watch', () {
+    Future<(ControlledEngine, AppState)> watching() async {
+      final engine = ControlledEngine()..holdDetect = true;
+      final s = await toBuild(engine);
+      await s.startBuild();
+      await settle();
+      s.next(); // backup
+      s.setBackedUp(true);
+      s.next(); // unlock
+      s.setUnlockConfirmed(true);
+      s.next(); // connect: the watch starts
+      expect(s.step, WizardStep.connect);
+      engine.detects.single.add(
+        const DevicesEvent([
+          DetectedDevice(
+            vidpid: '1782:4d00',
+            mode: 'download',
+            device: cube,
+            label: 'Unisoc download mode',
+          ),
+        ]),
+      );
+      await settle();
+      expect(s.matchedDevice, isNotNull);
+      return (engine, s);
+    }
+
+    test(
+      'a watch that ends forgets its devices and can be restarted',
+      () async {
+        final (engine, s) = await watching();
+        await engine.detects.single.finish();
+        await settle();
+        expect(s.detected, isEmpty);
+        expect(s.matchedDevice, isNull);
+        expect(s.detectError?.code, 'detect_stopped');
+        expect(s.canProceed(WizardStep.connect), isFalse);
+
+        s.restartDetect();
+        expect(engine.detects, hasLength(2));
+        expect(s.detectError, isNull);
+        engine.detects.last.add(const DevicesEvent([]));
+        await settle();
+        expect(s.matchedDevice, isNull);
+      },
+    );
+
+    test('a watch that reports an error is stopped and shows it', () async {
+      final (engine, s) = await watching();
+      final first = engine.detects.single;
+      first.add(
+        const ErrorEvent(code: 'usb_error', message: 'USB access denied'),
+      );
+      await settle();
+      expect(first.cancelled, isTrue);
+      expect(s.detected, isEmpty);
+      expect(s.detectError?.message, 'USB access denied');
+      // Its late lines change nothing.
+      first.add(
+        const DevicesEvent([
+          DetectedDevice(
+            vidpid: '1782:4d00',
+            mode: 'download',
+            device: cube,
+            label: 'late',
+          ),
+        ]),
+      );
+      await first.finish();
+      await settle();
+      expect(s.detected, isEmpty);
+      expect(s.detectError?.message, 'USB access denied');
+      // Try again starts a new watch.
+      s.restartDetect();
+      expect(engine.detects, hasLength(2));
+    });
+
+    testWidgets('Connect shows the stopped watch with Try again', (
+      tester,
+    ) async {
+      final engine = ControlledEngine()..holdDetect = true;
+      await startApp(tester, engine);
+      await tap(tester, key('device-$cube'));
+      await next(tester);
+      await next(tester);
+      await tap(tester, key('journey-returning'));
+      await next(tester);
+      await tester.enterText(key('workspace-field'), '/tmp/thimsy-ws');
+      await tester.pumpAndSettle();
+      await tap(tester, key('start-build'));
+      await next(tester);
+      await tap(tester, key('backed-up'));
+      await next(tester);
+      expect(engine.detects, hasLength(1));
+      await engine.detects.single.finish();
+      await tester.pumpAndSettle();
+      expect(key('detect-error'), findsOneWidget);
+      expect(find.text('Stopped looking for the device.'), findsOneWidget);
+      await tap(tester, key('detect-retry'));
+      expect(engine.detects, hasLength(2));
+      expect(key('detect-error'), findsNothing);
+    });
+  });
+
+  group('an unlock run locks the wizard', () {
+    test('no selection or step change while unlocking', () async {
+      final engine = ControlledEngine()..holdUnlock = true;
+      final s = await toBuild(engine, device: rp4);
+      expect(s.unlockRoute, 'automated');
+      s.startUnlock();
+      expect(s.busy, isTrue);
+      await s.selectDevice(cube);
+      expect(s.deviceId, rp4);
+      s.goTo(WizardStep.device);
+      expect(s.step, WizardStep.build);
+      expect(s.canGoTo(WizardStep.profile), isFalse);
+
+      final run = engine.unlocks.single;
+      s.cancelUnlock();
+      expect(run.cancelled, isTrue);
+      await run.finish(ResultEvent(false, {'type': 'result', 'ok': false}));
+      await settle();
+      expect(s.busy, isFalse);
+      expect(s.canGoTo(WizardStep.profile), isTrue);
+    });
+  });
+
+  test('a language change keeps the plans until the new ones are in', () async {
+    final engine = ControlledEngine();
+    final s = AppState(engine, onAndroid: false, workspace: '/ws');
+    await s.loadCatalog();
+    await s.selectDevice(cube);
+    s.deviceNext();
+    await settle();
+    expect(s.plans, hasLength(3));
+    expect(s.profileId, 'medium');
+
+    final gate = engine.resolveGates[cube] = Completer<void>();
+    engine.resolveLanguages.clear();
+    s.useEffectiveLocale(const Locale('de'));
+    await until(() => s.plansLoading);
+    expect(s.plansLoading, isTrue);
+    // Still all there while the German ones load.
+    expect(s.plans, hasLength(3));
+    expect(s.plan, isNotNull);
+    // Another change meanwhile: queued, not mixed in.
+    s.useEffectiveLocale(const Locale('fr'));
+    await settle();
+    expect(s.plans, hasLength(3));
+    gate.complete();
+    await until(() => engine.resolveLanguages.length == 6 && !s.plansLoading);
+    expect(s.plansLoading, isFalse);
+    expect(s.plans, hasLength(3));
+    expect(s.plan, isNotNull);
+    // The last pass was made in the last language.
+    expect(engine.resolveLanguages, hasLength(6));
+    expect(engine.resolveLanguages.last, 'fr');
+    expect(engine.calls.where((c) => c == 'catalog'), hasLength(3));
+  });
+
+  test('a driver check answer for another device is dropped', () async {
+    final engine = ControlledEngine(host: 'windows');
+    final s = AppState(engine, onAndroid: false, workspace: '/ws');
+    await s.loadCatalog();
+    await s.selectDevice(cube);
+    engine.driverGate = Completer<void>();
+    final checking = s.checkDriver();
+    expect(s.driverBusy, isTrue);
+    await s.selectDevice(rp4);
+    expect(s.driverBusy, isFalse);
+    engine.driverGate!.complete();
+    await checking;
+    expect(s.driverStatus, isNull);
+    expect(s.driverDetail, isNull);
+    expect(s.driverBusy, isFalse);
+    // A check for the device chosen now still lands.
+    await s.checkDriver();
+    expect(s.driverStatus, 'missing');
   });
 
   test('plans resolved for an earlier device are dropped', () async {

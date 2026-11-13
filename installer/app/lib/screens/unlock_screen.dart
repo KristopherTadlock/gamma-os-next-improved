@@ -37,6 +37,15 @@ class UnlockScreen extends StatelessWidget {
           ),
           const SizedBox(height: 12),
           RunView(s.unlockRun),
+          if (s.unlockRun.running)
+            Align(
+              alignment: AlignmentDirectional.centerStart,
+              child: OutlinedButton(
+                key: const ValueKey('stop-unlock'),
+                onPressed: s.cancelUnlock,
+                child: Text(l.stop),
+              ),
+            ),
           if (s.unlockRun.ok)
             Notice(
               icon: Icons.check_circle,

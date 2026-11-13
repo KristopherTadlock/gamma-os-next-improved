@@ -170,5 +170,6 @@
   "errEngineMissing": "Não foi possível iniciar o motor do instalador.",
   "errEngineMissingHint": "Reinstale o Instalador do Thimsy. O motor era esperado em {path}.",
   "errNoAnswer": "O motor do instalador não respondeu.",
-  "errCancelled": "Cancelado."
+  "errCancelled": "Cancelado.",
+  "detectStopped": "A procura do dispositivo parou."
 }

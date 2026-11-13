@@ -311,8 +311,11 @@ impl Config {
         self.files.iter().find(|f| f.id == id)
     }
 
+    /// The table's partition called `name`, whatever the case.
     pub fn partition(&self, name: &str) -> Option<&Partition> {
-        self.partitions.iter().find(|p| p.name == name)
+        self.partitions
+            .iter()
+            .find(|p| p.name.eq_ignore_ascii_case(name))
     }
 }
 
@@ -363,8 +366,28 @@ pub fn parse_num(s: &str) -> Option<u64> {
 
 /// Pairs PAC entries with their config files. Entries and `<File>`s appear in
 /// the same order (IDs can repeat, e.g. two `UBOOTLoader`s), so pair by
-/// position and check the IDs agree.
+/// position and check the IDs agree. The only entries without a `<File>` are
+/// the ones with no ID after the last (the XML config itself).
 pub fn pair<'a>(pac: &'a Pac, cfg: &'a Config) -> Result<Vec<(&'a Entry, &'a CfgFile)>> {
+    if cfg.files.len() > pac.entries.len() {
+        bail!(
+            "the PAC config lists {} files but the PAC has only {} entries",
+            cfg.files.len(),
+            pac.entries.len()
+        );
+    }
+    if let Some(e) = pac.entries[cfg.files.len()..]
+        .iter()
+        .find(|e| !e.id.is_empty())
+    {
+        bail!(
+            "PAC entry {} ({}) has no file in the PAC config ({} entries, {} files)",
+            e.index,
+            e.id,
+            pac.entries.len(),
+            cfg.files.len()
+        );
+    }
     let mut out = Vec::new();
     for (e, f) in pac.entries.iter().zip(cfg.files.iter()) {
         if e.id != f.id {

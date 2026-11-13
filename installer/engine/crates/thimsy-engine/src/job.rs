@@ -391,8 +391,9 @@ pub fn build(cat: &Catalog, opts: &BuildOptions, rep: &Reporter) -> Result<JobRe
     if state.assembling || !working.exists() {
         state.extracted = false;
     }
+    // The official firmware's download parts, only when they'll be unpacked.
     let mut parts = Vec::new();
-    if state.extracted || unpacked.is_none() {
+    if !state.extracted && unpacked.is_none() {
         for p in &src.parts {
             parts.push(cache.get(p, rep)?);
         }
@@ -560,6 +561,7 @@ pub fn build(cat: &Catalog, opts: &BuildOptions, rep: &Reporter) -> Result<JobRe
     // Partitions unpacked from an earlier image must never be flashed with
     // this one.
     let flash_dir = dir.join("flash");
+    crate::flash::rescue_old_backups(&dir)?;
     if flash_dir.exists() {
         fs::remove_dir_all(&flash_dir)
             .with_context(|| format!("removing {}", flash_dir.display()))?;
@@ -645,10 +647,16 @@ pub fn cleanable(workspace: &Path) -> Vec<CleanItem> {
                 ("flash", "scratch"),
                 ("out", "image"),
                 ("backup", "backup"),
+                // Backups an earlier engine version left in the scratch
+                // folder: never scratch (`clean` moves them to backup/).
+                ("flash/backup", "backup"),
             ] {
                 let p = j.join(sub);
                 if p.exists() {
-                    let bytes = dir_size(&p);
+                    let mut bytes = dir_size(&p);
+                    if sub == "flash" {
+                        bytes -= dir_size(&p.join("backup")).min(bytes);
+                    }
                     if bytes > 0 {
                         items.push(CleanItem {
                             kind,
@@ -663,12 +671,19 @@ pub fn cleanable(workspace: &Path) -> Vec<CleanItem> {
     items
 }
 
-/// Removes the chosen kinds; returns bytes freed.
+/// Removes the chosen kinds; returns bytes freed. Backups are removed only
+/// when `backup` is asked for: removing a job's scratch folder first moves
+/// any backup left in it to the job's backup folder.
 pub fn clean(workspace: &Path, kinds: &[&str]) -> Result<u64> {
     let mut freed = 0;
     for it in cleanable(workspace) {
-        if !kinds.contains(&it.kind) {
+        if !kinds.contains(&it.kind) || !it.path.exists() {
             continue;
+        }
+        if it.kind == "scratch" && it.path.file_name().is_some_and(|n| n == "flash") {
+            if let Some(job) = it.path.parent() {
+                crate::flash::rescue_old_backups(job)?;
+            }
         }
         if it.path.is_dir() {
             fs::remove_dir_all(&it.path)?

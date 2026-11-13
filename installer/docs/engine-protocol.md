@@ -96,7 +96,10 @@ unless `--delete-downloads`).
 ```json
 {"type":"result","ok":true,"items":[{"kind":"downloads","path":"…","bytes":524288000}],"freed":0}
 ```
-`backup` holds the device's NV/calibration backup; keep it unless the user insists.
+`backup` holds the device's NV/calibration backups (`DIR/jobs/<job>/backup`);
+keep it unless the user insists. Only `--backup` removes backups: `--scratch`
+first moves any backup an earlier engine version left in a job's `flash`
+folder into its `backup` folder (listed as a `backup` item until then).
 
 ### `build --device ID --profile P --workspace DIR [--import DIR] [--set K=V]... [--delete-downloads] --json`
 Streams stages `plan`, `fetch`, `extract`, `assemble`, `validate`, `publish`.
@@ -131,22 +134,48 @@ as `log` events and touches no device. Final:
 {"type":"result","ok":true,"backup":"DIR/…/backup"}
 ```
 Before anything is written:
-- The image is checked against the size and sha256 recorded by `build`
-  (progress label `Checking the image`); a changed image fails with
-  `hash_mismatch`. Partitions unpacked earlier into `DIR/flash` are reused
-  only if they came from this exact image.
+- The image must be the one the current catalog expects for the profile
+  (`expect`) and the one `build` recorded (size and sha256, progress label
+  `Checking the image`); otherwise the command fails with `hash_mismatch`
+  (after an installer update: build again). Partitions unpacked earlier into
+  `DIR/flash` are reused only if they came from this exact image.
 - `spd_dump` reads the device's partition table first. Every partition to be
-  backed up, written or erased must exist with the size the firmware's
-  partition table gives; otherwise nothing is confirmed, nothing is written,
-  and the command fails with `wrong_device` (another model on the same USB ID,
-  or a stock layout that needs repartitioning, which this version doesn't do).
+  backed up, written or erased must be in the firmware's partition table and
+  exist on the device with that size (names compared ignoring case);
+  otherwise nothing is confirmed, nothing is written, and the command fails
+  with `wrong_device` (another model on the same USB ID, or a stock layout
+  that needs repartitioning, which this version doesn't do). The only
+  partitions written without this check are the ones the device's flash
+  recipe lists in `unchecked_partitions` (boot-area loaders such as
+  `splloader`, which the table doesn't contain); a recipe that writes or
+  erases anything else outside the table, or leaves nothing to check, is
+  refused.
+- Every backup must have been read at the partition's full size; otherwise
+  nothing is confirmed and the command fails with `tool_failed`.
 - `spd_dump` gets each "yes" only when it asks, so if the engine is stopped
-  (the app's Cancel kills it) no further write can be confirmed. On Linux and
-  Windows `spd_dump` is also killed with the engine.
+  (the app's Cancel kills it) no further write can be confirmed. Only the
+  bundled `spd_dump` is used (the tools folder or `THIMSY_TOOLS_DIR`, never
+  PATH). On Linux and Windows `spd_dump` is also killed with the engine
+  (Windows: it joins a kill-on-close job before it starts); on Linux and
+  macOS SIGTERM, SIGINT and SIGHUP kill it before the engine exits.
+- If the app goes away (writing an event to it fails, or on Linux and macOS
+  the engine gets a new parent process) before the first "yes", `spd_dump`
+  is killed and the engine stops (`cancelled`). After that the flash runs to
+  its end: stopping in the middle of a partition is worse, and every further
+  write still needs its own confirmation from the checked plan.
 
-Backups (`DIR/backup/<partition>.img`) are whole partitions and are kept
-even when flashing fails. An existing backup is never replaced: a later one
-is saved as `<partition>-<time>-<n>.img`, and one of the wrong size gets
+While writing, the command fails with `tool_failed` (and the tool is killed
+at once) when `spd_dump` reports a partial write (`load_partition: …,
+target: T, written: W` with W ≠ T), logs `unexpected response`, or writes
+anything before the device's table was checked. At the end it fails unless
+every planned partition was reported written in full, and unless `spd_dump`
+asked to confirm every write and erase (an `spd_dump` that doesn't ask isn't
+the version the engine expects).
+
+Backups go straight to a new folder per run, `DIR/backup/run-<UTC
+time>/<partition>.img` (the final `backup` field), outside the scratch
+folder, so nothing moves, replaces or deletes them. They are whole
+partitions and are kept even when flashing fails; one of the wrong size gets
 `.incomplete` added (and the command fails).
 
 ### `unlock --device ID --json`

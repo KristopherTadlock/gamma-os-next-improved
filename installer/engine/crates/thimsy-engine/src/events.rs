@@ -3,8 +3,23 @@
 
 use serde::Serialize;
 use std::io::Write;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
+
+/// Set once the app that runs the engine is gone: writing an event to it
+/// failed, or (Unix) the engine was handed to another parent.
+static PARENT_GONE: AtomicBool = AtomicBool::new(false);
+
+/// Whether the app that started the engine has gone away.
+pub fn parent_gone() -> bool {
+    PARENT_GONE.load(Ordering::SeqCst)
+}
+
+/// Records that the app is gone (see [`parent_gone`]).
+pub fn set_parent_gone() {
+    PARENT_GONE.store(true, Ordering::SeqCst);
+}
 
 #[derive(Debug, Clone, Serialize, PartialEq)]
 #[serde(tag = "type", rename_all = "snake_case")]
@@ -46,8 +61,9 @@ impl Sink for JsonSink {
     fn emit(&self, event: &Event) {
         let line = serde_json::to_string(event).expect("event serializes");
         let mut out = std::io::stdout().lock();
-        let _ = writeln!(out, "{line}");
-        let _ = out.flush();
+        if writeln!(out, "{line}").and_then(|_| out.flush()).is_err() {
+            set_parent_gone();
+        }
     }
 }
 
@@ -56,7 +72,7 @@ pub struct TextSink;
 impl Sink for TextSink {
     fn emit(&self, event: &Event) {
         let mut err = std::io::stderr().lock();
-        let _ = match event {
+        let written = match event {
             Event::Stage { title, .. } => writeln!(err, "== {title}"),
             Event::Progress {
                 label, done, total, ..
@@ -82,6 +98,9 @@ impl Sink for TextSink {
                 None => writeln!(err, "error ({code}): {message}"),
             },
         };
+        if written.is_err() {
+            set_parent_gone();
+        }
     }
 }
 

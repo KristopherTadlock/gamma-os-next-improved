@@ -217,6 +217,13 @@ pub struct Flash {
     /// Extra entries never written, on top of `backup="1"` ones.
     #[serde(default)]
     pub never_write: Vec<String>,
+    /// Device partitions that are written although they aren't in the PAC's
+    /// `<Partitions>` table, so they can't be checked against the device's
+    /// table before the first write: the boot-area loaders (`splloader`).
+    /// Writing or erasing any other partition missing from the table is
+    /// refused. Each name must be a PAC entry's partition outside the table.
+    #[serde(default)]
+    pub unchecked_partitions: Vec<String>,
     /// Seconds the tool waits for the device.
     #[serde(default = "default_wait")]
     pub wait_seconds: u32,

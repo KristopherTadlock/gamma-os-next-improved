@@ -170,5 +170,6 @@
   "errEngineMissing": "Impossible de démarrer le moteur d'installation.",
   "errEngineMissingHint": "Réinstallez le programme d'installation Thimsy. Le moteur était attendu dans {path}.",
   "errNoAnswer": "Le moteur d'installation n'a pas répondu.",
-  "errCancelled": "Annulé."
+  "errCancelled": "Annulé.",
+  "detectStopped": "La recherche de l'appareil s'est arrêtée."
 }

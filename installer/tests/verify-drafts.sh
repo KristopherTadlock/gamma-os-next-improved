@@ -6,6 +6,8 @@
 #
 #   verify-drafts.sh WORKDIR SOURCE_PAC TAG...
 # WORKDIR/ws/cache may already hold the GammaOS download (reused).
+# WORKDIR/results.tsv gets one line per release (rewritten each run); exits
+# non-zero when any release FAILs.
 set -uo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 ENGINE="${ENGINE:-$HERE/../engine/target/release/thimsy-installer}"
@@ -13,6 +15,7 @@ SEVENZ="${SEVENZ:-7zz}"
 REPO="${REPO:-KristopherTadlock/thimsy-os}"
 WORK="$1"; SRC="$2"; shift 2
 mkdir -p "$WORK"; RESULTS="$WORK/results.tsv"
+: > "$RESULTS"   # this run's results only
 for TAG in "$@"; do
   D="$WORK/$TAG"; rm -rf "$D"; mkdir -p "$D/dl" "$D/pac"
   echo "== $TAG $(date +%T)"
@@ -31,7 +34,8 @@ for TAG in "$@"; do
   rm -rf "$D/dl"
   REF=$(ls "$D/pac"/*.pac | head -1)
   REF_SHA=$(sha256sum "$REF" | cut -d' ' -f1)
-  LISTED=$(awk -v f="$(basename "$REF")" '$2==f {print $1}' "$D/SHA256SUMS" 2>/dev/null)
+  # Names may carry sha256sum's binary-mode marker: "HASH *file".
+  LISTED=$(awk -v f="$(basename "$REF")" '{n=$2; sub(/^\*/, "", n)} n==f {print $1}' "$D/SHA256SUMS" 2>/dev/null)
   if [ -n "$LISTED" ] && [ "$LISTED" != "$REF_SHA" ]; then
     echo -e "$TAG\tFAIL\textracted PAC doesn't match SHA256SUMS" | tee -a "$RESULTS"; rm -rf "$D"; continue
   fi
@@ -41,7 +45,8 @@ for TAG in "$@"; do
   rm -f "$REF"
   cp -r "$HERE/../catalog" "$D/catalog"
   # Build from this release's loose pack files: drop the device's published
-  # bundles, or the engine would want (and download) the 1.0a archive.
+  # bundles, or the engine would want (and download) the 1.0a archive. This
+  # copy only builds heavy: other profiles' entries may go (--replace-others).
   python3 -I - "$D/catalog/devices/anbernic-rg-cube.yaml" <<'PY'
 import re, sys
 p = sys.argv[1]
@@ -50,10 +55,14 @@ s = re.sub(r"^bundles:[ \t]*\n(?:[ \t]+\S.*\n|[ \t]*\n(?=[ \t]+\S))*\n?", "", s,
 open(p, "w", encoding="utf-8").write(s)
 PY
   if grep -q '^bundles:' "$D/catalog/devices/anbernic-rg-cube.yaml" ||
-     ! python3 -I "$HERE/../tools/apply_pack.py" "$D/pack/pack.json" "$D/catalog/devices/anbernic-rg-cube.yaml" "$D/catalog/catalog.yaml" heavy "$TAG" > "$D/apply.log" 2>&1; then
+     ! python3 -I "$HERE/../tools/apply_pack.py" --replace-others "$D/pack/pack.json" "$D/catalog/devices/anbernic-rg-cube.yaml" "$D/catalog/catalog.yaml" heavy "$TAG" > "$D/apply.log" 2>&1; then
     echo -e "$TAG\tFAIL\tapply_pack: $(tail -1 "$D/apply.log" 2>/dev/null)" | tee -a "$RESULTS"; rm -rf "$D"; continue
   fi
-  rm -f "$D/pack"/thimsy-system-*.img.zst   # keep only the published-size parts
+  # Keep only the published-size parts, when apply_pack split the image
+  # into parts (it doesn't for a small one: then the image is what's used).
+  for img in "$D/pack"/thimsy-system-*.img.zst; do
+    [ -f "$img" ] && [ -f "$img.001" ] && rm -f "$img"
+  done
   WS="$WORK/ws"; rm -rf "$WS/jobs"
   if ! "$ENGINE" --catalog "$D/catalog" --json build --device anbernic-rg-cube --profile heavy --workspace "$WS" --import "$D/pack" > "$D/build.jsonl" 2>"$D/build.err"; then
     echo -e "$TAG\tFAIL\tbuild: $(grep '"type":"error"' "$D/build.jsonl" | tail -1)" | tee -a "$RESULTS"; rm -rf "$D"; continue
@@ -72,3 +81,7 @@ PY
   find "$WS/cache" -name 'rgcube-*' -delete
 done
 echo "== done"; cat "$RESULTS"
+if grep -q "$(printf '\tFAIL\t')" "$RESULTS"; then
+  echo "== some releases FAILED" >&2
+  exit 1
+fi

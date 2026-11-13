@@ -170,5 +170,6 @@
   "errEngineMissing": "Asennusmoottoria ei voitu käynnistää.",
   "errEngineMissingHint": "Asenna Thimsy-asennusohjelma uudelleen. Moottorin odotettiin olevan kohteessa {path}.",
   "errNoAnswer": "Asennusmoottori ei vastannut.",
-  "errCancelled": "Peruutettu."
+  "errCancelled": "Peruutettu.",
+  "detectStopped": "Laitteen etsiminen pysähtyi."
 }

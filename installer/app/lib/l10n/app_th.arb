@@ -170,5 +170,6 @@
   "errEngineMissing": "ไม่สามารถเริ่มเอนจินตัวติดตั้งได้",
   "errEngineMissingHint": "โปรดติดตั้งตัวติดตั้ง Thimsy ใหม่ เอนจินควรอยู่ที่ {path}",
   "errNoAnswer": "เอนจินตัวติดตั้งไม่ตอบสนอง",
-  "errCancelled": "ยกเลิกแล้ว"
+  "errCancelled": "ยกเลิกแล้ว",
+  "detectStopped": "หยุดค้นหาอุปกรณ์แล้ว"
 }

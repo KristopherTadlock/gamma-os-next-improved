@@ -170,5 +170,6 @@
   "errEngineMissing": "インストーラーエンジンを起動できませんでした。",
   "errEngineMissingHint": "Thimsy インストーラーを再インストールしてください。エンジンは {path} にあるはずでした。",
   "errNoAnswer": "インストーラーエンジンが応答しませんでした。",
-  "errCancelled": "キャンセルしました。"
+  "errCancelled": "キャンセルしました。",
+  "detectStopped": "デバイスの検出が停止しました。"
 }

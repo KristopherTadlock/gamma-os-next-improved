@@ -73,6 +73,10 @@ class ReviewScreen extends StatelessWidget {
         row(l.rowProfile, profileName),
         row(l.rowImage, s.image ?? '—'),
         row(l.rowPartitions, plan?.partitions.join(', ') ?? '—'),
+        if (s.detectError != null) ...[
+          const SizedBox(height: 12),
+          DetectErrorNotice(s),
+        ],
         const SizedBox(height: 16),
         Text(l.howToInstall, style: Theme.of(context).textTheme.titleMedium),
         RadioGroup<FlashMode>(

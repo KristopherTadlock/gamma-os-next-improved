@@ -210,6 +210,8 @@ fn main() {
     #[cfg(windows)]
     attach_console();
     let cli = Cli::parse();
+    // Notice the app dying even while nothing is written to it.
+    thimsy_engine::tools::watch_parent();
     let rep = if cli.json {
         Reporter::json()
     } else {

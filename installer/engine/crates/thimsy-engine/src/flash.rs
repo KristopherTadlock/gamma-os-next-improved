@@ -171,6 +171,22 @@ pub fn spd_plan(d: &Device, p: &Pac, mode: Mode) -> Result<SpdPlan> {
             bail!("refusing to {what} protected partition {name}");
         }
     }
+    // Every partition touched is checked against the device's table before
+    // the first write, except the boot-area ones the recipe names as outside
+    // it. Anything else missing from the table is refused.
+    for n in &f.unchecked_partitions {
+        if cfg.partition(n).is_some() {
+            bail!("unchecked_partitions names {n}, which is in the PAC's partition table (and so is checked)");
+        }
+        let written_by_pac = pairs.iter().any(|(_, c)| {
+            c.block
+                .as_deref()
+                .is_some_and(|b| b.eq_ignore_ascii_case(n))
+        });
+        if !written_by_pac {
+            bail!("unchecked_partitions names {n}, which isn't a partition of any PAC entry");
+        }
+    }
     let mut checks: Vec<(String, u64)> = Vec::new();
     let names = backups
         .iter()
@@ -178,12 +194,23 @@ pub fn spd_plan(d: &Device, p: &Pac, mode: Mode) -> Result<SpdPlan> {
         .map(|w| &w.partition)
         .chain(&erases);
     for name in names {
-        // Boot-area partitions (splloader) aren't in the table.
-        if let Some(t) = cfg.partition(name) {
-            if !checks.iter().any(|(n, _)| n == name) {
-                checks.push((name.clone(), t.mib));
+        match cfg.partition(name) {
+            Some(t) => {
+                if !checks.iter().any(|(n, _)| n.eq_ignore_ascii_case(name)) {
+                    checks.push((name.clone(), t.mib));
+                }
             }
+            None if f
+                .unchecked_partitions
+                .iter()
+                .any(|u| u.eq_ignore_ascii_case(name)) => {}
+            None => bail!(
+                "{name} isn't in the PAC's partition table, so it can't be checked on the device before it's written or erased"
+            ),
         }
+    }
+    if checks.is_empty() {
+        bail!("nothing this flash touches is in the PAC's partition table, so the device can't be checked");
     }
     Ok(SpdPlan {
         fdl,
@@ -200,6 +227,8 @@ fn file_for(name: &str) -> String {
     format!("{}.img", name.to_ascii_lowercase())
 }
 
+/// The `spd_dump` command line; backups are read into `backup_dir`
+/// (relative to the flash folder it runs in).
 pub fn spd_invocation(d: &Device, plan: &SpdPlan, backup_dir: &str) -> Invocation {
     let f = d.flash.as_ref().unwrap();
     let mut args = vec!["--wait".to_string(), f.wait_seconds.to_string()];
@@ -251,11 +280,14 @@ fn show_mib(mib: u64) -> String {
 /// Compares the device's partition table (from `spd_dump partition_list`)
 /// with what the firmware expects; `wrong_device` on any difference.
 pub fn check_device(checks: &[(String, u64)], device: &[pac::Partition]) -> Result<()> {
+    if checks.is_empty() {
+        bail!("there's nothing to compare the device's partition table with; nothing was written");
+    }
     // Size differences first: they say the most about what's connected.
     let mut diffs = Vec::new();
     let mut missing = Vec::new();
     for (name, mib) in checks {
-        match device.iter().find(|p| &p.name == name) {
+        match device.iter().find(|p| p.name.eq_ignore_ascii_case(name)) {
             None => missing.push(format!("{name} is missing")),
             Some(p) if p.mib != *mib => diffs.push(format!(
                 "{name} is {} on the device, the firmware expects {}",
@@ -341,37 +373,100 @@ fn prepare_flash_dir(flash_dir: &Path, sha256: &str) -> Result<()> {
     Ok(())
 }
 
-/// A name in `dir` that doesn't exist yet: `stem.img`, else `stem-N.img`.
-fn free_name(dir: &Path, stem: &str) -> PathBuf {
-    let first = dir.join(format!("{stem}.img"));
-    if !first.exists() {
-        return first;
-    }
+/// Name of a new folder for one run's backups: `run-<UTC time>`.
+fn backup_run_name() -> String {
     let secs = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
-    (0..)
-        .map(|i| dir.join(format!("{stem}-{secs}-{i}.img")))
-        .find(|p| !p.exists())
-        .expect("a free name")
+    format!("run-{}", util::utc_stamp(secs))
 }
 
-/// Moves the backups `spd_dump` read into `<job>/backup`, never replacing an
-/// earlier one (that one may be from this device; this run's may be from
-/// another). A file of the wrong size gets `.incomplete` added. Returns
-/// what's missing or wrong.
-fn keep_backups(plan: &SpdPlan, flash_dir: &Path, backup_dir: &Path) -> Result<Vec<String>> {
+/// Creates a new, empty folder in `<job>/backup` for one run's backups
+/// (`run-<UTC time>`, `-1`, `-2`... if taken): `spd_dump` reads straight
+/// into it, outside the scratch folder, so nothing ever has to move,
+/// replace or delete a backup.
+fn new_backup_run(backup_root: &Path, suffix: &str) -> Result<PathBuf> {
+    fs::create_dir_all(backup_root)
+        .with_context(|| format!("creating {}", backup_root.display()))?;
+    let base = format!("{}{suffix}", backup_run_name());
+    for i in 0..1000 {
+        let name = if i == 0 {
+            base.clone()
+        } else {
+            format!("{base}-{i}")
+        };
+        let dir = backup_root.join(name);
+        match fs::create_dir(&dir) {
+            Ok(()) => return Ok(dir),
+            Err(e) if e.kind() == std::io::ErrorKind::AlreadyExists => continue,
+            Err(e) => {
+                return Err(e).with_context(|| format!("creating {}", dir.display()));
+            }
+        }
+    }
+    bail!("no free backup folder name in {}", backup_root.display())
+}
+
+/// Backups an earlier engine version read into `<job>/flash/backup` and
+/// didn't get to move are moved into a new `<job>/backup/run-…-recovered`
+/// before anything clears the scratch folder. Fails (and the caller must
+/// then leave `flash/` alone) if one can't be moved.
+pub(crate) fn rescue_old_backups(job_dir: &Path) -> Result<()> {
+    let old = job_dir.join("flash").join("backup");
+    let Ok(rd) = fs::read_dir(&old) else {
+        return Ok(());
+    };
+    let files: Vec<PathBuf> = rd.flatten().map(|e| e.path()).collect();
+    if files.is_empty() {
+        let _ = fs::remove_dir(&old);
+        return Ok(());
+    }
+    let to = new_backup_run(&job_dir.join("backup"), "-recovered")?;
+    for f in files {
+        let name = f.file_name().context("backup without a name")?;
+        fs::rename(&f, to.join(name)).with_context(|| {
+            format!(
+                "moving the unsaved backup {} to {}",
+                f.display(),
+                to.display()
+            )
+        })?;
+    }
+    let _ = fs::remove_dir(&old);
+    Ok(())
+}
+
+/// The backups of this run: each must have been read at the partition's
+/// full size before anything is confirmed.
+fn check_backups(plan: &SpdPlan, run_dir: &Path) -> Result<()> {
+    for b in &plan.backups {
+        let p = run_dir.join(format!("{}.img", b.partition));
+        let len = fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
+        if len != b.bytes {
+            return Err(EngineError::new(
+                Code::ToolFailed,
+                format!(
+                    "the backup of {} is incomplete ({len} of {} bytes); nothing was written",
+                    b.partition, b.bytes
+                ),
+            )
+            .hint("Check the cable and that the device is still in its flashing mode, then try again.")
+            .into());
+        }
+    }
+    Ok(())
+}
+
+/// After the run: what's missing or wrong in its backups. A file of the
+/// wrong size gets `.incomplete` added (never over an existing file).
+fn finish_backups(plan: &SpdPlan, run_dir: &Path) -> Vec<String> {
     let mut problems = Vec::new();
     for b in &plan.backups {
-        let from = flash_dir
-            .join("backup")
-            .join(format!("{}.img", b.partition));
-        let Ok(meta) = fs::metadata(&from) else {
+        let p = run_dir.join(format!("{}.img", b.partition));
+        let Ok(meta) = fs::metadata(&p) else {
             problems.push(format!("{} wasn't read", b.partition));
             continue;
         };
-        fs::create_dir_all(backup_dir)?;
-        let mut to = free_name(backup_dir, &b.partition);
         if meta.len() != b.bytes {
             problems.push(format!(
                 "{} is {} bytes, expected {}",
@@ -379,11 +474,147 @@ fn keep_backups(plan: &SpdPlan, flash_dir: &Path, backup_dir: &Path) -> Result<V
                 meta.len(),
                 b.bytes
             ));
-            to = PathBuf::from(format!("{}.incomplete", to.display()));
+            let to = run_dir.join(format!("{}.img.incomplete", b.partition));
+            if !to.exists() {
+                let _ = fs::rename(&p, &to);
+            }
         }
-        fs::rename(&from, &to)?;
     }
-    Ok(problems)
+    problems
+}
+
+/// Lines `spd_dump` prints only once it's writing or erasing.
+const WRITE_LINES: &[&str] = &["load_partition", "erase_partition", "write_partition"];
+
+/// Follows `spd_dump`'s output while it flashes: progress, and the signs
+/// that a write went wrong or ran without being confirmed.
+pub struct SpdWatch {
+    /// Planned (partition, bytes), and whether it was written completely.
+    writes: Vec<(String, u64, bool)>,
+    written: u64,
+    total: u64,
+}
+
+impl SpdWatch {
+    pub fn new(plan: &SpdPlan) -> SpdWatch {
+        SpdWatch {
+            writes: plan
+                .writes
+                .iter()
+                .map(|w| (w.partition.clone(), w.bytes, false))
+                .collect(),
+            written: 0,
+            total: plan.writes.iter().map(|w| w.bytes).sum(),
+        }
+    }
+
+    /// Reads one output line. `checked`: whether the device's partition
+    /// table has been checked (the first answer approved). Returns the
+    /// partition just written with the bytes written so far and in total;
+    /// fails when the run must stop at once.
+    pub fn line(&mut self, line: &str, checked: bool) -> Result<Option<(String, u64, u64)>> {
+        let l = line.trim();
+        if l.contains("unexpected response") {
+            return Err(write_failed(format!(
+                "spd_dump got an unexpected response from the device ({l})"
+            )));
+        }
+        if !checked && WRITE_LINES.iter().any(|w| l.starts_with(w)) {
+            return Err(EngineError::new(
+                Code::ToolFailed,
+                format!("spd_dump wrote to the device without asking first, before its partition table was checked ({l})"),
+            )
+            .hint("Reinstall Thimsy Installer: its flashing tool isn't the version it expects.")
+            .into());
+        }
+        let Some(rest) = l.strip_prefix("load_partition:") else {
+            return Ok(None);
+        };
+        // "load_partition: super, target: 0x..., written: 0x..."
+        let fields: Vec<&str> = rest.split(',').map(str::trim).collect();
+        let num = |key: &str| {
+            fields
+                .iter()
+                .find_map(|f| f.strip_prefix(key))
+                .and_then(|v| pac::parse_num(v.trim()))
+        };
+        let name = fields.first().copied().unwrap_or_default();
+        let (Some(target), Some(written)) = (num("target:"), num("written:")) else {
+            return Err(write_failed(format!(
+                "spd_dump's report can't be read ({l})"
+            )));
+        };
+        let Some(w) = self
+            .writes
+            .iter_mut()
+            .find(|(n, _, _)| n.eq_ignore_ascii_case(name))
+        else {
+            return Err(write_failed(format!(
+                "spd_dump wrote {name}, which isn't in the plan"
+            )));
+        };
+        if written != target {
+            return Err(write_failed(format!(
+                "writing {name} stopped after {written} of {target} bytes"
+            )));
+        }
+        if target != w.1 {
+            return Err(write_failed(format!(
+                "spd_dump wrote {target} bytes to {name}; its image is {} bytes",
+                w.1
+            )));
+        }
+        if !w.2 {
+            w.2 = true;
+            self.written += target;
+        }
+        Ok(Some((name.to_string(), self.written, self.total)))
+    }
+
+    /// Once `spd_dump` has finished: every planned write must have been
+    /// reported complete.
+    pub fn finish(&self) -> Result<()> {
+        let missing: Vec<&str> = self
+            .writes
+            .iter()
+            .filter(|w| !w.2)
+            .map(|w| w.0.as_str())
+            .collect();
+        if missing.is_empty() {
+            return Ok(());
+        }
+        Err(write_failed(format!(
+            "spd_dump finished without reporting a complete write of {}",
+            missing.join(", ")
+        )))
+    }
+}
+
+fn write_failed(message: String) -> anyhow::Error {
+    EngineError::new(Code::ToolFailed, message)
+        .hint("Check the cable and that the device is still in its flashing mode, then try again.")
+        .into()
+}
+
+/// A real flash installs only the image this catalog expects for the
+/// profile, not just whatever job.json describes.
+fn check_reference(cat: &Catalog, d: &Device, rec: &JobRecord) -> Result<()> {
+    let want = d.expect.get(&rec.profile);
+    if want.is_some_and(|w| w.eq_ignore_ascii_case(&rec.sha256)) {
+        return Ok(());
+    }
+    Err(EngineError::new(
+        Code::HashMismatch,
+        format!(
+            "this build (sha256 {}) isn't the {} image catalog {} expects (sha256 {})",
+            rec.sha256,
+            rec.profile,
+            cat.root.version,
+            want.map_or("none", String::as_str)
+        ),
+    )
+    .hint("This version of the installer expects a different build. Build again, then install.")
+    .into())
 }
 
 #[derive(Debug, Serialize)]
@@ -422,8 +653,9 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
     let p = Pac::open(&rec.image)?;
     let plan = spd_plan(d, &p, opts.mode)?;
     let flash_dir = opts.job.join("flash");
-    let backup_dir = opts.job.join("backup");
-    let inv = spd_invocation(d, &plan, "backup");
+    let backup_root = opts.job.join("backup");
+    let run_name = backup_run_name();
+    let inv = spd_invocation(d, &plan, &format!("../backup/{run_name}"));
     rep.info(format!(
         "{} partitions to write ({}), {} to back up, {} to erase",
         plan.writes.len(),
@@ -438,18 +670,24 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
             commands: vec![inv.display()],
         });
     }
+    check_reference(cat, d, &rec)?;
     verify_image(&rec, rep)?;
 
     rep.stage("driver", "Checking the USB driver");
     crate::drivers::ensure(d, opts.host, rep)?;
 
     rep.stage("prepare", "Preparing the partitions");
-    // Backups an interrupted run read but never moved.
-    let _ = keep_backups(&plan, &flash_dir, &backup_dir);
+    rescue_old_backups(&opts.job)?;
+    // Folders of runs stopped before they read anything (only empty ones
+    // can be removed this way).
+    for e in fs::read_dir(&backup_root).into_iter().flatten().flatten() {
+        if e.file_name().to_string_lossy().starts_with("run-") {
+            let _ = fs::remove_dir(e.path());
+        }
+    }
     prepare_flash_dir(&flash_dir, &rec.sha256)?;
-    // Never mistake an earlier run's device table or backups for this one's.
+    // Never mistake an earlier run's device table for this one's.
     let _ = fs::remove_file(flash_dir.join(DEVICE_PARTITIONS));
-    let _ = fs::remove_dir_all(flash_dir.join("backup"));
     // (file name, PAC entry) for everything spd_dump reads.
     let mut files: Vec<(String, &pac::Entry)> = Vec::new();
     for (id, _) in &plan.fdl {
@@ -468,7 +706,6 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
     if free < need {
         return Err(job::not_enough_space(&opts.job, need, free));
     }
-    fs::create_dir_all(flash_dir.join("backup"))?;
     let total: u64 = files.iter().map(|(_, e)| e.size).sum();
     let mut done = 0;
     for (name, e) in &files {
@@ -483,6 +720,12 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
         }
         done += e.size;
     }
+    let run_dir = new_backup_run(&backup_root, "")?;
+    let backup_arg = format!(
+        "../backup/{}",
+        run_dir.file_name().unwrap().to_string_lossy()
+    );
+    let inv = spd_invocation(d, &plan, &backup_arg);
 
     rep.stage("wait_device", "Connect the device in download mode");
     // The device's own button steps, translated with its name filled in.
@@ -500,36 +743,33 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
     // The prompt stays up while spd_dump waits for the device; the install
     // stage starts when the device answers (its first BSL_REP_VER line).
     let mut connected = false;
-    let write_total: u64 = plan.writes.iter().map(|w| w.bytes).sum();
-    let mut written = 0u64;
-    let names: Vec<(String, u64)> = plan
-        .writes
-        .iter()
-        .map(|w| (w.partition.clone(), w.bytes))
-        .collect();
-    let on_line = |line: &str| {
+    let mut watch = SpdWatch::new(&plan);
+    // Set once the first answer is approved: the device's table and the
+    // backups were checked. Any write before that is fatal.
+    let checked = std::cell::Cell::new(false);
+    let on_line = |line: &str| -> Result<()> {
         if !connected && (line.starts_with("BSL_REP_VER") || line.starts_with("load_partition")) {
             connected = true;
             rep.stage("flash", "Installing Thimsy");
         }
-        // "load_partition: super, target: 0x..., written: 0x..."
-        if let Some(rest) = line.strip_prefix("load_partition: ") {
-            let name = rest.split(',').next().unwrap_or("").trim();
-            if let Some((_, b)) = names.iter().find(|(n, _)| n == name) {
-                written += b;
-                rep.progress(&format!("Wrote {name}"), written, write_total);
-            }
+        if let Some((name, written, total)) = watch.line(line, checked.get())? {
+            rep.progress(&format!("Wrote {name}"), written, total);
         }
+        Ok(())
     };
-    // Nothing is confirmed until the device's partition table matches.
+    // Nothing is confirmed until the device's partition table matches and
+    // every backup was read in full.
     let approve = |n: usize| {
         if n == 0 {
             check_device_file(&flash_dir, &plan.checks)?;
             rep.info("The device's partition table matches this firmware");
+            check_backups(&plan, &run_dir)?;
+            checked.set(true);
         }
         Ok(())
     };
-    let ran = tools::run_answering(&inv, &flash_dir, rep, on_line, approve).map_err(|e| {
+    let ran = tools::run_answering(&inv, &flash_dir, rep, on_line, approve);
+    let ran = ran.and_then(|()| watch.finish()).map_err(|e| {
         if crate::error::code_of(&e).0 != Code::ToolFailed {
             return e;
         }
@@ -542,23 +782,19 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
         e.context("flashing stopped; the device is still recoverable from download mode")
     });
 
-    // Keep the NV/calibration backups with the job, not in the scratch
-    // dir, whether or not the rest worked.
-    let kept = keep_backups(&plan, &flash_dir, &backup_dir);
-    if let Err(e) = ran {
-        if let Err(k) = &kept {
-            rep.warn(format!("couldn't keep the backups: {k:#}"));
-        }
-        return Err(e);
-    }
-    let problems = kept?;
+    // The NV/calibration backups stay where spd_dump read them, in the
+    // job's backup folder, whether or not the rest worked.
+    let problems = finish_backups(&plan, &run_dir);
+    // A run that never got to read anything leaves no empty folder.
+    let _ = fs::remove_dir(&run_dir);
+    ran?;
     if !problems.is_empty() {
         return Err(EngineError::new(
             Code::ToolFailed,
             format!(
                 "the device was installed, but its backup is incomplete: {}. The backed-up partitions were not written; keep {} and report this",
                 problems.join("; "),
-                backup_dir.display()
+                run_dir.display()
             ),
         )
         .into());
@@ -567,7 +803,7 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
     rep.info("The device restarts into Thimsy. The first boot takes a few minutes.");
     let _ = fs::remove_dir_all(&flash_dir);
     Ok(FlashResult {
-        backup: Some(backup_dir),
+        backup: run_dir.exists().then_some(run_dir),
         commands: vec![inv.display()],
     })
 }
@@ -600,7 +836,7 @@ pub fn unlock(cat: &Catalog, device: &str, rep: &Reporter) -> Result<()> {
                 stdin: vec![],
                 answer_prompt: None,
             };
-            tools::run(&inv, Path::new("."), rep, |_| {})
+            tools::run(&inv, Path::new("."), rep, |_| Ok(()))
         }
         _ => Err(EngineError::new(
             Code::UnlockGuided,
@@ -707,5 +943,124 @@ mod tests {
         let many: Vec<(String, u64)> = (0..6).map(|i| (format!("p{i}"), 1)).collect();
         let msg = check_device(&many, &[]).unwrap_err().to_string();
         assert!(msg.contains("and 3 more"), "{msg}");
+    }
+
+    #[test]
+    fn backup_runs_are_named_by_utc_time() {
+        assert_eq!(util::utc_stamp(0), "19700101-000000");
+        assert_eq!(util::utc_stamp(951_782_400), "20000229-000000");
+        assert_eq!(util::utc_stamp(1_794_503_683), "20261112-171443");
+        // Never reused: a second folder in the same second gets a suffix.
+        let dir = tempfile::tempdir().unwrap();
+        let a = new_backup_run(dir.path(), "").unwrap();
+        let b = new_backup_run(dir.path(), "").unwrap();
+        assert_ne!(a, b);
+        assert!(a.is_dir() && b.is_dir());
+    }
+
+    #[test]
+    fn device_check_ignores_case_and_refuses_an_empty_list() {
+        let dev = vec![pac::Partition {
+            name: "Super".into(),
+            mib: 5600,
+        }];
+        check_device(&[("super".to_string(), 5600)], &dev).unwrap();
+        // Nothing to compare: never "matches".
+        let err = check_device(&[], &dev).unwrap_err();
+        assert!(err.to_string().contains("nothing to compare"), "{err}");
+    }
+
+    fn plan_writing(parts: &[(&str, u64)]) -> SpdPlan {
+        SpdPlan {
+            fdl: vec![],
+            backups: vec![],
+            writes: parts
+                .iter()
+                .enumerate()
+                .map(|(i, (p, b))| Write {
+                    entry: p.to_uppercase(),
+                    index: i,
+                    partition: p.to_string(),
+                    bytes: *b,
+                })
+                .collect(),
+            erases: vec![],
+            checks: vec![],
+        }
+    }
+
+    #[test]
+    fn spd_output_counts_only_complete_writes() {
+        let plan = plan_writing(&[("uboot_a", 0x1000), ("super", 0x15e000000)]);
+        let mut w = SpdWatch::new(&plan);
+        assert!(w.line("file size : 0x1000", true).unwrap().is_none());
+        let got = w
+            .line(
+                "load_partition: uboot_a, target: 0x1000, written: 0x1000",
+                true,
+            )
+            .unwrap();
+        assert_eq!(got, Some(("uboot_a".to_string(), 0x1000, 0x15e001000)));
+        // Not every write was reported: spd_dump's exit status isn't enough.
+        let err = w.finish().unwrap_err();
+        assert!(err.to_string().contains("super"), "{err}");
+        w.line(
+            "load_partition: super, target: 0x15e000000, written: 0x15e000000",
+            true,
+        )
+        .unwrap();
+        w.finish().unwrap();
+    }
+
+    #[test]
+    fn a_partial_write_stops_the_flash() {
+        let plan = plan_writing(&[("super", 0x15e000000)]);
+        // load_partition breaks off on an unexpected response, says how far
+        // it got, and spd_dump may still exit 0.
+        let mut w = SpdWatch::new(&plan);
+        let err = w
+            .line(
+                "load_partition: super, target: 0x15e000000, written: 0x3000000",
+                true,
+            )
+            .unwrap_err();
+        assert_eq!(crate::error::code_of(&err).0, Code::ToolFailed);
+        assert!(
+            err.to_string()
+                .contains("stopped after 50331648 of 5872025600 bytes"),
+            "{err}"
+        );
+        let err = w.line("unexpected response (0x00fe)", true).unwrap_err();
+        assert!(err.to_string().contains("unexpected response"), "{err}");
+        // A full write of the wrong size, or of a partition not planned.
+        let err = w
+            .line("load_partition: super, target: 0x10, written: 0x10", true)
+            .unwrap_err();
+        assert!(err.to_string().contains("its image is"), "{err}");
+        let err = w
+            .line("load_partition: prodnv, target: 0x10, written: 0x10", true)
+            .unwrap_err();
+        assert!(err.to_string().contains("isn't in the plan"), "{err}");
+        let err = w.line("load_partition: super, garbled", true).unwrap_err();
+        assert!(err.to_string().contains("can't be read"), "{err}");
+    }
+
+    #[test]
+    fn writing_before_the_device_was_checked_is_fatal() {
+        let plan = plan_writing(&[("super", 0x10)]);
+        let mut w = SpdWatch::new(&plan);
+        // Reading is fine before the check.
+        w.line(
+            "dump_partition: prodnv+0x0, target: 0x4000000, read: 0x4000000",
+            false,
+        )
+        .unwrap();
+        w.line("BSL_REP_VER: \"Spreadtrum Boot Block version 1.1\"", false)
+            .unwrap();
+        let err = w
+            .line("load_partition: super, target: 0x10, written: 0x10", false)
+            .unwrap_err();
+        assert!(err.to_string().contains("without asking first"), "{err}");
+        assert!(w.line("erase_partition: userdata", false).is_err());
     }
 }

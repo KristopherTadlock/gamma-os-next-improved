@@ -170,5 +170,6 @@
   "errEngineMissing": "Installationsmotoren kunne ikke startes.",
   "errEngineMissingHint": "Geninstaller Thimsy Installer. Motoren forventedes i {path}.",
   "errNoAnswer": "Installationsmotoren svarede ikke.",
-  "errCancelled": "Annulleret."
+  "errCancelled": "Annulleret.",
+  "detectStopped": "Søgningen efter enheden stoppede."
 }

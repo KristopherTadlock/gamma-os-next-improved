@@ -20,6 +20,10 @@ class ConnectScreen extends StatelessWidget {
       children: [
         GuideList(s.plan?.guides.downloadMode ?? const []),
         const SizedBox(height: 12),
+        if (s.detectError != null) ...[
+          DetectErrorNotice(s),
+          const SizedBox(height: 12),
+        ],
         if (s.host == 'windows' && s.driverStatus == 'missing')
           Notice(
             icon: Icons.usb,

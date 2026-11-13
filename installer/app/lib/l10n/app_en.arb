@@ -311,5 +311,9 @@
     }
   },
   "errNoAnswer": "The installer engine didn't answer.",
-  "errCancelled": "Cancelled."
+  "errCancelled": "Cancelled.",
+  "detectStopped": "Stopped looking for the device.",
+  "@detectStopped": {
+    "description": "Connect and Review: the device watch (detect --watch) ended by itself; a Try again button follows."
+  }
 }

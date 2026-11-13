@@ -63,6 +63,10 @@ flash:
   erase_full: [userdata, metadata]
   # Device-unique or diagnostic data: never written, even on a fresh install.
   never_write: [UserData, Persist, calinv, isedata, BLACKBOX, sysdumpdb]
+  # The boot-area loaders (SPLLoader, SPLLoader_bak) live outside the PAC's
+  # partition table, so the device's table can't confirm them; everything
+  # else written or erased must match it first.
+  unchecked_partitions: [splloader, splloader_bak]
   wait_seconds: 300
 update_requires: "Keeps your data. Only when the RG Cube already runs GammaOS Next 1.2 or a Thimsy build."
 guides:

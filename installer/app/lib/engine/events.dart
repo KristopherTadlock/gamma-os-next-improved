@@ -100,8 +100,9 @@ class ErrorEvent extends EngineEvent {
   final String? hint;
 
   /// True for errors the app itself raises about the engine process
-  /// (`engine_crashed`, `engine_missing`, `no_answer`, `cancelled`); the UI
-  /// shows its own translation for those, using [args].
+  /// (`engine_crashed`, `engine_missing`, `no_answer`, `cancelled`,
+  /// `detect_stopped`); the UI shows its own translation for those, using
+  /// [args].
   final bool local;
   final Map<String, String> args;
   const ErrorEvent({
@@ -531,14 +532,15 @@ class JsonLinesDecoder extends StreamTransformerBase<String, EngineEvent> {
     return LogEvent('raw', line);
   }
 
+  /// Plain stream operators, not an `async*` generator: cancelling an
+  /// `async*` stream waits until its source sends something more, which a
+  /// pipe held open by a leftover tool may never do.
   @override
-  Stream<EngineEvent> bind(Stream<String> stream) async* {
-    await for (final line in stream.transform(const LineSplitter())) {
-      final t = line.trim();
-      if (t.isEmpty) continue;
-      yield decodeLine(t);
-    }
-  }
+  Stream<EngineEvent> bind(Stream<String> stream) => stream
+      .transform(const LineSplitter())
+      .map((line) => line.trim())
+      .where((t) => t.isNotEmpty)
+      .map(decodeLine);
 }
 
 // --------------------------------------------------------------- helpers

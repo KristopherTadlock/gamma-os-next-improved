@@ -170,5 +170,6 @@
   "errEngineMissing": "Installationsmotorn kunde inte startas.",
   "errEngineMissingHint": "Installera om Thimsy-installationsprogrammet. Motorn förväntades i {path}.",
   "errNoAnswer": "Installationsmotorn svarade inte.",
-  "errCancelled": "Avbrutet."
+  "errCancelled": "Avbrutet.",
+  "detectStopped": "Sökningen efter enheten avbröts."
 }

@@ -170,5 +170,6 @@
   "errEngineMissing": "无法启动安装引擎。",
   "errEngineMissingHint": "请重新安装 Thimsy 安装程序。引擎应位于 {path}。",
   "errNoAnswer": "安装引擎没有响应。",
-  "errCancelled": "已取消。"
+  "errCancelled": "已取消。",
+  "detectStopped": "已停止查找设备。"
 }

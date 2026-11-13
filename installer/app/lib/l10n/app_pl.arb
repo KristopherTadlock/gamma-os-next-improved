@@ -170,5 +170,6 @@
   "errEngineMissing": "Nie udało się uruchomić silnika instalatora.",
   "errEngineMissingHint": "Zainstaluj ponownie Instalator Thimsy. Silnik powinien znajdować się w {path}.",
   "errNoAnswer": "Silnik instalatora nie odpowiedział.",
-  "errCancelled": "Anulowano."
+  "errCancelled": "Anulowano.",
+  "detectStopped": "Wyszukiwanie urządzenia zostało przerwane."
 }

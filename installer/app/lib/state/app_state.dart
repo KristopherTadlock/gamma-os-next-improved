@@ -171,11 +171,27 @@ class AppState extends ChangeNotifier {
     if (catalog != null) scheduleMicrotask(_reloadTranslated);
   }
 
+  /// A translated reload is running; another language change meanwhile
+  /// queues one more pass (so the last language always wins).
+  bool _reloading = false, _reloadQueued = false;
+
+  /// Fetches the catalog and the plans again in the engine's language. The
+  /// plans shown stay until the new ones are all in ([loadPlans] swaps
+  /// them), so the profile step never empties mid-flow.
   Future<void> _reloadTranslated() async {
-    await loadCatalog();
-    if (plans.isNotEmpty) {
-      plans.clear();
-      await loadPlans();
+    if (_reloading) {
+      _reloadQueued = true;
+      return;
+    }
+    _reloading = true;
+    try {
+      do {
+        _reloadQueued = false;
+        await loadCatalog();
+        if (plans.isNotEmpty || plansLoading) await loadPlans();
+      } while (_reloadQueued && !_shutDown);
+    } finally {
+      _reloading = false;
     }
   }
 
@@ -286,9 +302,17 @@ class AppState extends ChangeNotifier {
   List<DetectedDevice> detected = const [];
   EngineRun? _detectHandle;
   StreamSubscription<EngineEvent>? _detectSub;
+
+  /// Why the device watch ended by itself (an engine error, or a local
+  /// `detect_stopped` when it just ended). Cleared by [restartDetect].
+  ErrorEvent? detectError;
   String? driverStatus;
   String? driverDetail;
   bool driverBusy = false;
+
+  /// Bumped by each [checkDriver] and device change: only the latest check
+  /// for the device chosen now writes the driver status.
+  int _driverGen = 0;
 
   DetectedDevice? get matchedDevice =>
       detected.where((d) => d.device == deviceId).firstOrNull;
@@ -307,9 +331,12 @@ class AppState extends ChangeNotifier {
   /// Set by [install]; cleared when the build, journey or mode changes.
   FlashConfirmation? _confirmed;
 
-  /// A build or an install is running: the selection and the step rail
-  /// are locked until it ends.
-  bool get busy => buildRun.running || flashRun.running;
+  /// A build, unlock or install is running: the selection and the step
+  /// rail are locked until it ends.
+  bool get busy => buildRun.running || flashRun.running || unlockRun.running;
+
+  /// Set by [shutdown]: the app is closing, nothing new starts.
+  bool _shutDown = false;
 
   /// A real install is past its checks and writing (or about to write) the
   /// device: stopping now needs a confirmation.
@@ -366,6 +393,8 @@ class AppState extends ChangeNotifier {
     exportOnly = false;
     detected = const [];
     driverStatus = driverDetail = null;
+    driverBusy = false;
+    _driverGen++;
     final done = _resetFrom(WizardStep.profile);
     notifyListeners();
     await done;
@@ -546,13 +575,14 @@ class AppState extends ChangeNotifier {
 
   /// Checks free space first; never starts the build without room.
   Future<void> startBuild() async {
-    if (busy || deviceId == null || profileId == null) return;
+    if (busy || _shutDown || deviceId == null || profileId == null) return;
     if (workspace.trim().isEmpty || !imageSourceReady) return;
     final d = deviceId!, p = profileId!, sel = _selection;
     _spaceDebounce?.cancel();
     final info = await checkSpace();
     // The device or profile changed (or a build started) while checking.
     if (sel != _selection || deviceId != d || profileId != p || busy) return;
+    if (_shutDown) return;
     if (info == null) return;
     if (!info.ok) {
       spaceProblem = SpaceProblem(
@@ -601,7 +631,7 @@ class AppState extends ChangeNotifier {
   }
 
   void startUnlock() {
-    if (unlockRun.running || deviceId == null) return;
+    if (busy || _shutDown || deviceId == null) return;
     unlockRun.reset();
     unlockRun.running = true;
     notifyListeners();
@@ -616,18 +646,52 @@ class AppState extends ChangeNotifier {
     );
   }
 
+  void cancelUnlock() {
+    _unlockHandle?.cancel();
+  }
+
   void startDetect() {
-    if (_detectHandle != null) return;
+    if (_detectHandle != null || _shutDown) return;
+    detectError = null;
     final run = engine.detect();
     _detectHandle = run;
-    _detectSub = run.events.listen((e) {
-      // Nothing from a watch that was stopped (its list was cleared).
-      if (e is DevicesEvent && identical(_detectHandle, run)) {
-        detected = e.devices;
-        notifyListeners();
-      }
-    });
+    // The watch ended by itself (the engine reported an error, exited or
+    // crashed): what it saw is no longer known, so forget it and say so.
+    // Nothing happens for a watch that was stopped or replaced meanwhile.
+    void ended(ErrorEvent error) {
+      if (!identical(_detectHandle, run)) return;
+      final sub = _detectSub;
+      _detectHandle = null;
+      _detectSub = null;
+      detected = const [];
+      detectError = error;
+      notifyListeners();
+      run.cancel();
+      sub?.cancel();
+    }
+
+    _detectSub = run.events.listen(
+      (e) {
+        if (!identical(_detectHandle, run)) return;
+        if (e is DevicesEvent) {
+          detected = e.devices;
+          notifyListeners();
+        } else if (e is ErrorEvent) {
+          ended(e);
+        }
+      },
+      onDone: () => ended(
+        const ErrorEvent(code: 'detect_stopped', message: '', local: true),
+      ),
+    );
     if (host == 'windows' && deviceId != null) checkDriver();
+  }
+
+  /// "Try again" after the watch ended by itself.
+  void restartDetect() {
+    if (_detectHandle != null) return;
+    startDetect();
+    notifyListeners();
   }
 
   /// Stops the watch and forgets what it saw, so no later step relies on
@@ -637,29 +701,46 @@ class AppState extends ChangeNotifier {
     _detectHandle = null;
     _detectSub = null;
     detected = const [];
+    detectError = null;
     await h?.cancel();
     await sub?.cancel();
   }
 
   Future<void> checkDriver({bool install = false}) async {
-    if (deviceId == null) return;
+    final d = deviceId;
+    if (d == null) return;
+    // The answer is for this device: dropped if another is chosen (or a
+    // newer check starts) before it comes.
+    final gen = ++_driverGen;
+    bool current() => gen == _driverGen && deviceId == d;
     driverBusy = true;
     notifyListeners();
+    String? status, detail;
     try {
-      final r = await engine.drivers(device: deviceId!, install: install);
-      driverStatus = r.str('status');
-      driverDetail = r.str('detail');
+      final r = await engine.drivers(device: d, install: install);
+      status = r.str('status');
+      detail = r.str('detail');
     } on EngineException catch (e) {
-      driverStatus = 'missing';
-      driverDetail = e.event.hint ?? e.event.message;
+      status = 'missing';
+      detail = e.event.hint ?? e.event.message;
     } finally {
-      driverBusy = false;
-      notifyListeners();
+      if (current()) {
+        driverStatus = status;
+        driverDetail = detail;
+        driverBusy = false;
+        notifyListeners();
+      }
     }
   }
 
+  /// Dry run on Review. A change from what was confirmed means the
+  /// confirmed install (and its result) no longer applies: a real install
+  /// can't be reported, or repeated, as a dry run and the reverse.
   void setDryRun(bool v) {
+    if (busy || dryRun == v) return;
     dryRun = v;
+    final c = _confirmed;
+    if (c != null && c.dry != v) _invalidateFlash();
     notifyListeners();
   }
 
@@ -706,7 +787,7 @@ class AppState extends ChangeNotifier {
 
   void _startConfirmed() {
     final c = _confirmed;
-    if (flashRun.running || c == null || c.job != job) return;
+    if (busy || _shutDown || c == null || c.job != job) return;
     flashRun.reset();
     flashRun.running = true;
     flashRunDry = c.dry;
@@ -732,6 +813,20 @@ class AppState extends ChangeNotifier {
 
   Future<void> cancelFlash() async {
     await _flashHandle?.cancel();
+  }
+
+  /// The app is closing: stops the install, build and unlock (waiting for
+  /// each engine to be told) and the device watch, and starts nothing new.
+  /// Safe to call more than once.
+  Future<void> shutdown() async {
+    _shutDown = true;
+    _spaceDebounce?.cancel();
+    final handles = [_flashHandle, _buildHandle, _unlockHandle];
+    await Future.wait([
+      for (final h in handles)
+        if (h != null) h.cancel(),
+      stopDetect(),
+    ]);
   }
 
   Future<void> loadCleanItems() async {
@@ -856,7 +951,8 @@ class AppState extends ChangeNotifier {
       case WizardStep.review:
         return false; // Install button instead
       case WizardStep.install:
-        return flashRun.ok;
+        // A dry run wrote nothing: there's no installed Thimsy to go on to.
+        return flashRun.ok && !flashRunDry;
       case WizardStep.firstBoot:
         return true;
       case WizardStep.done:
@@ -866,7 +962,7 @@ class AppState extends ChangeNotifier {
 
   /// Generic Next (the device step uses [deviceNext]).
   void next() {
-    if (!canProceed(step)) return;
+    if (busy || !canProceed(step)) return;
     var i = step.index + 1;
     while (i < WizardStep.values.length && isSkipped(WizardStep.values[i])) {
       i++;
@@ -944,11 +1040,7 @@ class AppState extends ChangeNotifier {
 
   @override
   void dispose() {
-    _spaceDebounce?.cancel();
-    stopDetect();
-    _buildHandle?.cancel();
-    _flashHandle?.cancel();
-    _unlockHandle?.cancel();
+    shutdown();
     super.dispose();
   }
 }

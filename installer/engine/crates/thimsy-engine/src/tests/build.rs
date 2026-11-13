@@ -652,6 +652,108 @@ fn flash_plan_backs_up_nv_and_never_writes_protected_partitions() {
 }
 
 #[test]
+fn every_partition_touched_must_be_checkable_on_the_device() {
+    let dir = tempfile::tempdir().unwrap();
+    let mk = |name: &str, table: &[(&str, u64)]| -> Pac {
+        let entries = vec![
+            E("FDL", "fdl1.bin", pattern(2048, 1)),
+            E("FDL2", "fdl2.bin", pattern(4096, 2)),
+            E("SPLLoader", "spl.img", pattern(4096, 3)),
+            E("Boot", "boot.img", pattern(4096, 4)),
+            E(
+                "",
+                "cfg.xml",
+                config_xml_with_table(
+                    &[
+                        ("FDL", "FDL", None, 0x5500, false),
+                        ("FDL2", "NAND_FDL", None, 0x9efffe00, false),
+                        ("SPLLoader", "UBOOT_LOADER2", Some("splloader"), 0, false),
+                        ("Boot", "CODE2", Some("BOOT_A"), 0, false),
+                    ],
+                    table,
+                ),
+            ),
+        ];
+        let path = dir.path().join(format!("{name}.pac"));
+        std::fs::write(&path, build_pac(&entries, "v", "a")).unwrap();
+        Pac::open(&path).unwrap()
+    };
+    let cat = Catalog::bundled().unwrap();
+    let mut d = cat.device("anbernic-rg-cube").unwrap().clone();
+    let set = |d: &mut crate::catalog::Device, unchecked: &[&str]| {
+        let f = d.flash.as_mut().unwrap();
+        f.fdl = vec!["FDL".into(), "FDL2".into()];
+        f.update.clear();
+        f.erase_full.clear();
+        f.never_write.clear();
+        f.unchecked_partitions = unchecked.iter().map(|s| s.to_string()).collect();
+    };
+    let p = mk("normal", &[("boot_a", 1), ("userdata", pac::REST_OF_DISK)]);
+    // The table names partitions in another case: still checked.
+    set(&mut d, &["SPLLOADER"]);
+    let plan = flash::spd_plan(&d, &p, flash::Mode::Full).unwrap();
+    assert_eq!(plan.checks, [("BOOT_A".to_string(), 1)]);
+    assert_eq!(plan.writes.len(), 2);
+    // A partition missing from the table is refused unless the recipe
+    // names it as unchecked.
+    set(&mut d, &[]);
+    let err = flash::spd_plan(&d, &p, flash::Mode::Full).unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("splloader isn't in the PAC's partition table"),
+        "{err}"
+    );
+    // The list only names partitions outside the table, written by the PAC.
+    set(&mut d, &["splloader", "boot_a"]);
+    let err = flash::spd_plan(&d, &p, flash::Mode::Full).unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("boot_a, which is in the PAC's partition table"),
+        "{err}"
+    );
+    set(&mut d, &["splloader", "splloader_bak"]);
+    let err = flash::spd_plan(&d, &p, flash::Mode::Full).unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("splloader_bak, which isn't a partition"),
+        "{err}"
+    );
+    // Nothing left to check: refused, never an empty check that "matches".
+    let p = mk("other", &[("other", 1), ("userdata", pac::REST_OF_DISK)]);
+    set(&mut d, &["splloader", "boot_a"]);
+    let err = flash::spd_plan(&d, &p, flash::Mode::Full).unwrap_err();
+    assert!(
+        err.to_string().contains("nothing this flash touches"),
+        "{err}"
+    );
+}
+
+#[test]
+fn an_unpacked_firmware_isnt_downloaded_again() {
+    let fx = good_fixture();
+    let ws = fx.dir.path().join("ws");
+    // An earlier run unpacked the official firmware, then stopped.
+    let dir = job::job_dir(&ws, "testdev", "heavy");
+    std::fs::create_dir_all(dir.join("work")).unwrap();
+    std::fs::write(dir.join("work").join("firmware.pac"), &fx.src_pac).unwrap();
+    std::fs::write(
+        dir.join("state.json"),
+        r#"{"extracted":true,"assembling":false}"#,
+    )
+    .unwrap();
+    // Its download is gone (deleted to save space): fetching it would fail.
+    for i in 1..=3 {
+        std::fs::remove_file(fx.dir.path().join(format!("fw.7z.{i:03}"))).unwrap();
+    }
+    let (rep, sink) = quiet();
+    let rec = job::build(&fx.catalog, &opts(&ws, false), &rep).unwrap();
+    assert_eq!(rec.sha256, fx.expected_sha);
+    assert!(sink.0.lock().unwrap().iter().any(
+        |e| matches!(e, Event::Log { message, .. } if message == "Firmware already unpacked")
+    ));
+}
+
+#[test]
 fn unavailable_profile_is_refused() {
     let fx = good_fixture();
     let (rep, _) = quiet();
@@ -710,14 +812,30 @@ fn flash_checks_the_image_the_device_and_the_backups() {
     assert!(text.contains("partition_list device-partitions.xml"));
     assert!(text.contains("erase_part metadata"));
     assert!(!flash_dir.exists(), "scratch removed after a good flash");
-    assert_eq!(r.backup.as_deref(), Some(backup_dir.as_path()));
+    // Read straight into a folder of its own in the job's backup folder.
+    let first_run = r.backup.clone().unwrap();
+    assert_eq!(first_run.parent(), Some(backup_dir.as_path()));
+    assert!(first_run
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .starts_with("run-"));
     // The backup is the whole partition.
     assert_eq!(
-        std::fs::metadata(backup_dir.join("prodnv.img"))
+        std::fs::metadata(first_run.join("prodnv.img"))
             .unwrap()
             .len(),
         MIB
     );
+    let runs = |dir: &Path| -> Vec<PathBuf> {
+        let mut v: Vec<PathBuf> = std::fs::read_dir(dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.path())
+            .collect();
+        v.sort();
+        v
+    };
     assert!(sink.0.lock().unwrap().iter().any(|e| matches!(e,
         Event::Log { message, .. } if message.contains("partition table matches"))));
 
@@ -750,20 +868,150 @@ fn flash_checks_the_image_the_device_and_the_backups() {
         "{text}"
     );
     // Its backup is kept, next to (not over) the first one.
+    let kept = runs(&backup_dir);
+    assert_eq!(kept.len(), 2, "both backups kept: {kept:?}");
+    for run in &kept {
+        assert_eq!(
+            std::fs::metadata(run.join("prodnv.img")).unwrap().len(),
+            MIB
+        );
+    }
+
+    // spd_dump says the device's table is unusable (sizes in the wrong
+    // unit): refused like a different device.
+    let bad_table = fx.dir.path().join("error-table.xml");
+    std::fs::write(&bad_table, "<Partitions>\n    <Partition id=\"prodnv\" size=\"1\"/>\n<error>Wrong unit size, do not use this table!</error>\n</Partitions>\n").unwrap();
+    fake_env(Some(("FAKE_SPD_PARTS", bad_table.display().to_string())));
+    let (rep, _) = quiet();
+    let err = flash::flash(&fx.catalog, &o, &rep).unwrap_err();
+    assert_eq!(crate::error::code_of(&err).0, Code::WrongDevice, "{err:#}");
+    assert!(err.to_string().contains("Wrong unit size"), "{err}");
+    let text = std::fs::read_to_string(&log).unwrap();
+    assert!(
+        !text.contains("write_part") && !text.contains("erase_part"),
+        "{text}"
+    );
+
+    // A backup read short: nothing is confirmed, and the file is kept,
+    // marked incomplete.
+    fake_env(Some(("FAKE_SPD_SHORT_READ", "prodnv".to_string())));
+    let before = runs(&backup_dir);
+    let (rep, _) = quiet();
+    let err = flash::flash(&fx.catalog, &o, &rep).unwrap_err();
+    assert_eq!(crate::error::code_of(&err).0, Code::ToolFailed, "{err:#}");
+    assert!(
+        format!("{err:#}").contains("backup of prodnv is incomplete"),
+        "{err:#}"
+    );
+    let text = std::fs::read_to_string(&log).unwrap();
+    assert!(
+        !text.contains("write_part") && !text.contains("erase_part"),
+        "{text}"
+    );
+    let new: Vec<PathBuf> = runs(&backup_dir)
+        .into_iter()
+        .filter(|r| !before.contains(r))
+        .collect();
+    assert_eq!(new.len(), 1, "{new:?}");
     assert_eq!(
-        std::fs::metadata(backup_dir.join("prodnv.img"))
+        std::fs::metadata(new[0].join("prodnv.img.incomplete"))
             .unwrap()
             .len(),
-        MIB
+        MIB / 2
     );
-    let kept = std::fs::read_dir(&backup_dir).unwrap().count();
-    assert_eq!(kept, 2, "both backups kept");
+    assert!(!new[0].join("prodnv.img").exists());
+    for run in &before {
+        assert_eq!(
+            std::fs::metadata(run.join("prodnv.img")).unwrap().len(),
+            MIB
+        );
+    }
 
-    // Publishing a new image clears the old unpacked partitions.
-    assert!(flash_dir.exists());
+    // The device stops answering halfway through a write: spd_dump says so
+    // and carries on (exit 0), but the flash stops there and fails.
+    fake_env(Some(("FAKE_SPD_SHORT_WRITE", "vendor_boot_b".to_string())));
+    let (rep, _) = quiet();
+    let err = flash::flash(&fx.catalog, &o, &rep).unwrap_err();
+    assert_eq!(crate::error::code_of(&err).0, Code::ToolFailed, "{err:#}");
+    assert!(
+        format!("{err:#}").contains("unexpected response"),
+        "{err:#}"
+    );
+    let text = std::fs::read_to_string(&log).unwrap();
+    assert!(
+        text.contains("write_part vendor_boot_b vendor_boot_b.img short"),
+        "{text}"
+    );
+    assert!(
+        !text.contains("write_part super") && !text.contains("erase_part"),
+        "nothing after the broken write:\n{text}"
+    );
+
+    // An spd_dump that writes without asking (old or forked): stopped at
+    // its first write, and an error even though it would exit 0.
+    fake_env(Some(("FAKE_SPD_NO_PROMPT", "1".to_string())));
+    let (rep, _) = quiet();
+    let err = flash::flash(&fx.catalog, &o, &rep).unwrap_err();
+    assert_eq!(crate::error::code_of(&err).0, Code::ToolFailed, "{err:#}");
+    assert!(
+        format!("{err:#}").contains("without asking first"),
+        "{err:#}"
+    );
+    let text = std::fs::read_to_string(&log).unwrap();
+    assert!(text.matches("write_part").count() <= 1, "{text}");
+    assert!(!text.contains("erase_part"), "{text}");
+
+    // A build that isn't the image the catalog now expects (the installer
+    // was updated since): refused before the device is touched.
+    let newer = fixture(Some(&"1".repeat(64)));
+    fake_env(None);
+    let (rep, _) = quiet();
+    let err = flash::flash(&newer.catalog, &o, &rep).unwrap_err();
+    assert_eq!(crate::error::code_of(&err).0, Code::HashMismatch, "{err:#}");
+    assert!(err.to_string().contains("catalog test expects"), "{err}");
+    assert!(!log.exists(), "spd_dump never ran");
+
+    // Backups an earlier engine left unmoved in the scratch folder survive
+    // a scratch clean (moved to the backup folder), and a backup clean is
+    // the only thing that removes backups.
+    let legacy = flash_dir.join("backup");
+    std::fs::create_dir_all(&legacy).unwrap();
+    std::fs::write(legacy.join("prodnv.img"), vec![7u8; 4096]).unwrap();
+    let items = job::cleanable(&ws);
+    assert!(items
+        .iter()
+        .any(|i| i.kind == "backup" && i.path == legacy && i.bytes == 4096));
+    assert!(items
+        .iter()
+        .any(|i| i.kind == "scratch" && i.path == flash_dir));
+    let backups_before = runs(&backup_dir).len();
+    job::clean(&ws, &["scratch"]).unwrap();
+    assert!(!flash_dir.exists());
+    let after = runs(&backup_dir);
+    assert_eq!(after.len(), backups_before + 1);
+    let recovered = after
+        .iter()
+        .find(|r| r.to_string_lossy().ends_with("-recovered"))
+        .unwrap();
+    assert_eq!(
+        std::fs::read(recovered.join("prodnv.img")).unwrap(),
+        vec![7u8; 4096]
+    );
+    assert!(job::cleanable(&ws)
+        .iter()
+        .any(|i| i.kind == "backup" && i.path == backup_dir));
+
+    // Publishing a new image clears the old unpacked partitions, but not
+    // a backup left among them.
+    std::fs::create_dir_all(&legacy).unwrap();
+    std::fs::write(flash_dir.join("super.img"), b"old").unwrap();
+    std::fs::write(legacy.join("miscdata.img"), b"nv").unwrap();
     let (rep, _) = quiet();
     job::build(&fx.catalog, &opts(&ws, false), &rep).unwrap();
     assert!(!flash_dir.exists(), "build must remove <job>/flash");
+    assert!(runs(&backup_dir)
+        .iter()
+        .any(|r| std::fs::read(r.join("miscdata.img")).is_ok_and(|b| b == b"nv")));
 
     // The image changed after the build (same size): refused before the
     // device is touched.

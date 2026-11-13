@@ -170,5 +170,6 @@
   "errEngineMissing": "Yükleyici motoru başlatılamadı.",
   "errEngineMissingHint": "Thimsy Yükleyici'yi yeniden yükleyin. Motorun {path} konumunda olması bekleniyordu.",
   "errNoAnswer": "Yükleyici motoru yanıt vermedi.",
-  "errCancelled": "İptal edildi."
+  "errCancelled": "İptal edildi.",
+  "detectStopped": "Cihaz araması durdu."
 }

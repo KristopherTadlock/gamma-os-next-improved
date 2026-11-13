@@ -9,7 +9,16 @@ The partition table is the one in the PAC config of the job being flashed
 (found through ../job.json from the working directory), in the real tool's
 format; FAKE_SPD_PARTS=FILE hands out FILE instead (a different device).
 FAKE_SPD_HASH=1 also logs "sha256 PARTITION HEX" for each written file.
-FAKE_SPD_WAIT=SECONDS waits that long for the "device" before connecting."""
+FAKE_SPD_WAIT=SECONDS waits that long for the "device" before connecting.
+
+Faults, like the real tool's:
+FAKE_SPD_SHORT_WRITE=PART: the device stops answering halfway through
+  writing PART; like load_partition() it logs "unexpected response" and
+  "written" < "target", then carries on and exits 0.
+FAKE_SPD_SHORT_READ=PART: reading PART stops halfway (a short packet ends
+  dump_partition() without an error line); the backup file is half size.
+FAKE_SPD_NO_PROMPT=1: an old or forked spd_dump that never asks before
+  writing or erasing."""
 import hashlib, json, os, re, struct, sys, time
 
 def follow_launcher():
@@ -40,6 +49,8 @@ def log_line(text):
 connected = False
 log = open(os.environ.get("FAKE_SPD_LOG", os.devnull), "a", buffering=1)
 def confirm(what):
+    if os.environ.get("FAKE_SPD_NO_PROMPT"):
+        return
     sys.stdout.write(f'Answer "yes" to confirm the "{what}" command: ')
     sys.stdout.flush()
     line = sys.stdin.readline()
@@ -99,17 +110,29 @@ while i < len(args):
         log.write(f"partition_list {args[i+1]}\n"); i += 2
     elif a == "read_part":
         name, off, size, out = args[i+1:i+5]
-        os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
-        with open(out, "wb") as o: o.truncate(int(size, 0))  # sparse, full size
-        log_line(f"dump_partition: {name}+0x0, target: {size}, read: {size}")
+        # Like fopen(fn, "wb"): the folder must exist.
+        if not os.path.isdir(os.path.dirname(out) or "."): sys.exit("fopen(dump) failed")
+        got = int(size, 0)
+        if os.environ.get("FAKE_SPD_SHORT_READ") == name: got //= 2
+        with open(out, "wb") as o: o.truncate(got)  # sparse
+        log_line(f"dump_partition: {name}+0x0, target: {size}, read: 0x{got:x}")
         log.write(f"read_part {name} {size} {out}\n"); i += 5
     elif a == "write_part":
         name, f = args[i+1], args[i+2]
         confirm("write partition")
         size = os.path.getsize(f)
         log_line(f"file size : 0x{size:x}")
+        if os.environ.get("FAKE_SPD_SHORT_WRITE") == name:
+            log.write(f"write_part {name} {f} short\n")
+            log_line("unexpected response (0x00fe)")
+            log_line(f"load_partition: {name}, target: 0x{size:x}, written: 0x{size // 2:x}")
+            i += 3
+            continue
         log_line(f"load_partition: {name}, target: 0x{size:x}, written: 0x{size:x}")
         log.write(f"write_part {name} {f} {size}\n")
+        # Writing takes the real tool a while; without questions in between
+        # that's the only thing pacing it.
+        if os.environ.get("FAKE_SPD_NO_PROMPT"): time.sleep(0.5)
         if os.environ.get("FAKE_SPD_HASH"):
             h = hashlib.sha256()
             with open(f, "rb") as src:

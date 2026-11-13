@@ -25,6 +25,14 @@ case "$1" in
     echo '{"type":"result","ok":true,"job":"/w/jobs/j","image":"/w/i.pac"}'
     ;;
   flash)
+    if [ "$3" = hang ]; then
+      # A tool left running in the background holds stdout open; the
+      # engine itself then hangs until killed.
+      echo '{"type":"stage","stage":"check","title":"Checking"}'
+      sleep 30 &
+      echo $! > "$(dirname "$0")/bg.pid"
+      exec sleep 30
+    fi
     echo '{"type":"error","code":"unsupported_host","message":"Needs Windows","hint":"Use a Windows PC"}'
     echo '{"type":"result","ok":false}'
     ;;
@@ -34,6 +42,11 @@ case "$1" in
     ;;
   detect)
     exec sleep 30
+    ;;
+  unlock)
+    # Bytes that aren't UTF-8, then an exit without a result.
+    [ "$3" = garbage ] && printf '\377\376\n' && exit 0
+    exit 3
     ;;
   *)
     exit 3
@@ -168,9 +181,59 @@ void main() {
     );
   });
 
-  test('a missing engine binary reports tool_missing', () async {
+  test('a missing engine binary reports engine_missing', () async {
     final missing = ProcessEngine('${dir.path}/nope');
     final events = await missing.detect().events.toList();
     expect(events.whereType<ErrorEvent>().single.code, 'engine_missing');
   });
+
+  test('a cancelled run ends when the engine exits, even with stdout held '
+      'open by a tool it started', () async {
+    final bgPid = File('${dir.path}/bg.pid');
+    addTearDown(() async {
+      if (await bgPid.exists()) {
+        Process.killPid(int.parse((await bgPid.readAsString()).trim()));
+      }
+    });
+    final run = engine.flash(job: 'hang');
+    final events = <EngineEvent>[];
+    final firstEvent = Completer<void>();
+    final done = Completer<void>();
+    run.events.listen((e) {
+      events.add(e);
+      if (!firstEvent.isCompleted) firstEvent.complete();
+    }, onDone: done.complete);
+    await firstEvent.future.timeout(const Duration(seconds: 10));
+    // The background tool has been started by now (its pid is written
+    // before the engine execs).
+    for (var i = 0; i < 100 && !await bgPid.exists(); i++) {
+      await Future<void>.delayed(const Duration(milliseconds: 20));
+    }
+    final watch = Stopwatch()..start();
+    await run.cancel();
+    await done.future.timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => fail('the run only ended when stdout closed'),
+    );
+    expect(watch.elapsed, lessThan(const Duration(seconds: 10)));
+    expect(events.first, isA<StageEvent>());
+    expect(events.whereType<ErrorEvent>().single.code, 'cancelled');
+    expect((events.last as ResultEvent).ok, isFalse);
+  });
+
+  test(
+    'bytes that are not UTF-8 still end with an error and a result',
+    () async {
+      final events = await engine
+          .unlock(device: 'garbage')
+          .events
+          .toList()
+          .timeout(const Duration(seconds: 10));
+      // The garbage line is kept (as replacement characters), not fatal.
+      expect(events.first, isA<LogEvent>());
+      expect((events.first as LogEvent).message, '��');
+      expect(events.whereType<ErrorEvent>().single.code, 'engine_crashed');
+      expect((events.last as ResultEvent).ok, isFalse);
+    },
+  );
 }

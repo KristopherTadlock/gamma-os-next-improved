@@ -170,5 +170,6 @@
   "errEngineMissing": "לא ניתן היה להפעיל את מנוע ההתקנה.",
   "errEngineMissingHint": "התקינו מחדש את מתקין Thimsy. המנוע היה אמור להימצא ב-{path}.",
   "errNoAnswer": "מנוע ההתקנה לא הגיב.",
-  "errCancelled": "בוטל."
+  "errCancelled": "בוטל.",
+  "detectStopped": "החיפוש אחר המכשיר נעצר."
 }

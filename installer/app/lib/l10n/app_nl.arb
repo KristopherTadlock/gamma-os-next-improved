@@ -170,5 +170,6 @@
   "errEngineMissing": "De installatie-engine kon niet worden gestart.",
   "errEngineMissingHint": "Installeer het Thimsy-installatieprogramma opnieuw. De engine werd verwacht in {path}.",
   "errNoAnswer": "De installatie-engine reageerde niet.",
-  "errCancelled": "Geannuleerd."
+  "errCancelled": "Geannuleerd.",
+  "detectStopped": "Het zoeken naar het apparaat is gestopt."
 }

@@ -16,6 +16,16 @@ env:
   SPD_DUMP_COMMIT: 3d0582579f3521f35a4937b2e871312e4dd6c308
   LIBWDI_REPO: https://github.com/pbatard/libwdi
   LIBWDI_COMMIT: 30df0c0e051b0132c4b9ebed8c054bc8eb3aaaec
+  # Windows Driver Kit 8.0 redistributable components (WinUSB co-installers
+  # for wdi-simple), as served by the fwlink below on 2026-11-12.
+  WDK_REDIST_URL: https://go.microsoft.com/fwlink/p/?LinkID=253170
+  WDK_REDIST_SHA256: 29314207814ce9d5d73695f7e9239539cf37c79e750b9d5ea5a5ef5487a583d6
+  # libusb for the macOS spd_dump, built from source for both Mac
+  # architectures (Homebrew's is only the runner's own).
+  LIBUSB_URL: https://github.com/libusb/libusb/releases/download/v1.0.29/libusb-1.0.29.tar.bz2
+  LIBUSB_SHA256: 5977fc950f8d1395ccea9bd48c06b3f808fd3c2c961b44b0c2e6e29fc3a70a85
+  # The oldest macOS the app supports (Runner.xcodeproj); the tools match.
+  MACOSX_DEPLOYMENT_TARGET: "12.0"
 
 jobs:
   engine:
@@ -46,10 +56,23 @@ jobs:
       - name: Clippy
         if: runner.os == 'Linux'
         run: cargo clippy --all-targets -- -D warnings
+      - name: apply_pack tests
+        if: runner.os == 'Linux'
+        run: python3 ../tools/test_apply_pack.py
       - name: Test
         run: cargo test --workspace
       - name: Build
         run: cargo build --release
+      - name: Universal macOS engine (Apple Silicon + Intel)
+        if: runner.os == 'macOS'
+        run: |
+          # The app is universal, so the engine is too: build the Intel half
+          # and combine the two in place of the native build.
+          rustup target add x86_64-apple-darwin
+          cargo build --release --target x86_64-apple-darwin
+          lipo -create target/release/thimsy-installer target/x86_64-apple-darwin/release/thimsy-installer -output target/thimsy-installer-universal
+          mv target/thimsy-installer-universal target/release/thimsy-installer
+          lipo -archs target/release/thimsy-installer
       - uses: actions/upload-artifact@v4
         with:
           name: engine-${{ runner.os }}
@@ -66,32 +89,65 @@ jobs:
         os: [ubuntu-22.04, macos-latest]
     steps:
       - name: Dependencies
+        if: runner.os == 'Linux'
+        run: sudo apt-get update && sudo apt-get install -y libusb-1.0-0-dev
+      - name: libusb, universal (macOS)
+        if: runner.os == 'macOS'
         run: |
-          if [ "$RUNNER_OS" = Linux ]; then sudo apt-get update && sudo apt-get install -y libusb-1.0-0-dev; else brew install libusb; fi
+          # Built for each Mac architecture from the pinned release, then
+          # combined: the app (and so the tool) runs on Apple Silicon and Intel.
+          curl -fsSL -o libusb.tar.bz2 "$LIBUSB_URL"
+          echo "$LIBUSB_SHA256  libusb.tar.bz2" | shasum -a 256 -c -
+          for arch in arm64 x86_64; do
+            host=$([ "$arch" = arm64 ] && echo aarch64-apple-darwin || echo x86_64-apple-darwin)
+            mkdir "libusb-$arch" && tar -xjf libusb.tar.bz2 -C "libusb-$arch" --strip-components=1
+            (cd "libusb-$arch" && ./configure --host="$host" --prefix="$PWD/../usb-$arch" --disable-static \
+               --disable-dependency-tracking CC="clang -arch $arch" && make -j3 && make install)
+          done
+          mkdir -p usb
+          lipo -create usb-arm64/lib/libusb-1.0.0.dylib usb-x86_64/lib/libusb-1.0.0.dylib -output usb/libusb-1.0.0.dylib
+          # Found next to the tool, wherever the app is.
+          install_name_tool -id @loader_path/libusb-1.0.0.dylib usb/libusb-1.0.0.dylib
+          codesign --force -s - usb/libusb-1.0.0.dylib
+          lipo -archs usb/libusb-1.0.0.dylib
       - name: Build spd_dump
         run: |
           git clone "$SPD_DUMP_REPO" spd && cd spd && git checkout "$SPD_DUMP_COMMIT"
+          mkdir -p ../out
           if [ "$RUNNER_OS" = macOS ]; then
-            P=$(brew --prefix libusb)
-            make CFLAGS="-O2 -std=c99 -DUSE_LIBUSB=1 -I$P/include" LIBS="-L$P/lib -lusb-1.0"
-            # Ship libusb next to the tool.
-            cp "$P/lib/libusb-1.0.0.dylib" .
-            install_name_tool -id @loader_path/libusb-1.0.0.dylib libusb-1.0.0.dylib
-            install_name_tool -change "$(otool -L spd_dump | awk '/libusb/{print $1}')" @loader_path/libusb-1.0.0.dylib spd_dump
-            codesign --force -s - libusb-1.0.0.dylib spd_dump
+            # One universal binary, linked against the universal libusb (whose
+            # install name is already @loader_path/libusb-1.0.0.dylib).
+            make CC="clang -arch arm64 -arch x86_64" CFLAGS="-O2 -std=c99 -DUSE_LIBUSB=1 -I$PWD/../usb-arm64/include" \
+              LIBS="$PWD/../usb/libusb-1.0.0.dylib"
+            codesign --force -s - spd_dump
+            cp ../usb/libusb-1.0.0.dylib ../out/
           else
             make
           fi
-          mkdir -p ../out && cp spd_dump ../out/ && cp LICENSE ../out/spd_dump-LICENSE
-          [ -f libusb-1.0.0.dylib ] && cp libusb-1.0.0.dylib ../out/ || true
+          cp spd_dump ../out/ && cp LICENSE ../out/spd_dump-LICENSE
       - name: Check spd_dump starts
         run: |
           # spd_dump has no --help: its option parser answers "unknown option"
           # with exit 1 (or "libusb_init failed" when there's no USB). A
           # missing library fails differently (127, or dyld's abort).
-          rc=0; msg=$(out/spd_dump --help 2>&1) || rc=$?
-          echo "exit $rc: $msg"
-          [ "$rc" -eq 1 ] && printf '%s' "$msg" | grep -qE 'unknown option|libusb_init failed' || { echo "::error::spd_dump didn't start"; exit 1; }
+          check() {
+            rc=0; msg=$("$@" --help 2>&1) || rc=$?
+            echo "$*: exit $rc: $msg"
+            [ "$rc" -eq 1 ] && printf '%s' "$msg" | grep -qE 'unknown option|libusb_init failed' || { echo "::error::$* didn't start"; exit 1; }
+          }
+          check out/spd_dump
+          if [ "$RUNNER_OS" = macOS ]; then
+            otool -L out/spd_dump
+            otool -L out/spd_dump | grep -q '@loader_path/libusb-1.0.0.dylib' || { echo "::error::spd_dump doesn't load the bundled libusb"; exit 1; }
+            for f in out/spd_dump out/libusb-1.0.0.dylib; do
+              archs=" $(lipo -archs "$f") "; echo "$f:$archs"
+              for a in arm64 x86_64; do
+                case "$archs" in *" $a "*) ;; *) echo "::error::$f has no $a code"; exit 1 ;; esac
+              done
+            done
+            if arch -x86_64 /usr/bin/true 2>/dev/null; then check arch -x86_64 out/spd_dump
+            else echo "Rosetta not available: the Intel half isn't run here"; fi
+          fi
       - uses: actions/upload-artifact@v4
         with:
           name: tools-${{ runner.os }}
@@ -122,7 +178,9 @@ jobs:
           mkdir -p ../out && cp spd_dump.exe ../out/ && cp LICENSE ../out/spd_dump-LICENSE
       - name: Build wdi-simple (WinUSB driver installer)
         run: |
-          curl -L "https://go.microsoft.com/fwlink/p/?LinkID=253170" -o wdk-redist.msi
+          curl -fL "$WDK_REDIST_URL" -o wdk-redist.msi
+          sha256sum wdk-redist.msi
+          echo "$WDK_REDIST_SHA256  wdk-redist.msi" | sha256sum -c - || { echo "::error::the WDK redistributable changed; check it and update WDK_REDIST_SHA256"; exit 1; }
           msiexec //a wdk-redist.msi //qn TARGETDIR="$(cygpath -w "$PWD/wdk")"
           git clone "$LIBWDI_REPO" libwdi && cd libwdi && git checkout "$LIBWDI_COMMIT"
           ./bootstrap.sh
@@ -133,9 +191,24 @@ jobs:
       - name: Check the tools
         run: |
           test -x out/spd_dump.exe && test -x out/wdi-simple.exe
-          rc=0; msg=$(out/spd_dump.exe --help 2>&1) || rc=$?
-          echo "exit $rc: $msg"
+          # Only DLLs that come with Windows: anything from MSYS2 (libusb,
+          # libgcc_s, libwinpthread, ...) isn't on a user's PC.
+          allowed='^(kernel32|user32|gdi32|advapi32|shell32|ole32|oleaut32|comctl32|comdlg32|setupapi|cfgmgr32|newdev|version|shlwapi|ws2_32|crypt32|wintrust|bcrypt|ntdll|msvcrt|ucrtbase|rpcrt4|userenv|imagehlp|dbghelp|winmm|secur32|ncrypt|iphlpapi|winhttp|wininet|psapi|hid|winusb|uxtheme|dwmapi|imm32|mpr|netapi32|api-ms-win-[a-z0-9-]+)\.dll$'
+          for exe in out/spd_dump.exe out/wdi-simple.exe; do
+            dlls=$(objdump -p "$exe" | awk '/DLL Name:/ {print $3}' | tr 'A-Z' 'a-z' | tr -d '\r')
+            echo "$exe imports:" $dlls
+            bad=$(printf '%s\n' $dlls | grep -Ev "$allowed" || true)
+            [ -z "$bad" ] || { echo "::error::$exe needs DLLs a clean PC doesn't have: $bad"; exit 1; }
+          done
+          # And they start with only Windows' folders on the PATH (no MSYS2).
+          WINPATH=/c/Windows/System32:/c/Windows
+          rc=0; msg=$(PATH=$WINPATH out/spd_dump.exe --help 2>&1) || rc=$?
+          echo "spd_dump: exit $rc: $msg"
           [ "$rc" -eq 1 ] && printf '%s' "$msg" | grep -qE 'unknown option|libusb_init failed' || { echo "::error::spd_dump.exe didn't start"; exit 1; }
+          # wdi-simple prints its usage for --help and exits 0.
+          rc=0; msg=$(PATH=$WINPATH out/wdi-simple.exe --help 2>&1) || rc=$?
+          echo "wdi-simple: exit $rc: $msg"
+          [ "$rc" -eq 0 ] && printf '%s' "$msg" | grep -q -- '--help' || { echo "::error::wdi-simple.exe didn't start"; exit 1; }
       - uses: actions/upload-artifact@v4
         with:
           name: tools-Windows
@@ -187,6 +260,7 @@ jobs:
           case "$RUNNER_OS" in
             Linux) APP=build/linux/x64/release/bundle; OUT=ThimsyInstaller-$VER-linux-x64.tar.gz ;;
             Windows) APP=build/windows/x64/runner/Release; OUT=ThimsyInstaller-$VER-windows-x64.zip ;;
+            # Universal: Apple Silicon and Intel (checked below with lipo).
             macOS) APP=build/macos/Build/Products/Release/thimsy_installer.app; OUT=ThimsyInstaller-$VER-macos.zip ;;
           esac
           if [ "$RUNNER_OS" = macOS ]; then ENG="$APP/Contents/MacOS/engine"; else ENG="$APP/engine"; fi
@@ -202,14 +276,43 @@ jobs:
           for f in "${need[@]}"; do
             [ -f "$f" ] && { [ -x "$f" ] || [ "${f##*.}" = dylib ]; } || { echo "::error::missing or not executable: $f"; exit 1; }
           done
+          if [ "$RUNNER_OS" = macOS ]; then
+            # Everything that runs is universal, like the app itself.
+            BIN="$APP/Contents/MacOS/$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$APP/Contents/Info.plist")"
+            for f in "$BIN" "$ENG/thimsy-installer" "$ENG/tools/spd_dump" "$ENG/tools/libusb-1.0.0.dylib"; do
+              archs=" $(lipo -archs "$f") "; echo "$f:$archs"
+              for a in arm64 x86_64; do
+                case "$archs" in *" $a "*) ;; *) echo "::error::$f isn't universal: no $a code"; exit 1 ;; esac
+              done
+            done
+          fi
+          # On Windows, run the bundled programs with only Windows' folders on
+          # the PATH, as on a user's PC: a DLL that's only on the runner fails.
+          RUNPATH=$PATH; [ "$RUNNER_OS" = Windows ] && RUNPATH=/c/Windows/System32:/c/Windows
           # Smoke tests (to a file: piping into head would cut the output short).
-          "$ENG/thimsy-installer$X" --json catalog > "$RUNNER_TEMP/catalog.json"
+          PATH=$RUNPATH "$ENG/thimsy-installer$X" --json catalog > "$RUNNER_TEMP/catalog.json"
           head -c 300 "$RUNNER_TEMP/catalog.json"; echo
+          if [ "$RUNNER_OS" = macOS ]; then
+            # The Intel half too, where Rosetta can run it.
+            if arch -x86_64 /usr/bin/true 2>/dev/null; then
+              arch -x86_64 "$ENG/thimsy-installer" --json catalog > /dev/null
+              rc=0; msg=$(arch -x86_64 "$ENG/tools/spd_dump" --help 2>&1) || rc=$?
+              echo "spd_dump (x86_64): exit $rc: $msg"
+              [ "$rc" -eq 1 ] && printf '%s' "$msg" | grep -qE 'unknown option|libusb_init failed' || { echo "::error::the bundled spd_dump (x86_64) didn't start"; exit 1; }
+            else
+              echo "Rosetta isn't available here: the Intel half isn't run"
+            fi
+          fi
           # spd_dump answers --help with "unknown option" and exit 1 once it
           # has started; a missing DLL or dylib fails with another code.
-          rc=0; msg=$("$ENG/tools/spd_dump$X" --help 2>&1) || rc=$?
+          rc=0; msg=$(PATH=$RUNPATH "$ENG/tools/spd_dump$X" --help 2>&1) || rc=$?
           echo "spd_dump: exit $rc: $msg"
           [ "$rc" -eq 1 ] && printf '%s' "$msg" | grep -qE 'unknown option|libusb_init failed' || { echo "::error::the bundled spd_dump didn't start"; exit 1; }
+          if [ "$RUNNER_OS" = Windows ]; then
+            rc=0; msg=$(PATH=$RUNPATH "$ENG/tools/wdi-simple.exe" --help 2>&1) || rc=$?
+            echo "wdi-simple: exit $rc: $msg"
+            [ "$rc" -eq 0 ] && printf '%s' "$msg" | grep -q -- '--help' || { echo "::error::the bundled wdi-simple didn't start"; exit 1; }
+          fi
           if [ "$RUNNER_OS" = Windows ]; then
             # The Flutter runner needs the Visual C++ runtime, which a clean
             # PC may not have: ship it next to the app (unless Flutter did).

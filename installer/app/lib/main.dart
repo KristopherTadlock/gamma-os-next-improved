@@ -51,7 +51,16 @@ Future<void> main() async {
 
 class ThimsyInstallerApp extends StatelessWidget {
   final AppState state;
-  const ThimsyInstallerApp({super.key, required this.state});
+
+  /// Whether closing the window mid-install asks first; null for the
+  /// platform default ([HomeShell.defaultGuardWindowClose]).
+  final bool? guardWindowClose;
+
+  const ThimsyInstallerApp({
+    super.key,
+    required this.state,
+    this.guardWindowClose,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -83,7 +92,9 @@ class ThimsyInstallerApp extends StatelessWidget {
             s.useEffectiveLocale(resolved);
             return resolved;
           },
-          home: s.onAndroid ? const AndroidNotice() : const HomeShell(),
+          home: s.onAndroid
+              ? const AndroidNotice()
+              : HomeShell(guardWindowClose: guardWindowClose),
         ),
       ),
     );

@@ -1,7 +1,7 @@
-import 'dart:io' show Platform;
 import 'dart:ui' show AppExitResponse;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart'
+    show TargetPlatform, defaultTargetPlatform, kIsWeb;
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
@@ -24,13 +24,20 @@ import 'unlock_screen.dart';
 /// The single installer window: step rail at the start side, the current
 /// step beside it, Back / Next at the bottom. Mirrors for RTL languages.
 class HomeShell extends StatefulWidget {
-  /// Whether closing the window during a real install asks first. Defaults
-  /// to Windows and Linux, where the close button goes through the app; on
-  /// macOS the window is gone before the app is asked, so there's nothing
-  /// to show the question in.
+  /// Whether closing the window during a real install asks first (null:
+  /// [defaultGuardWindowClose]). Either way, the engine runs are stopped
+  /// before the app exits.
   final bool? guardWindowClose;
 
   const HomeShell({super.key, this.guardWindowClose});
+
+  /// Windows and Linux, where the close button goes through the app; on
+  /// macOS the window is gone before the app is asked, so there's nothing
+  /// to show the question in.
+  static bool get defaultGuardWindowClose =>
+      !kIsWeb &&
+      (defaultTargetPlatform == TargetPlatform.windows ||
+          defaultTargetPlatform == TargetPlatform.linux);
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -39,6 +46,7 @@ class HomeShell extends StatefulWidget {
 class _HomeShellState extends State<HomeShell> {
   bool _dialogOpen = false;
   late final AppLifecycleListener _lifecycle;
+  late final AppState _state;
 
   @override
   void initState() {
@@ -47,25 +55,36 @@ class _HomeShellState extends State<HomeShell> {
     if (s.catalog == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => s.loadCatalog());
     }
-    _lifecycle = AppLifecycleListener(onExitRequested: _onExitRequested);
+    _state = s;
+    _lifecycle = AppLifecycleListener(
+      onExitRequested: _onExitRequested,
+      // Wherever the app gets a last chance (macOS may never ask first):
+      // the engines are stopped, so none can go on writing the device.
+      onDetach: s.shutdown,
+    );
   }
 
   @override
   void dispose() {
     _lifecycle.dispose();
+    _state.shutdown();
     super.dispose();
   }
 
   bool get _guardClose =>
-      widget.guardWindowClose ??
-      (!kIsWeb && (Platform.isWindows || Platform.isLinux));
+      widget.guardWindowClose ?? HomeShell.defaultGuardWindowClose;
 
-  /// Closing the window mid-install: same question as Stop.
+  /// Closing the window: mid-install, the same question as Stop. Whatever
+  /// is still running (install, build, unlock, device watch) is stopped
+  /// before the app exits.
   Future<AppExitResponse> _onExitRequested() async {
     final s = context.read<AppState>();
-    if (!_guardClose || !s.stopNeedsConfirmation) return AppExitResponse.exit;
-    if (!await confirmStopInstall(context)) return AppExitResponse.cancel;
-    await s.cancelFlash();
+    if (_guardClose &&
+        s.stopNeedsConfirmation &&
+        !await confirmStopInstall(context)) {
+      return AppExitResponse.cancel;
+    }
+    await s.shutdown();
     return AppExitResponse.exit;
   }
 
@@ -289,7 +308,7 @@ class _HomeShellState extends State<HomeShell> {
                       if (showNext)
                         FilledButton(
                           key: const ValueKey('next'),
-                          onPressed: s.canProceed(s.step)
+                          onPressed: !s.busy && s.canProceed(s.step)
                               ? () => _next(s)
                               : null,
                           child: Text(l.next),

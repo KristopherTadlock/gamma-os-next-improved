@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Tests for apply_pack.py (stdlib only): run it on a temporary copy of the
-catalog for two profiles and check neither wipes the other.
+catalog for two profiles and check neither wipes the other, and that a pack
+that would break another profile is refused unless --replace-others.
 
   python3 installer/tools/test_apply_pack.py
 """
@@ -71,8 +72,9 @@ class ApplyPackTest(unittest.TestCase):
     def tearDown(self):
         shutil.rmtree(self.tmp)
 
-    def apply(self, profile, c, ops, with_bundle=True):
+    def apply(self, profile, c, ops, with_bundle=True, extra=(), ok=True):
         d = os.path.join(self.tmp, profile)
+        shutil.rmtree(d, ignore_errors=True)
         os.makedirs(d)
         pj = os.path.join(d, "pack.json")
         with open(pj, "w", encoding="utf-8") as f:
@@ -83,10 +85,15 @@ class ApplyPackTest(unittest.TestCase):
             with open(bj, "w", encoding="utf-8") as f:
                 json.dump(bundle(profile, c), f)
             args += ["--bundle", bj]
+        args += list(extra)
         args += [pj, self.dev_yaml, self.cat_yaml, profile, "installer-vtest"]
         r = subprocess.run(args, capture_output=True, text=True,
                            env={**os.environ, "LC_ALL": "C", "PYTHONIOENCODING": "ascii"})
-        self.assertEqual(r.returncode, 0, r.stderr)
+        if ok:
+            self.assertEqual(r.returncode, 0, r.stderr)
+        else:
+            self.assertNotEqual(r.returncode, 0, r.stdout)
+        return r
 
     def read(self, path):
         with open(path, encoding="utf-8") as f:
@@ -137,14 +144,92 @@ class ApplyPackTest(unittest.TestCase):
         self.assertEqual(len(re.findall(r"^  heavy: ", top_block(cat, "systems"), flags=re.M)), 1)
 
     def test_without_bundle_lists_download_addresses(self):
+        self.apply("heavy", "1", TRICKY)
+        # Same artifacts and steps (only download addresses added): allowed.
         self.apply("medium", "2", TRICKY, with_bundle=False)
         dev, cat = self.read(self.dev_yaml), self.read(self.cat_yaml)
         arts = [flow_to_json(l[4:]) for l in top_block(dev, "artifacts").splitlines()]
         self.assertEqual(arts[0]["urls"], [
             "https://github.com/KristopherTadlock/thimsy-os/releases/download/installer-vtest/rgcube-odm-a-delta.bsdiff"])
-        # The existing heavy bundle is left alone.
+        # The heavy bundle is left alone.
         self.assertIn("  heavy: {", top_block(dev, "bundles"))
         self.assertIn("thimsy-system-test-medium.img.zst\"]", cat)
+
+    def test_changed_steps_are_refused_while_another_profile_uses_them(self):
+        # The catalog's heavy profile has a bundle and an expected hash made
+        # with the current artifacts and build steps; this pack changes them.
+        dev_before, cat_before = self.read(self.dev_yaml), self.read(self.cat_yaml)
+        r = self.apply("medium", "2", TRICKY, ok=False)
+        self.assertIn("heavy", r.stderr)
+        self.assertIn("--replace-others", r.stderr)
+        self.assertEqual(self.read(self.dev_yaml), dev_before)
+        self.assertEqual(self.read(self.cat_yaml), cat_before)
+        # Without a bundle too.
+        self.apply("medium", "2", TRICKY, with_bundle=False, ok=False)
+        self.assertEqual(self.read(self.dev_yaml), dev_before)
+
+    def test_changed_artifacts_are_refused_too(self):
+        self.apply("heavy", "1", TRICKY)
+        # Same steps, another artifact hash: medium's pack, heavy's bundle.
+        d = os.path.join(self.tmp, "medium")
+        os.makedirs(d)
+        p = pack("medium", "2", TRICKY)
+        p["artifacts"][0]["sha256"] = sha("9")
+        pj = os.path.join(d, "pack.json")
+        with open(pj, "w", encoding="utf-8") as f:
+            json.dump(p, f)
+        r = subprocess.run([sys.executable, "-I", TOOL, pj, self.dev_yaml, self.cat_yaml, "medium",
+                            "installer-vtest"], capture_output=True, text=True)
+        self.assertNotEqual(r.returncode, 0)
+        self.assertIn("heavy", r.stderr)
+
+    def test_replace_others_drops_their_entries(self):
+        r = self.apply("medium", "2", TRICKY, extra=["--replace-others"])
+        self.assertIn("heavy", r.stdout)
+        dev, cat = self.read(self.dev_yaml), self.read(self.cat_yaml)
+        self.assertRegex(dev, r"(?m)^expect:\n  medium: \"2{64}\"\n(?!  )")
+        self.assertEqual(len(re.findall(r"^(expect|bundles):", dev, flags=re.M)), 2)
+        bundles = dict(re.findall(r"^  (\w+): (\{.*\})$", top_block(dev, "bundles"), flags=re.M))
+        self.assertEqual(set(bundles), {"medium"})
+        systems = dict(re.findall(r"^  (\w+): (\S+)$", top_block(cat, "systems"), flags=re.M))
+        self.assertEqual(systems, {"medium": "thimsy-system-test-medium"})
+        self.assertEqual([flow_to_json(l[4:]) for l in top_block(dev, "build").splitlines()], TRICKY)
+
+    def test_replace_others_with_block_style_entries(self):
+        # Two other profiles, written in block style.
+        dev = self.read(self.dev_yaml)
+        dev = re.sub(r"^expect: .*$", 'expect:\n  heavy: "' + sha("7") + '"\n  light: "' + sha("8") + '"',
+                     dev, flags=re.M)
+        with open(self.dev_yaml, "w", encoding="utf-8") as f:
+            f.write(dev)
+        r = self.apply("medium", "2", TRICKY, ok=False)
+        self.assertIn("heavy, light", r.stderr)
+        self.apply("medium", "2", TRICKY, extra=["--replace-others"])
+        dev = self.read(self.dev_yaml)
+        self.assertRegex(dev, r"(?m)^expect:\n  medium: \"2{64}\"\n")
+        self.assertNotIn("light:", dev)
+        self.assertNotIn("  heavy:", dev)
+        self.assertEqual(len(re.findall(r"^expect:", dev, flags=re.M)), 1)
+
+    def test_without_bundle_drops_the_profiles_own_bundle(self):
+        # heavy is the only profile with entries: its own old archive goes.
+        self.apply("heavy", "1", TRICKY, with_bundle=False)
+        dev = self.read(self.dev_yaml)
+        self.assertIsNone(re.search(r"^bundles:", dev, flags=re.M))
+        self.assertNotIn("Thimsy-1.0a-anbernic-rg-cube-heavy.tar", dev)
+        exp = flow_to_json(re.search(r"^expect: (\{.*\})$", dev, flags=re.M).group(1))
+        self.assertEqual(exp, {"heavy": sha("1")})
+        # The rest of the file is intact.
+        self.assertIn("flash:\n  method: spd\n", dev)
+        self.assertEqual([flow_to_json(l[4:]) for l in top_block(dev, "build").splitlines()], TRICKY)
+
+    def test_without_bundle_keeps_other_profiles_bundles(self):
+        self.apply("heavy", "1", TRICKY)
+        self.apply("medium", "2", TRICKY)
+        self.apply("medium", "3", TRICKY, with_bundle=False)
+        bundles = dict(re.findall(r"^  (\w+): (\{.*\})$", top_block(self.read(self.dev_yaml), "bundles"),
+                                  flags=re.M))
+        self.assertEqual(set(bundles), {"heavy"})
 
     def test_device_without_pack_sections_gets_them(self):
         other = os.path.join(self.cat, "devices", "anbernic-rg557.yaml")

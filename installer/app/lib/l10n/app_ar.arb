@@ -170,5 +170,6 @@
   "errEngineMissing": "تعذّر تشغيل محرك المثبّت.",
   "errEngineMissingHint": "أعد تثبيت مثبّت Thimsy. كان المتوقع وجود المحرك في {path}.",
   "errNoAnswer": "لم يستجب محرك المثبّت.",
-  "errCancelled": "تم الإلغاء."
+  "errCancelled": "تم الإلغاء.",
+  "detectStopped": "توقّف البحث عن الجهاز."
 }
