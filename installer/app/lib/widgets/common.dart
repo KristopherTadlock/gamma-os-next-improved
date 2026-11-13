@@ -282,6 +282,35 @@ Future<void> showNeedsWindowsDialog(
   );
 }
 
+/// Asks before stopping a real install mid-way (the Stop button, or
+/// closing the window). True when the user chose to stop.
+Future<bool> confirmStopInstall(BuildContext context) async {
+  final l = AppLocalizations.of(context);
+  final stop = await showDialog<bool>(
+    context: context,
+    barrierDismissible: false,
+    builder: (ctx) => AlertDialog(
+      key: const ValueKey('confirm-stop'),
+      icon: const Icon(Icons.warning_amber),
+      title: Text(l.stopInstallTitle),
+      content: Text(l.stopInstallBody),
+      actions: [
+        TextButton(
+          key: const ValueKey('confirm-stop-yes'),
+          onPressed: () => Navigator.of(ctx).pop(true),
+          child: Text(l.stop),
+        ),
+        FilledButton(
+          key: const ValueKey('confirm-stop-keep'),
+          onPressed: () => Navigator.of(ctx).pop(false),
+          child: Text(l.keepInstalling),
+        ),
+      ],
+    ),
+  );
+  return stop ?? false;
+}
+
 /// What the user chose in the not-enough-space dialog.
 enum SpaceChoice { chooseFolder, checkAgain, cancel }
 

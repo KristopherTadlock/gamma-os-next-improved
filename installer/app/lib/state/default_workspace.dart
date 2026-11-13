@@ -17,8 +17,27 @@ String defaultWorkspaceFor({
 }) {
   final ctx = os == 'windows' ? p.windows : p.posix;
   final here = appFolder(executable, os);
-  if (here.isNotEmpty && isWritable(here)) return here;
+  if (here.isNotEmpty &&
+      (os != 'macos' || macFolderUsable(here, env)) &&
+      isWritable(here)) {
+    return here;
+  }
   return appDataFolder(os, env, ctx);
+}
+
+/// On macOS, the app's folder is used only when it's a folder of the
+/// user's own inside their home, such as Downloads or Desktop: never
+/// `/Applications`, `/System`, `/Library`, a mounted disk image, a
+/// translocated copy, `~/Applications` or `~/Library` (an administrator can
+/// write to `/Applications`, but downloads don't belong there).
+bool macFolderUsable(String dir, Map<String, String> env) {
+  final home = p.posix.normalize(env['HOME'] ?? '');
+  if (home.isEmpty || home == '/' || !home.startsWith('/')) return false;
+  final d = p.posix.normalize(dir);
+  if (!p.posix.isWithin(home, d)) return false;
+  // macOS folder names are case-insensitive by default.
+  final top = p.posix.split(p.posix.relative(d, from: home)).first;
+  return !{'applications', 'library'}.contains(top.toLowerCase());
 }
 
 /// The folder the app is in: the executable's folder on Windows and Linux;

@@ -28,6 +28,10 @@ jobs:
     defaults:
       run:
         working-directory: installer/engine
+    env:
+      # Windows: link the C runtime statically, so the engine runs on a PC
+      # without the Visual C++ Redistributable.
+      RUSTFLAGS: ${{ startsWith(matrix.os, 'windows') && '-C target-feature=+crt-static' || '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
@@ -80,7 +84,14 @@ jobs:
           fi
           mkdir -p ../out && cp spd_dump ../out/ && cp LICENSE ../out/spd_dump-LICENSE
           [ -f libusb-1.0.0.dylib ] && cp libusb-1.0.0.dylib ../out/ || true
-          ../out/spd_dump --help >/dev/null 2>&1 || true
+      - name: Check spd_dump starts
+        run: |
+          # spd_dump has no --help: its option parser answers "unknown option"
+          # with exit 1 (or "libusb_init failed" when there's no USB). A
+          # missing library fails differently (127, or dyld's abort).
+          rc=0; msg=$(out/spd_dump --help 2>&1) || rc=$?
+          echo "exit $rc: $msg"
+          [ "$rc" -eq 1 ] && printf '%s' "$msg" | grep -qE 'unknown option|libusb_init failed' || { echo "::error::spd_dump didn't start"; exit 1; }
       - uses: actions/upload-artifact@v4
         with:
           name: tools-${{ runner.os }}
@@ -110,7 +121,6 @@ jobs:
           make LIBS="-Wl,-Bstatic -lusb-1.0 -Wl,-Bdynamic"
           mkdir -p ../out && cp spd_dump.exe ../out/ && cp LICENSE ../out/spd_dump-LICENSE
       - name: Build wdi-simple (WinUSB driver installer)
-        continue-on-error: true
         run: |
           curl -L "https://go.microsoft.com/fwlink/p/?LinkID=253170" -o wdk-redist.msi
           msiexec //a wdk-redist.msi //qn TARGETDIR="$(cygpath -w "$PWD/wdk")"
@@ -120,6 +130,12 @@ jobs:
             --with-wdkdir="../wdk/Windows Kits/8.0" --with-wdfver=1011
           make
           cp examples/wdi-simple.exe ../out/ && cp COPYING ../out/libwdi-COPYING
+      - name: Check the tools
+        run: |
+          test -x out/spd_dump.exe && test -x out/wdi-simple.exe
+          rc=0; msg=$(out/spd_dump.exe --help 2>&1) || rc=$?
+          echo "exit $rc: $msg"
+          [ "$rc" -eq 1 ] && printf '%s' "$msg" | grep -qE 'unknown option|libusb_init failed' || { echo "::error::spd_dump.exe didn't start"; exit 1; }
       - uses: actions/upload-artifact@v4
         with:
           name: tools-Windows
@@ -178,15 +194,53 @@ jobs:
           cp dl/engine/* "$ENG/" && cp dl/tools/* "$ENG/tools/"
           chmod +x "$ENG"/thimsy-installer* "$ENG"/tools/* || true
           cp ../../LICENSE ../../NOTICE "$ENG/" 2>/dev/null || true
-          # Smoke test (to a file: piping into head would cut the output short).
-          "$ENG"/thimsy-installer* --json catalog > "$RUNNER_TEMP/catalog.json"
+          # Everything the engine runs must be there and executable.
+          X=""; [ "$RUNNER_OS" = Windows ] && X=.exe
+          need=("$ENG/thimsy-installer$X" "$ENG/tools/spd_dump$X")
+          [ "$RUNNER_OS" = Windows ] && need+=("$ENG/tools/wdi-simple.exe")
+          [ "$RUNNER_OS" = macOS ] && need+=("$ENG/tools/libusb-1.0.0.dylib")
+          for f in "${need[@]}"; do
+            [ -f "$f" ] && { [ -x "$f" ] || [ "${f##*.}" = dylib ]; } || { echo "::error::missing or not executable: $f"; exit 1; }
+          done
+          # Smoke tests (to a file: piping into head would cut the output short).
+          "$ENG/thimsy-installer$X" --json catalog > "$RUNNER_TEMP/catalog.json"
           head -c 300 "$RUNNER_TEMP/catalog.json"; echo
+          # spd_dump answers --help with "unknown option" and exit 1 once it
+          # has started; a missing DLL or dylib fails with another code.
+          rc=0; msg=$("$ENG/tools/spd_dump$X" --help 2>&1) || rc=$?
+          echo "spd_dump: exit $rc: $msg"
+          [ "$rc" -eq 1 ] && printf '%s' "$msg" | grep -qE 'unknown option|libusb_init failed' || { echo "::error::the bundled spd_dump didn't start"; exit 1; }
+          if [ "$RUNNER_OS" = Windows ]; then
+            # The Flutter runner needs the Visual C++ runtime, which a clean
+            # PC may not have: ship it next to the app (unless Flutter did).
+            VSWHERE="/c/Program Files (x86)/Microsoft Visual Studio/Installer/vswhere.exe"
+            VS=$("$VSWHERE" -latest -products '*' -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath | tr -d '\r')
+            CRT=$(find "$(cygpath -u "$VS")/VC/Redist/MSVC" -type d -path '*/x64/Microsoft.VC14*.CRT' -not -path '*onecore*' 2>/dev/null | sort -V | tail -1 || true)
+            echo "Visual C++ runtime: ${CRT:-not found, using System32}"
+            for dll in vcruntime140.dll vcruntime140_1.dll msvcp140.dll; do
+              if [ -f "$APP/$dll" ]; then echo "$dll: already in the build"
+              elif [ -n "$CRT" ] && [ -f "$CRT/$dll" ]; then cp "$CRT/$dll" "$APP/"
+              else cp "/c/Windows/System32/$dll" "$APP/"; fi
+            done
+          fi
           mkdir -p ../../dist
           case "$RUNNER_OS" in
             Linux) tar -C "$(dirname "$APP")" -czf "../../dist/$OUT" --transform "s,^bundle,ThimsyInstaller," bundle ;;
             Windows) (cd "$APP" && 7z a -tzip "$GITHUB_WORKSPACE/dist/$OUT" . >/dev/null) ;;
             macOS) codesign --force --deep -s - "$APP"; ditto -c -k --keepParent "$APP" "../../dist/$OUT" ;;
           esac
+          if [ "$RUNNER_OS" = Windows ]; then
+            # What's in the zip, and that nothing needed is missing.
+            python - "$GITHUB_WORKSPACE/dist/$OUT" <<'PY'
+          import sys, zipfile
+          names = sorted(n.replace("\\", "/") for n in zipfile.ZipFile(sys.argv[1]).namelist())
+          print("\n".join(names))
+          need = ["thimsy_installer.exe", "vcruntime140.dll", "vcruntime140_1.dll", "msvcp140.dll",
+                  "engine/thimsy-installer.exe", "engine/tools/spd_dump.exe", "engine/tools/wdi-simple.exe"]
+          missing = [n for n in need if n not in names]
+          sys.exit(f"missing from the zip: {missing}" if missing else 0)
+          PY
+          fi
           ls -la ../../dist
       - uses: actions/upload-artifact@v4
         with:

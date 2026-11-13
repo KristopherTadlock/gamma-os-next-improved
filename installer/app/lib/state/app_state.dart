@@ -40,10 +40,15 @@ class RunState {
   ResultEvent? result;
   final List<String> log = [];
 
+  /// Bumped by [reset]: events from a run started before the reset (one
+  /// that was replaced or abandoned) are ignored.
+  int generation = 0;
+
   bool get ok => result?.ok == true;
   bool get failed => result != null && !result!.ok;
 
   void reset() {
+    generation++;
     running = false;
     stage = stageTitle = label = null;
     fraction = null;
@@ -115,6 +120,15 @@ enum ImageSource {
 
 /// What the device step's Next did.
 enum DeviceNext { proceeded, needsWindows, nothingSelected }
+
+/// What the user confirmed on Review: the only flash "Run again" (or the
+/// space dialog's "Check again") may repeat.
+class FlashConfirmation {
+  final String job;
+  final FlashMode mode;
+  final bool dry;
+  const FlashConfirmation(this.job, this.mode, this.dry);
+}
 
 class AppState extends ChangeNotifier {
   final Engine engine;
@@ -194,6 +208,10 @@ class AppState extends ChangeNotifier {
   final Map<String, Plan> plans = {};
   Object? planError;
   bool plansLoading = false;
+
+  /// Bumped by each [loadPlans] and device change: only the latest load
+  /// writes [plans].
+  int _plansGen = 0;
   String? profileId;
   Plan? get plan => profileId == null ? null : plans[profileId];
 
@@ -241,8 +259,19 @@ class AppState extends ChangeNotifier {
 
   final RunState buildRun = RunState();
   EngineRun? _buildHandle;
-  String? get job => buildRun.result?.str('job');
-  String? get image => buildRun.result?.str('image');
+
+  /// The device and profile the current [buildRun] was started for.
+  String? _builtDevice, _builtProfile;
+
+  /// Bumped whenever the device or profile changes, so work started for
+  /// the old selection (a space check before a build) doesn't carry on.
+  int _selection = 0;
+
+  /// The build finished and is for the device and profile chosen now.
+  bool get buildCurrent =>
+      buildRun.ok && _builtDevice == deviceId && _builtProfile == profileId;
+  String? get job => buildCurrent ? buildRun.result?.str('job') : null;
+  String? get image => buildCurrent ? buildRun.result?.str('image') : null;
 
   // ---------------------------------------------------------------- backup
   bool backedUp = false;
@@ -250,6 +279,7 @@ class AppState extends ChangeNotifier {
   // ---------------------------------------------------------------- unlock
   bool unlockConfirmed = false;
   final RunState unlockRun = RunState();
+  EngineRun? _unlockHandle;
   String get unlockRoute => plan?.guides.unlockRoute ?? 'none';
 
   // --------------------------------------------------------------- connect
@@ -273,6 +303,21 @@ class AppState extends ChangeNotifier {
   FlashMode flashMode = FlashMode.full;
   final RunState flashRun = RunState();
   EngineRun? _flashHandle;
+
+  /// Set by [install]; cleared when the build, journey or mode changes.
+  FlashConfirmation? _confirmed;
+
+  /// A build or an install is running: the selection and the step rail
+  /// are locked until it ends.
+  bool get busy => buildRun.running || flashRun.running;
+
+  /// A real install is past its checks and writing (or about to write) the
+  /// device: stopping now needs a confirmation.
+  bool get stopNeedsConfirmation =>
+      flashRun.running &&
+      !flashRunDry &&
+      flashRun.stage != null &&
+      flashRun.stage != 'check';
 
   // ----------------------------------------------------------------- clean
   List<CleanItem>? cleanItems;
@@ -310,15 +355,20 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void selectDevice(String id) {
-    if (deviceId != id) {
-      deviceId = id;
-      plans.clear();
-      profileId = null;
-      exportOnly = false;
-      _resetFrom(WizardStep.profile);
-    }
+  Future<void> selectDevice(String id) async {
+    if (busy || deviceId == id) return;
+    deviceId = id;
+    plans.clear();
+    _plansGen++;
+    plansLoading = false;
+    planError = null;
+    profileId = null;
+    exportOnly = false;
+    detected = const [];
+    driverStatus = driverDetail = null;
+    final done = _resetFrom(WizardStep.profile);
     notifyListeners();
+    await done;
   }
 
   /// Next on the device step. Returns [DeviceNext.needsWindows] when this
@@ -345,7 +395,7 @@ class AppState extends ChangeNotifier {
   void exportAnyway() {
     if (device?.buildVerified != true) return;
     exportOnly = true;
-    if (buildRun.ok) {
+    if (buildCurrent) {
       _advanceTo(WizardStep.done);
     } else if (step.index < WizardStep.build.index) {
       _advanceTo(WizardStep.profile);
@@ -358,39 +408,55 @@ class AppState extends ChangeNotifier {
     final d = deviceId;
     final cat = catalog;
     if (d == null || cat == null) return;
+    final gen = ++_plansGen;
     plansLoading = true;
     planError = null;
     notifyListeners();
+    // Collected apart and kept only if nothing changed meanwhile (another
+    // device, or a newer load): plans never mix two devices.
+    final loaded = <String, Plan>{};
+    Object? error;
     try {
       for (final p in cat.profiles) {
-        plans[p.id] = await engine.resolve(device: d, profile: p.id);
+        loaded[p.id] = await engine.resolve(device: d, profile: p.id);
+        if (gen != _plansGen) return;
       }
+    } catch (e) {
+      error = e;
+    }
+    if (gen != _plansGen || deviceId != d) return;
+    plans
+      ..clear()
+      ..addAll(loaded);
+    planError = error;
+    if (error == null) {
       profileId ??= cat.profiles
           .where((p) => p.available && (plans[p.id]?.available ?? false))
           .map((p) => p.id)
           .firstOrNull;
-    } catch (e) {
-      planError = e;
-    } finally {
-      plansLoading = false;
-      notifyListeners();
     }
-  }
-
-  void selectProfile(String id) {
-    if (!(plans[id]?.available ?? false)) return;
-    if (profileId != id) {
-      profileId = id;
-      _resetFrom(WizardStep.build);
-    }
+    plansLoading = false;
     notifyListeners();
   }
 
+  Future<void> selectProfile(String id) async {
+    if (busy || !(plans[id]?.available ?? false) || profileId == id) return;
+    profileId = id;
+    final done = _resetFrom(WizardStep.build);
+    notifyListeners();
+    await done;
+  }
+
   void selectJourney(String id) {
-    if (plan?.journeys[id] == null) return;
-    journeyId = id;
-    flashMode = allowedModes.first;
-    unlockConfirmed = false;
+    if (busy || plan?.journeys[id] == null) return;
+    if (journeyId != id) {
+      journeyId = id;
+      flashMode = allowedModes.first;
+      unlockConfirmed = false;
+      // The unlock step may now be needed, and the confirmed install no
+      // longer matches: go through the steps after the journey again.
+      _invalidateFlash(WizardStep.journey);
+    }
     notifyListeners();
   }
 
@@ -426,7 +492,9 @@ class AppState extends ChangeNotifier {
         workspace: w,
         deleteDownloads: deleteDownloads,
       );
-      if (workspace.trim() == w) space = info;
+      if (workspace.trim() == w && deviceId == d && profileId == p) {
+        space = info;
+      }
       return info;
     } catch (e) {
       spaceError = e;
@@ -449,7 +517,12 @@ class AppState extends ChangeNotifier {
     spaceProblem = null;
     notifyListeners();
     if (problem?.kind == SpaceProblemKind.flash) {
-      startFlash();
+      // Only the install the user confirmed, in its mode (dry or real).
+      if (canRunAgain) {
+        _startConfirmed();
+      } else {
+        goTo(WizardStep.review);
+      }
     } else {
       await startBuild();
     }
@@ -473,10 +546,13 @@ class AppState extends ChangeNotifier {
 
   /// Checks free space first; never starts the build without room.
   Future<void> startBuild() async {
-    if (buildRun.running || deviceId == null || profileId == null) return;
+    if (busy || deviceId == null || profileId == null) return;
     if (workspace.trim().isEmpty || !imageSourceReady) return;
+    final d = deviceId!, p = profileId!, sel = _selection;
     _spaceDebounce?.cancel();
     final info = await checkSpace();
+    // The device or profile changed (or a build started) while checking.
+    if (sel != _selection || deviceId != d || profileId != p || busy) return;
     if (info == null) return;
     if (!info.ok) {
       spaceProblem = SpaceProblem(
@@ -487,18 +563,27 @@ class AppState extends ChangeNotifier {
       notifyListeners();
       return;
     }
+    _invalidateFlash();
     buildRun.reset();
     buildRun.running = true;
+    _builtDevice = d;
+    _builtProfile = p;
     notifyListeners();
     final run = engine.build(
-      device: deviceId!,
-      profile: profileId!,
+      device: d,
+      profile: p,
       workspace: workspace.trim(),
       imports: imports,
       deleteDownloads: deleteDownloads,
     );
     _buildHandle = run;
-    _follow(run, buildRun, onDone: () => _buildHandle = null);
+    _follow(
+      run,
+      buildRun,
+      onDone: () {
+        if (identical(_buildHandle, run)) _buildHandle = null;
+      },
+    );
   }
 
   Future<void> cancelBuild() async {
@@ -520,7 +605,15 @@ class AppState extends ChangeNotifier {
     unlockRun.reset();
     unlockRun.running = true;
     notifyListeners();
-    _follow(engine.unlock(device: deviceId!), unlockRun);
+    final run = engine.unlock(device: deviceId!);
+    _unlockHandle = run;
+    _follow(
+      run,
+      unlockRun,
+      onDone: () {
+        if (identical(_unlockHandle, run)) _unlockHandle = null;
+      },
+    );
   }
 
   void startDetect() {
@@ -528,7 +621,8 @@ class AppState extends ChangeNotifier {
     final run = engine.detect();
     _detectHandle = run;
     _detectSub = run.events.listen((e) {
-      if (e is DevicesEvent) {
+      // Nothing from a watch that was stopped (its list was cleared).
+      if (e is DevicesEvent && identical(_detectHandle, run)) {
         detected = e.devices;
         notifyListeners();
       }
@@ -536,12 +630,15 @@ class AppState extends ChangeNotifier {
     if (host == 'windows' && deviceId != null) checkDriver();
   }
 
+  /// Stops the watch and forgets what it saw, so no later step relies on
+  /// an old snapshot.
   Future<void> stopDetect() async {
-    final h = _detectHandle;
+    final h = _detectHandle, sub = _detectSub;
     _detectHandle = null;
-    await _detectSub?.cancel();
     _detectSub = null;
+    detected = const [];
     await h?.cancel();
+    await sub?.cancel();
   }
 
   Future<void> checkDriver({bool install = false}) async {
@@ -567,8 +664,9 @@ class AppState extends ChangeNotifier {
   }
 
   void setFlashMode(FlashMode m) {
-    if (!allowedModes.contains(m)) return;
+    if (busy || !allowedModes.contains(m) || flashMode == m) return;
     flashMode = m;
+    _invalidateFlash();
     notifyListeners();
   }
 
@@ -577,29 +675,59 @@ class AppState extends ChangeNotifier {
   bool get canInstallForReal =>
       plan?.connectFirst == false || matchedDevice != null;
 
-  /// Repeats the last run in the same mode (never switches a dry run to a
-  /// real install: that only happens from Review, after its confirmation).
+  /// Whether "Run again" may repeat the install confirmed on Review: the
+  /// same build, mode and dry/real choice.
+  bool get canRunAgain {
+    final c = _confirmed;
+    return c != null && c.job == job && !busy;
+  }
+
+  /// Repeats exactly what was confirmed on Review (never switches a dry run
+  /// to a real install, or one mode or build for another). When that no
+  /// longer applies, goes back to Review instead.
   void runAgain() {
-    dryRun = flashRunDry;
-    startFlash();
+    if (busy) return;
+    if (!canRunAgain) {
+      goTo(WizardStep.review);
+      return;
+    }
+    _startConfirmed();
   }
 
-  /// Review's Install button (after the confirmation dialog).
+  /// Review's Install button (after the confirmation dialog): records what
+  /// was confirmed, then starts it.
   void install() {
+    final j = job;
+    if (busy || j == null || (!dryRun && !canInstallForReal)) return;
+    _confirmed = FlashConfirmation(j, flashMode, dryRun);
     _advanceTo(WizardStep.install);
-    startFlash();
+    _startConfirmed();
   }
 
-  void startFlash() {
-    final j = job;
-    if (flashRun.running || j == null) return;
+  void _startConfirmed() {
+    final c = _confirmed;
+    if (flashRun.running || c == null || c.job != job) return;
     flashRun.reset();
     flashRun.running = true;
-    flashRunDry = dryRun;
+    flashRunDry = c.dry;
     notifyListeners();
-    final run = engine.flash(job: j, dryRun: flashRunDry, mode: flashMode);
+    final run = engine.flash(job: c.job, dryRun: c.dry, mode: c.mode);
     _flashHandle = run;
-    _follow(run, flashRun, onDone: () => _flashHandle = null);
+    _follow(
+      run,
+      flashRun,
+      onDone: () {
+        if (identical(_flashHandle, run)) _flashHandle = null;
+      },
+    );
+  }
+
+  /// The build, journey or mode changed: the confirmed install and its
+  /// result no longer apply, and Review must be passed again.
+  void _invalidateFlash([WizardStep back = WizardStep.review]) {
+    _confirmed = null;
+    if (!flashRun.running) flashRun.reset();
+    if (furthest.index > back.index) furthest = back;
   }
 
   Future<void> cancelFlash() async {
@@ -657,9 +785,14 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Folds [run]'s events into [state] until [state] is reset (the run was
+  /// replaced or abandoned); later events are dropped.
   void _follow(EngineRun run, RunState state, {VoidCallback? onDone}) {
+    final generation = state.generation;
+    bool current() => state.generation == generation;
     run.events.listen(
       (e) {
+        if (!current()) return;
         state.apply(e);
         if (e is ErrorEvent && e.code == 'unsupported_host') hostError = e;
         if (e is ErrorEvent && e.code == 'not_enough_space') {
@@ -673,7 +806,7 @@ class AppState extends ChangeNotifier {
         notifyListeners();
       },
       onDone: () {
-        state.running = false;
+        if (current()) state.running = false;
         onDone?.call();
         notifyListeners();
       },
@@ -707,7 +840,7 @@ class AppState extends ChangeNotifier {
       case WizardStep.journey:
         return journey != null;
       case WizardStep.build:
-        return buildRun.ok;
+        return buildCurrent;
       case WizardStep.backup:
         return backedUp;
       case WizardStep.unlock:
@@ -749,7 +882,9 @@ class AppState extends ChangeNotifier {
     if (i >= 0) goTo(WizardStep.values[i]);
   }
 
-  bool canGoTo(WizardStep s) => s.index <= furthest.index && !isSkipped(s);
+  /// Steps can't be changed while a build or install runs.
+  bool canGoTo(WizardStep s) =>
+      !busy && s.index <= furthest.index && !isSkipped(s);
 
   void goTo(WizardStep s) {
     if (!canGoTo(s)) return;
@@ -761,11 +896,17 @@ class AppState extends ChangeNotifier {
     _enter(s);
   }
 
+  /// Steps that watch for the device: Review keeps watching, so what it
+  /// shows (and allows) is what's connected now.
+  static const _detectSteps = {WizardStep.connect, WizardStep.review};
+
   void _enter(WizardStep s) {
     final leaving = step;
     step = s;
-    if (leaving == WizardStep.connect && s != WizardStep.connect) stopDetect();
-    if (s == WizardStep.connect) startDetect();
+    if (_detectSteps.contains(leaving) && !_detectSteps.contains(s)) {
+      stopDetect();
+    }
+    if (_detectSteps.contains(s)) startDetect();
     if (s == WizardStep.profile && plans.isEmpty) loadPlans();
     if (s == WizardStep.build && space == null && workspace.isNotEmpty) {
       checkSpace();
@@ -774,16 +915,31 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
-  /// Forget progress from [s] on (a different device or profile was picked).
-  void _resetFrom(WizardStep s) {
+  /// Forget progress from [s] on (a different device or profile was
+  /// picked). Stops and waits for anything still running for the old
+  /// selection; their remaining events are ignored.
+  Future<void> _resetFrom(WizardStep s) async {
+    _selection++;
     if (furthest.index >= s.index) furthest = WizardStep.values[s.index - 1];
     if (s.index <= WizardStep.profile.index) journeyId = null;
-    if (s.index <= WizardStep.build.index) buildRun.reset();
+    if (s.index <= WizardStep.build.index) {
+      buildRun.reset();
+      _builtDevice = _builtProfile = null;
+      space = null;
+    }
     backedUp = false;
     unlockConfirmed = false;
     unlockRun.reset();
     flashRun.reset();
+    _confirmed = null;
     firstBootChecks.clear();
+    final handles = [_buildHandle, _flashHandle, _unlockHandle];
+    _buildHandle = _flashHandle = _unlockHandle = null;
+    await Future.wait([
+      for (final h in handles)
+        if (h != null) h.cancel(),
+      stopDetect(),
+    ]);
   }
 
   @override
@@ -792,6 +948,7 @@ class AppState extends ChangeNotifier {
     stopDetect();
     _buildHandle?.cancel();
     _flashHandle?.cancel();
+    _unlockHandle?.cancel();
     super.dispose();
   }
 }

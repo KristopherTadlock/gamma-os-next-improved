@@ -2,6 +2,7 @@
 @TestOn('!windows')
 library;
 
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter_test/flutter_test.dart';
@@ -30,6 +31,9 @@ case "$1" in
   resolve)
     echo '{"type":"error","code":"profile_unavailable","message":"No such profile"}'
     exit 2
+    ;;
+  detect)
+    exec sleep 30
     ;;
   *)
     exit 3
@@ -132,6 +136,36 @@ void main() {
     final events = await engine.unlock(device: 'd').events.toList();
     expect(events.whereType<ErrorEvent>().single.code, 'engine_crashed');
     expect((events.last as ResultEvent).ok, isFalse);
+  });
+
+  test('a cancel before the process has started still stops it', () async {
+    final run = engine.detect();
+    // Synchronously: Process.start hasn't returned yet.
+    unawaited(run.cancel());
+    final events = await run.events.toList().timeout(
+      const Duration(seconds: 10),
+      onTimeout: () => fail('the engine process kept running'),
+    );
+    expect(events.whereType<ErrorEvent>().single.code, 'cancelled');
+    expect((events.last as ResultEvent).ok, isFalse);
+  });
+
+  // Custom settings aren't built into the image yet: `build` has no way to
+  // take them (see the build test's exact arguments), previews still work.
+  test('settings: resolve still passes overrides as --set', () async {
+    await expectLater(
+      engine.resolve(
+        device: 'd',
+        profile: 'nope',
+        overrides: const {'nano.theme': 'grid'},
+      ),
+      throwsA(isA<EngineException>()),
+    );
+    expect(
+      engine.stderrLog.last,
+      'args: resolve --device d --profile nope --set nano.theme=grid '
+      '--lang en --json',
+    );
   });
 
   test('a missing engine binary reports tool_missing', () async {

@@ -448,6 +448,18 @@ impl Catalog {
             if !d.build.is_empty() && d.source.is_none() {
                 bail!("device {} has build steps but no source firmware", d.id);
             }
+            // Every profile a buildable device can build has a reference
+            // hash, so no build is ever published unchecked.
+            if !d.build.is_empty() {
+                for p in self.root.systems.keys().chain(d.bundles.keys()) {
+                    if !d.expect.contains_key(p) {
+                        bail!(
+                            "device {} can build the {p} profile but has no expect hash for it",
+                            d.id
+                        );
+                    }
+                }
+            }
             for (p, b) in &d.bundles {
                 self.profile(p)
                     .with_context(|| format!("device {}: bundle for unknown profile {p}", d.id))?;

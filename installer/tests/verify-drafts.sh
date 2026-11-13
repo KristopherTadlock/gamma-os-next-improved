@@ -40,7 +40,19 @@ for TAG in "$@"; do
   fi
   rm -f "$REF"
   cp -r "$HERE/../catalog" "$D/catalog"
-  python3 "$HERE/../tools/apply_pack.py" "$D/pack/pack.json" "$D/catalog/devices/anbernic-rg-cube.yaml" "$D/catalog/catalog.yaml" heavy "$TAG" >/dev/null
+  # Build from this release's loose pack files: drop the device's published
+  # bundles, or the engine would want (and download) the 1.0a archive.
+  python3 -I - "$D/catalog/devices/anbernic-rg-cube.yaml" <<'PY'
+import re, sys
+p = sys.argv[1]
+s = open(p, encoding="utf-8").read()
+s = re.sub(r"^bundles:[ \t]*\n(?:[ \t]+\S.*\n|[ \t]*\n(?=[ \t]+\S))*\n?", "", s, flags=re.M)
+open(p, "w", encoding="utf-8").write(s)
+PY
+  if grep -q '^bundles:' "$D/catalog/devices/anbernic-rg-cube.yaml" ||
+     ! python3 -I "$HERE/../tools/apply_pack.py" "$D/pack/pack.json" "$D/catalog/devices/anbernic-rg-cube.yaml" "$D/catalog/catalog.yaml" heavy "$TAG" > "$D/apply.log" 2>&1; then
+    echo -e "$TAG\tFAIL\tapply_pack: $(tail -1 "$D/apply.log" 2>/dev/null)" | tee -a "$RESULTS"; rm -rf "$D"; continue
+  fi
   rm -f "$D/pack"/thimsy-system-*.img.zst   # keep only the published-size parts
   WS="$WORK/ws"; rm -rf "$WS/jobs"
   if ! "$ENGINE" --catalog "$D/catalog" --json build --device anbernic-rg-cube --profile heavy --workspace "$WS" --import "$D/pack" > "$D/build.jsonl" 2>"$D/build.err"; then

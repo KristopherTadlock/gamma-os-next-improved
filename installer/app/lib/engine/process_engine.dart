@@ -123,7 +123,6 @@ class ProcessEngine extends Engine {
     required String workspace,
     List<String> imports = const [],
     bool deleteDownloads = false,
-    Map<String, String> overrides = const {},
   }) => _start([
     'build',
     '--device',
@@ -135,7 +134,6 @@ class ProcessEngine extends Engine {
     for (final path in imports)
       if (path.isNotEmpty) ...['--import', path],
     if (deleteDownloads) '--delete-downloads',
-    ..._sets(overrides),
   ]);
 
   @override
@@ -196,6 +194,8 @@ class _ProcessRun implements EngineRun {
     try {
       final proc = await Process.start(exe, args);
       _process = proc;
+      // Cancelled while the process was starting: stop it now.
+      if (_cancelled) proc.kill();
       final err = proc.stderr
           .transform(utf8.decoder)
           .transform(const LineSplitter())

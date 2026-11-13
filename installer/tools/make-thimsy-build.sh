@@ -48,7 +48,10 @@ while [[ $# -gt 0 ]]; do
 done
 [[ $# -eq 2 ]] || { echo "usage: $0 [options] THIMSY_PAC OUT_DIR (--help)" >&2; exit 2; }
 PAC="$(realpath "$1")"; OUT="$2"
+# Absolute before anything changes directory (a bare name is looked up on PATH).
+if [[ "$ENGINE" != */* ]]; then ENGINE="$(command -v "$ENGINE" || echo "./$ENGINE")"; fi
 [[ -x "$ENGINE" ]] || { echo "no engine at $ENGINE (cargo build --release in installer/engine)" >&2; exit 1; }
+ENGINE="$(cd "$(dirname "$ENGINE")" && pwd)/$(basename "$ENGINE")"
 [[ -f "$PAC" ]] || { echo "no file $PAC" >&2; exit 1; }
 DEVICE_YAML="$INSTALLER/catalog/devices/$DEVICE.yaml"
 [[ -f "$DEVICE_YAML" ]] || { echo "no catalog device $DEVICE" >&2; exit 1; }
@@ -61,6 +64,13 @@ short=$(sed -n 's/^short: *"\{0,1\}\([^"]*\)"\{0,1\}$/\1/p' "$DEVICE_YAML")
 short="${short:-$(echo "$DEVICE" | sed 's/^[a-z]*-//; s/-//g')}"
 
 mkdir -p "$OUT"; OUT="$(realpath "$OUT")"
+# OUT_DIR/catalog is replaced below: never let that be the real catalog.
+REAL_INSTALLER="$(realpath "$INSTALLER")"
+if [[ "$OUT" == "$REAL_INSTALLER" || "$OUT/catalog" -ef "$INSTALLER/catalog" ||
+      "$OUT/" == "$REAL_INSTALLER/catalog/"* ]]; then
+  echo "OUT_DIR $OUT is the installer's own folder or catalog; choose another folder" >&2
+  exit 2
+fi
 WORK="$OUT/.work"; rm -rf "$WORK" "$OUT/thimsy-build" "$OUT/catalog"
 mkdir -p "$WORK"
 trap 'rm -rf "$WORK"' EXIT

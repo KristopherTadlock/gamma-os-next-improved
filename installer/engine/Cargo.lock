@@ -960,6 +960,7 @@ dependencies = [
  "anyhow",
  "fs4",
  "hex",
+ "libc",
  "minisign-verify",
  "nusb",
  "qbsdiff",
@@ -972,6 +973,7 @@ dependencies = [
  "tempfile",
  "thiserror",
  "ureq",
+ "windows-sys 0.61.2",
  "zstd",
 ]
 

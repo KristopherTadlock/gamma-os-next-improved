@@ -169,8 +169,77 @@ fn flash_without_a_build_is_an_error() {
         "flash",
         "--job",
         ws.path().to_str().unwrap(),
+        "--mode",
+        "full",
         "--dry-run",
     ]);
     assert!(!ok);
     assert!(l.iter().any(|e| e["type"] == "error"));
+}
+
+#[test]
+fn flash_mode_is_required() {
+    let ws = tempfile::tempdir().unwrap();
+    let job = ws.path().to_str().unwrap();
+    for args in [
+        vec!["--json", "flash", "--job", job, "--dry-run"],
+        vec![
+            "--json",
+            "flash",
+            "--job",
+            job,
+            "--mode",
+            "fresh",
+            "--dry-run",
+        ],
+    ] {
+        let out = Command::new(env!("CARGO_BIN_EXE_thimsy-installer"))
+            .args(&args)
+            .output()
+            .unwrap();
+        assert!(!out.status.success(), "{args:?}");
+        let err = String::from_utf8_lossy(&out.stderr);
+        assert!(err.contains("--mode"), "{args:?}: {err}");
+    }
+}
+
+#[test]
+fn build_refuses_custom_settings_until_they_can_be_applied() {
+    let ws = tempfile::tempdir().unwrap();
+    let (ok, l) = run(&[
+        "--json",
+        "build",
+        "--device",
+        "anbernic-rg-cube",
+        "--profile",
+        "heavy",
+        "--workspace",
+        ws.path().to_str().unwrap(),
+        "--set",
+        "nano.theme=minima",
+    ]);
+    assert!(!ok);
+    let err = l.iter().find(|e| e["type"] == "error").unwrap();
+    assert_eq!(err["code"], "bad_input");
+    assert!(err["message"]
+        .as_str()
+        .unwrap()
+        .contains("aren't supported"));
+    // resolve still reports them.
+    let (ok, l) = run(&[
+        "--json",
+        "resolve",
+        "--device",
+        "anbernic-rg-cube",
+        "--profile",
+        "heavy",
+        "--set",
+        "nano.theme=minima",
+    ]);
+    assert!(ok);
+    assert!(l[0]["settings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|s| s["key"] == "nano.theme" && s["source"] == "user"));
 }

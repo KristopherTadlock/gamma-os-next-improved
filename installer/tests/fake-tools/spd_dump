@@ -1,21 +1,85 @@
 #!/usr/bin/env python3
 """Stand-in for spd_dump in tests: accepts the same command line, asks for
-"yes" before each write/erase like the real tool, checks the files it's
-given, writes dummy backups for read_part, and logs every command to
-$FAKE_SPD_LOG. Fails if any confirmation is missing."""
-import os, sys
+"yes" before each write/erase like the real tool (on stdout, no newline),
+checks the files it's given, writes backups of the requested size for
+read_part, writes the device's partition table for partition_list, and logs
+every command to $FAKE_SPD_LOG. Fails if any confirmation is missing.
+
+The partition table is the one in the PAC config of the job being flashed
+(found through ../job.json from the working directory), in the real tool's
+format; FAKE_SPD_PARTS=FILE hands out FILE instead (a different device).
+FAKE_SPD_HASH=1 also logs "sha256 PARTITION HEX" for each written file.
+FAKE_SPD_WAIT=SECONDS waits that long for the "device" before connecting."""
+import hashlib, json, os, re, struct, sys, time
+
+def follow_launcher():
+    """Some python3 commands are launchers that run the interpreter as their
+    child. The engine makes its own child (the launcher, here) die with it;
+    pass that on so this process behaves like the single native process the
+    real spd_dump is. Only when the parent runs this same script, so a
+    missing PR_SET_PDEATHSIG in the engine is never masked."""
+    if not sys.platform.startswith("linux"):
+        return
+    try:
+        ppid = os.getppid()
+        with open(f"/proc/{ppid}/cmdline", "rb") as f:
+            parent = f.read().split(b"\0")
+        if os.fsencode(sys.argv[0]) in parent:
+            import ctypes, signal
+            ctypes.CDLL(None).prctl(1, int(signal.SIGKILL))  # PR_SET_PDEATHSIG
+            if os.getppid() != ppid:
+                os._exit(1)
+    except OSError:
+        pass
+
+follow_launcher()
 args = sys.argv[1:]
 def log_line(text):
     # The real tool logs to stderr (DBG_LOG); only confirmations go to stdout.
     sys.stderr.write(text + "\n"); sys.stderr.flush()
 connected = False
-log = open(os.environ.get("FAKE_SPD_LOG", os.devnull), "a")
+log = open(os.environ.get("FAKE_SPD_LOG", os.devnull), "a", buffering=1)
 def confirm(what):
     sys.stdout.write(f'Answer "yes" to confirm the "{what}" command: ')
     sys.stdout.flush()
     line = sys.stdin.readline()
     if line.strip().lower() != "yes":
         sys.stderr.write("operation is not confirmed\n"); sys.exit(1)
+
+def pac_partitions():
+    """The <Partitions> table of the job's PAC, as (name, size) pairs."""
+    image = json.load(open(os.path.join("..", "job.json")))["image"]
+    with open(image, "rb") as f:
+        h = f.read(2124)
+        count, start = struct.unpack_from("<II", h, 1076)
+        f.seek(start)
+        table = f.read(count * 2580)
+        xml = None
+        for i in range(count):
+            e = table[i * 2580:(i + 1) * 2580]
+            name = e[516:1028].decode("utf-16-le").split("\0")[0]
+            size = struct.unpack_from("<I", e, 1540)[0] | (struct.unpack_from("<I", e, 1532)[0] << 32)
+            off = struct.unpack_from("<I", e, 1552)[0] | (struct.unpack_from("<I", e, 1536)[0] << 32)
+            if size and name.lower().endswith(".xml"):
+                f.seek(off); xml = f.read(size).decode("utf-8", "replace")
+    body = xml.split("<Partitions>", 1)[1].split("</Partitions>", 1)[0]
+    return re.findall(r'<Partition id="([^"]+)" size="([^"]+)"', body)
+
+def partition_list(out):
+    if os.environ.get("FAKE_SPD_PARTS"):
+        text = open(os.environ["FAKE_SPD_PARTS"]).read()
+    else:
+        parts = pac_partitions()
+        text = "<Partitions>\n"
+        for i, (name, size) in enumerate(parts):
+            # Like partition_list(): sizes in MiB, the last one 0xffffffff.
+            shown = "0xffffffff" if i + 1 == len(parts) else str(int(size, 0))
+            text += f'    <Partition id="{name}" size="{shown}"/>\n'
+        text += "</Partitions>\n"
+    for i, (name, size) in enumerate(re.findall(r'<Partition id="([^"]+)" size="([^"]+)"', text)):
+        log_line(f"[{i}] {name}, {size}")
+    with open(out, "w") as o: o.write(text)
+
 i = 0
 while i < len(args):
     a = args[i]
@@ -26,13 +90,18 @@ while i < len(args):
         if not os.path.getsize(f): sys.exit(f"empty {f}")
         if not connected:
             log_line("Waiting for connection (300s)")
+            time.sleep(float(os.environ.get("FAKE_SPD_WAIT", "0")))
             log_line('BSL_REP_VER: "Spreadtrum Boot Block version 1.1"')
             connected = True
         log.write(f"fdl {f} {addr}\n"); log_line(f"FDL loaded from {f} at {addr}"); i += 3
+    elif a == "partition_list":
+        partition_list(args[i+1])
+        log.write(f"partition_list {args[i+1]}\n"); i += 2
     elif a == "read_part":
         name, off, size, out = args[i+1:i+5]
         os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
-        with open(out, "wb") as o: o.write(b"\0" * min(int(size, 0), 4096))
+        with open(out, "wb") as o: o.truncate(int(size, 0))  # sparse, full size
+        log_line(f"dump_partition: {name}+0x0, target: {size}, read: {size}")
         log.write(f"read_part {name} {size} {out}\n"); i += 5
     elif a == "write_part":
         name, f = args[i+1], args[i+2]
@@ -40,7 +109,13 @@ while i < len(args):
         size = os.path.getsize(f)
         log_line(f"file size : 0x{size:x}")
         log_line(f"load_partition: {name}, target: 0x{size:x}, written: 0x{size:x}")
-        log.write(f"write_part {name} {f} {size}\n"); i += 3
+        log.write(f"write_part {name} {f} {size}\n")
+        if os.environ.get("FAKE_SPD_HASH"):
+            h = hashlib.sha256()
+            with open(f, "rb") as src:
+                for chunk in iter(lambda: src.read(1 << 22), b""): h.update(chunk)
+            log.write(f"sha256 {name} {h.hexdigest()}\n")
+        i += 3
     elif a == "erase_part":
         confirm("erase partition")
         log.write(f"erase_part {args[i+1]}\n"); i += 2

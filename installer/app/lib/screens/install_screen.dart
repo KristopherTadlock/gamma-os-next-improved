@@ -8,6 +8,12 @@ import '../widgets/common.dart';
 class InstallScreen extends StatelessWidget {
   const InstallScreen({super.key});
 
+  /// Stop: once a real install is writing the device, asks first.
+  Future<void> _stop(BuildContext context, AppState s) async {
+    if (s.stopNeedsConfirmation && !await confirmStopInstall(context)) return;
+    await s.cancelFlash();
+  }
+
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
@@ -29,22 +35,27 @@ class InstallScreen extends StatelessWidget {
         const SizedBox(height: 12),
         Row(
           children: [
-            if (run.failed || (run.ok && s.flashRunDry))
+            // "Run again" repeats only what was confirmed on Review.
+            if ((run.failed || (run.ok && s.flashRunDry)) && s.canRunAgain) ...[
               FilledButton(
                 key: const ValueKey('run-again'),
                 onPressed: s.runAgain,
                 child: Text(l.runAgain),
               ),
-            if (run.ok && s.flashRunDry) ...[
               const SizedBox(width: 12),
+            ],
+            if (!run.running && !(run.ok && !s.flashRunDry))
               OutlinedButton(
                 key: const ValueKey('back-to-review'),
                 onPressed: () => s.goTo(WizardStep.review),
                 child: Text(l.backToReview),
               ),
-            ],
             if (run.running)
-              OutlinedButton(onPressed: s.cancelFlash, child: Text(l.stop)),
+              OutlinedButton(
+                key: const ValueKey('stop-install'),
+                onPressed: () => _stop(context, s),
+                child: Text(l.stop),
+              ),
           ],
         ),
       ],

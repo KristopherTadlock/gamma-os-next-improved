@@ -17,6 +17,18 @@ use std::sync::Arc;
 
 const MIB: u64 = 1 << 20;
 
+/// The fixture firmware's partition table (MiB). NV is bigger than its image
+/// in the PAC: backups read the whole partition.
+pub const TABLE: &[(&str, u64)] = &[
+    ("prodnv", 1),
+    ("vendor_boot_a", 1),
+    ("vendor_boot_b", 1),
+    ("super", 12),
+    ("persist", 1),
+    ("metadata", 1),
+    ("userdata", pac::REST_OF_DISK),
+];
+
 pub struct Fixture {
     pub dir: tempfile::TempDir,
     pub catalog: Catalog,
@@ -53,17 +65,20 @@ pub fn fixture(expect_override: Option<&str>) -> Fixture {
         E(
             "",
             "cfg.xml",
-            config_xml(&[
-                ("FDL", "FDL", None, 0x5500, false),
-                ("FDL2", "NAND_FDL", None, 0x9efffe00, false),
-                ("ProdNV", "CODE2", Some("prodnv"), 0, true),
-                ("VENDORBOOT", "CODE2", Some("vendor_boot_a"), 0, false),
-                ("VENDORBOOT_B", "CODE2", Some("vendor_boot_b"), 0, false),
-                ("Super", "YAFFS_IMG2", Some("super"), 0, false),
-                ("Persist", "YAFFS_IMG2", Some("persist"), 0, false),
-                ("UserData", "YAFFS_IMG2", Some("userdata"), 0, false),
-                ("EraseMetadata", "EraseFlash2", Some("metadata"), 0, false),
-            ]),
+            config_xml_with_table(
+                &[
+                    ("FDL", "FDL", None, 0x5500, false),
+                    ("FDL2", "NAND_FDL", None, 0x9efffe00, false),
+                    ("ProdNV", "CODE2", Some("prodnv"), 0, true),
+                    ("VENDORBOOT", "CODE2", Some("vendor_boot_a"), 0, false),
+                    ("VENDORBOOT_B", "CODE2", Some("vendor_boot_b"), 0, false),
+                    ("Super", "YAFFS_IMG2", Some("super"), 0, false),
+                    ("Persist", "YAFFS_IMG2", Some("persist"), 0, false),
+                    ("UserData", "YAFFS_IMG2", Some("userdata"), 0, false),
+                    ("EraseMetadata", "EraseFlash2", Some("metadata"), 0, false),
+                ],
+                TABLE,
+            ),
         ),
     ];
     let src_pac = build_pac(&entries, "Stock_1.0", "TESTDEV");
@@ -446,16 +461,87 @@ fn tampered_inputs_are_rejected() {
 fn not_enough_space_is_reported_before_anything_is_written() {
     let fx = good_fixture();
     let ws = fx.dir.path().join("ws");
+    let d = fx.catalog.device("testdev").unwrap();
+    let sp = crate::resolve::space(&fx.catalog, d, "heavy");
     let sc = job::check_space(&fx.catalog, "testdev", "heavy", &ws, false).unwrap();
     assert!(sc.ok);
     assert!(sc.need >= sc.downloads);
     assert_eq!(sc.cached, 0);
     let with_delete = job::check_space(&fx.catalog, "testdev", "heavy", &ws, true).unwrap();
     assert!(with_delete.flash_need <= sc.flash_need);
+    // Flashing needs the image (not built yet), the unpacked partitions and,
+    // when downloads are kept, the downloads still missing; the build needs
+    // its peak minus what's cached. Nothing is subtracted twice.
+    std::fs::create_dir_all(ws.join("cache")).unwrap();
+    std::fs::copy(fx.dir.path().join("fw.7z.001"), ws.join("cache/fw.7z.001")).unwrap();
+    for delete in [false, true] {
+        let sc = job::check_space(&fx.catalog, "testdev", "heavy", &ws, delete).unwrap();
+        assert_eq!(
+            sc.cached,
+            std::fs::metadata(ws.join("cache/fw.7z.001")).unwrap().len()
+        );
+        let kept = if delete { 0 } else { sc.downloads - sc.cached };
+        assert_eq!(
+            sc.flash_need,
+            sp.image + sp.flash_extra + kept,
+            "delete={delete}"
+        );
+        assert!(
+            sc.need >= sp.image + sp.flash_extra + kept,
+            "delete={delete}"
+        );
+        assert!(sc.need >= sp.build_peak - sc.cached, "delete={delete}");
+        if !delete {
+            assert!(sc.need >= sp.image + sp.flash_extra + (sc.downloads - sc.cached));
+        }
+    }
+    // With a device pack, the system image and patches come from it: copies
+    // of them in the cache don't count as already downloaded.
+    let mut cat = fx.catalog.clone();
+    let mut pack = d.artifacts[0].clone();
+    pack.file = "pack.tar".into();
+    pack.size = 123_456;
+    cat.devices[0].bundles.insert("heavy".into(), pack);
+    std::fs::copy(
+        fx.dir.path().join("thimsy-system.img.zst"),
+        ws.join("cache/thimsy-system.img.zst"),
+    )
+    .unwrap();
+    let sc = job::check_space(&cat, "testdev", "heavy", &ws, false).unwrap();
+    assert_eq!(
+        sc.cached,
+        std::fs::metadata(ws.join("cache/fw.7z.001")).unwrap().len()
+    );
     // The message for the app.
     let e = job::not_enough_space(&ws, 10_000_000_000, 1_000);
     assert_eq!(crate::error::code_of(&e).0, Code::NotEnoughSpace);
     assert!(e.to_string().contains("10.00 GB"));
+}
+
+#[test]
+fn picked_files_that_the_build_cant_use_are_refused() {
+    let fx = good_fixture();
+    let other = fx.dir.path().join("holiday.mp4");
+    std::fs::write(&other, b"not firmware").unwrap();
+    let mut o = opts(&fx.dir.path().join("ws"), false);
+    o.imports = vec![other];
+    let (rep, _) = quiet();
+    let err = job::build(&fx.catalog, &o, &rep).unwrap_err();
+    assert_eq!(crate::error::code_of(&err).0, Code::BadInput, "{err:#}");
+    let msg = err.to_string();
+    assert!(
+        msg.contains("holiday.mp4") && msg.contains("firmware.pac"),
+        "{msg}"
+    );
+    assert!(
+        !fx.dir.path().join("ws/cache/fw.7z.001").exists(),
+        "nothing downloaded"
+    );
+    // Settings overrides can't be applied yet: refused, not ignored.
+    let mut o = opts(&fx.dir.path().join("ws"), false);
+    o.overrides = vec![("nano.theme".into(), "minima".into())];
+    let err = job::build(&fx.catalog, &o, &rep).unwrap_err();
+    assert_eq!(crate::error::code_of(&err).0, Code::BadInput, "{err:#}");
 }
 
 #[test]
@@ -488,6 +574,47 @@ fn flash_plan_backs_up_nv_and_never_writes_protected_partitions() {
     assert!(upd.erases.is_empty());
     assert_eq!(upd.writes.len(), 3);
 
+    // Backups read the whole partition (1 MiB), not the PAC image (8 KiB).
+    assert_eq!(full.backups[0].bytes, MIB);
+    // Everything touched is checked against the device's table.
+    assert_eq!(
+        full.checks,
+        [
+            ("prodnv".to_string(), 1),
+            ("vendor_boot_a".to_string(), 1),
+            ("vendor_boot_b".to_string(), 1),
+            ("super".to_string(), 12),
+            ("userdata".to_string(), pac::REST_OF_DISK),
+            ("metadata".to_string(), 1),
+        ]
+    );
+    // Erasing NV is refused too, whatever the case.
+    let mut bad = d.clone();
+    bad.flash.as_mut().unwrap().erase_full = vec!["userdata".into(), "ProdNV".into()];
+    let err = flash::spd_plan(&bad, &p, flash::Mode::Full).unwrap_err();
+    assert!(
+        err.to_string().contains("erase protected partition ProdNV"),
+        "{err}"
+    );
+    // Listing persist for update doesn't make it writable.
+    let mut bad = d.clone();
+    bad.flash.as_mut().unwrap().update.push("Persist".into());
+    bad.flash.as_mut().unwrap().never_write = vec!["UserData".into()];
+    let err = flash::spd_plan(&bad, &p, flash::Mode::Update).unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("write protected partition persist"),
+        "{err}"
+    );
+    // A misspelt never_write name is refused.
+    let mut bad = d.clone();
+    bad.flash
+        .as_mut()
+        .unwrap()
+        .never_write
+        .push("Persits".into());
+    let err = flash::spd_plan(&bad, &p, flash::Mode::Full).unwrap_err();
+    assert!(err.to_string().contains("Persits"), "{err}");
     // A recipe that forgets to exclude persist is refused.
     let mut bad = d.clone();
     bad.flash.as_mut().unwrap().never_write = vec!["UserData".into()];
@@ -513,6 +640,15 @@ fn flash_plan_backs_up_nv_and_never_writes_protected_partitions() {
     let o = flash::FlashOptions { dry_run: true, ..o };
     let r = flash::flash(&fx.catalog, &o, &rep).unwrap();
     assert!(r.commands[0].contains("write_part super super.img"));
+
+    // A build made with another catalog version is flagged.
+    let mut rec2 = job::load_job(&o.job).unwrap();
+    rec2.catalog = "older".into();
+    std::fs::write(o.job.join("job.json"), serde_json::to_vec(&rec2).unwrap()).unwrap();
+    let (rep, sink) = quiet();
+    flash::flash(&fx.catalog, &o, &rep).unwrap();
+    assert!(sink.0.lock().unwrap().iter().any(|e| matches!(e,
+        Event::Log { level, message } if level == "warn" && message.contains("catalog older"))));
 }
 
 #[test]
@@ -523,4 +659,123 @@ fn unavailable_profile_is_refused() {
     o.profile = "light".into();
     let err = job::build(&fx.catalog, &o, &rep).unwrap_err();
     assert_eq!(crate::error::code_of(&err).0, Code::ProfileUnavailable);
+}
+
+/// Flashes the fixture through the fake spd_dump (installer/tests/fake-tools).
+#[cfg(unix)]
+#[test]
+fn flash_checks_the_image_the_device_and_the_backups() {
+    use crate::tools;
+    let fx = good_fixture();
+    let ws = fx.dir.path().join("ws");
+    let (rep, _) = quiet();
+    let rec = job::build(&fx.catalog, &opts(&ws, false), &rep).unwrap();
+    let job_dir = job::job_dir(&ws, "testdev", "heavy");
+    let flash_dir = job_dir.join("flash");
+    let backup_dir = job_dir.join("backup");
+    let fake = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../tests/fake-tools");
+    tools::test::TOOLS_DIR.with(|d| *d.borrow_mut() = Some(fake));
+    let log = fx.dir.path().join("spd.log");
+    let fake_env = |extra: Option<(&str, String)>| {
+        let _ = std::fs::remove_file(&log);
+        let mut env = vec![
+            ("FAKE_SPD_LOG".to_string(), log.display().to_string()),
+            ("FAKE_SPD_HASH".to_string(), "1".to_string()),
+        ];
+        env.extend(extra.map(|(k, v)| (k.to_string(), v)));
+        tools::test::ENV.with(|e| *e.borrow_mut() = env);
+    };
+    let o = flash::FlashOptions {
+        job: job_dir.clone(),
+        mode: flash::Mode::Full,
+        dry_run: false,
+        host: Host::Linux,
+    };
+    let p = Pac::open(&rec.image).unwrap();
+    let super_sha = sha256_hex(&p.read_entry(p.find("Super").unwrap()).unwrap());
+
+    // Files left by a flash of an older image, the same size as this one's:
+    // thrown away, not flashed.
+    std::fs::create_dir_all(&flash_dir).unwrap();
+    std::fs::write(flash_dir.join(".image-sha256"), "0".repeat(64)).unwrap();
+    std::fs::write(flash_dir.join("super.img"), vec![0xAA; 12 << 20]).unwrap();
+    fake_env(None);
+    let (rep, sink) = quiet();
+    let r = flash::flash(&fx.catalog, &o, &rep).unwrap();
+    let text = std::fs::read_to_string(&log).unwrap();
+    assert!(
+        text.contains(&format!("sha256 super {super_sha}")),
+        "super must come from this image:\n{text}"
+    );
+    assert!(text.contains("partition_list device-partitions.xml"));
+    assert!(text.contains("erase_part metadata"));
+    assert!(!flash_dir.exists(), "scratch removed after a good flash");
+    assert_eq!(r.backup.as_deref(), Some(backup_dir.as_path()));
+    // The backup is the whole partition.
+    assert_eq!(
+        std::fs::metadata(backup_dir.join("prodnv.img"))
+            .unwrap()
+            .len(),
+        MIB
+    );
+    assert!(sink.0.lock().unwrap().iter().any(|e| matches!(e,
+        Event::Log { message, .. } if message.contains("partition table matches"))));
+
+    // Another device (or stock layout): super is a different size. Nothing
+    // is confirmed, so nothing is written or erased.
+    let parts = fx.dir.path().join("other-device.xml");
+    let mut table = String::from("<Partitions>\n");
+    for (i, (name, mib)) in TABLE.iter().enumerate() {
+        let mib = if *name == "super" { 10 } else { *mib };
+        let size = if i + 1 == TABLE.len() {
+            "0xffffffff".to_string()
+        } else {
+            mib.to_string()
+        };
+        table.push_str(&format!("    <Partition id=\"{name}\" size=\"{size}\"/>\n"));
+    }
+    table.push_str("</Partitions>\n");
+    std::fs::write(&parts, table).unwrap();
+    fake_env(Some(("FAKE_SPD_PARTS", parts.display().to_string())));
+    let (rep, _) = quiet();
+    let err = flash::flash(&fx.catalog, &o, &rep).unwrap_err();
+    assert_eq!(crate::error::code_of(&err).0, Code::WrongDevice, "{err:#}");
+    assert!(
+        err.to_string().contains("super is 10 MiB on the device"),
+        "{err}"
+    );
+    let text = std::fs::read_to_string(&log).unwrap();
+    assert!(
+        !text.contains("write_part") && !text.contains("erase_part"),
+        "{text}"
+    );
+    // Its backup is kept, next to (not over) the first one.
+    assert_eq!(
+        std::fs::metadata(backup_dir.join("prodnv.img"))
+            .unwrap()
+            .len(),
+        MIB
+    );
+    let kept = std::fs::read_dir(&backup_dir).unwrap().count();
+    assert_eq!(kept, 2, "both backups kept");
+
+    // Publishing a new image clears the old unpacked partitions.
+    assert!(flash_dir.exists());
+    let (rep, _) = quiet();
+    job::build(&fx.catalog, &opts(&ws, false), &rep).unwrap();
+    assert!(!flash_dir.exists(), "build must remove <job>/flash");
+
+    // The image changed after the build (same size): refused before the
+    // device is touched.
+    let mut bytes = std::fs::read(&rec.image).unwrap();
+    let mid = bytes.len() / 2;
+    bytes[mid] ^= 0xFF;
+    std::fs::write(&rec.image, &bytes).unwrap();
+    fake_env(None);
+    let (rep, _) = quiet();
+    let err = flash::flash(&fx.catalog, &o, &rep).unwrap_err();
+    assert_eq!(crate::error::code_of(&err).0, Code::HashMismatch, "{err:#}");
+    assert!(!log.exists(), "spd_dump never ran");
+    tools::test::ENV.with(|e| e.borrow_mut().clear());
+    tools::test::TOOLS_DIR.with(|d| *d.borrow_mut() = None);
 }

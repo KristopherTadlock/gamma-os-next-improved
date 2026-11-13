@@ -101,7 +101,9 @@ enum Cmd {
     Flash {
         #[arg(long)]
         job: PathBuf,
-        #[arg(long, default_value = "full")]
+        /// full (fresh install, erases data) or update (keeps data). Required:
+        /// the choice is the user's, never a default.
+        #[arg(long, value_parser = ["full", "update"])]
         mode: String,
         #[arg(long)]
         dry_run: bool,

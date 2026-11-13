@@ -59,13 +59,16 @@ abstract class Engine {
     bool deleteDownloads = false,
   });
 
+  /// Builds the image with the profile's settings as they are: custom
+  /// settings (`--set`) aren't built into the image yet, and the engine
+  /// refuses them, so there is no way to pass any here. [resolve] still
+  /// takes overrides to preview them.
   EngineRun build({
     required String device,
     required String profile,
     required String workspace,
     List<String> imports = const [],
     bool deleteDownloads = false,
-    Map<String, String> overrides = const {},
   });
 
   /// `detect --watch`: emits [DevicesEvent]s until cancelled.

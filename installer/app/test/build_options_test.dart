@@ -94,6 +94,53 @@ void main() {
       expect(tried, ['/Users/me/Apps']);
     });
 
+    test('macOS: only a folder of the user\'s own, never Applications', () {
+      const env = {'HOME': '/Users/me'};
+      const data = '/Users/me/Library/Application Support/Thimsy Installer';
+      String ws(String appDir) => defaultWorkspaceFor(
+        executable:
+            '$appDir/Thimsy Installer.app/Contents/MacOS/'
+            'Thimsy Installer',
+        os: 'macos',
+        env: env,
+        // An administrator can write to /Applications: still not used.
+        isWritable: (_) => true,
+      );
+      expect(ws('/Applications'), data);
+      expect(ws('/Users/me/Applications'), data);
+      expect(ws('/Users/me/applications/Games'), data);
+      expect(ws('/Users/me/Library/Caches'), data);
+      expect(ws('/System/Applications'), data);
+      expect(ws('/Library/Thimsy'), data);
+      expect(ws('/Volumes/Thimsy Installer'), data);
+      expect(ws('/Users/other/Downloads'), data);
+      expect(ws('/Users/me'), data);
+      expect(ws('/Users/me/Downloads'), '/Users/me/Downloads');
+      expect(ws('/Users/me/Desktop/Thimsy'), '/Users/me/Desktop/Thimsy');
+      // Without a home folder there's nothing to compare with.
+      expect(
+        defaultWorkspaceFor(
+          executable:
+              '/Users/me/Downloads/Thimsy Installer.app/Contents/'
+              'MacOS/Thimsy Installer',
+          os: 'macos',
+          env: const {},
+          isWritable: (_) => true,
+        ),
+        isNot('/Users/me/Downloads'),
+      );
+      // Linux and Windows aren't affected.
+      expect(
+        defaultWorkspaceFor(
+          executable: '/opt/thimsy/thimsy_installer',
+          os: 'linux',
+          env: const {'HOME': '/home/me'},
+          isWritable: (_) => true,
+        ),
+        '/opt/thimsy',
+      );
+    });
+
     test('read-only app folder: the app data folder instead', () {
       expect(
         defaultWorkspaceFor(

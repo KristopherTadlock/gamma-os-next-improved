@@ -249,10 +249,24 @@ pub struct CfgFile {
     pub backup: bool,
 }
 
+/// One `<Partition id=… size=…>` of a partition table: the PAC config's
+/// (what the firmware expects) or the one `spd_dump partition_list` reads
+/// from the device. Size in MiB; `REST_OF_DISK` for the last partition.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Partition {
+    pub name: String,
+    pub mib: u64,
+}
+
+/// Size of a partition that takes the rest of the disk (`0xFFFFFFFF`).
+pub const REST_OF_DISK: u64 = 0xFFFF_FFFF;
+
 #[derive(Debug, Clone, Default)]
 pub struct Config {
     pub product: String,
     pub files: Vec<CfgFile>,
+    /// The `<Partitions>` table the firmware expects on the device.
+    pub partitions: Vec<Partition>,
 }
 
 impl Config {
@@ -287,12 +301,55 @@ impl Config {
         if cfg.files.is_empty() {
             bail!("PAC XML config lists no files");
         }
+        if let Some(t) = doc.descendants().find(|n| n.has_tag_name("Partitions")) {
+            cfg.partitions = read_partitions(t)?;
+        }
         Ok(cfg)
     }
 
     pub fn file(&self, id: &str) -> Option<&CfgFile> {
         self.files.iter().find(|f| f.id == id)
     }
+
+    pub fn partition(&self, name: &str) -> Option<&Partition> {
+        self.partitions.iter().find(|p| p.name == name)
+    }
+}
+
+fn read_partitions(table: roxmltree::Node) -> Result<Vec<Partition>> {
+    if let Some(e) = table.children().find(|c| c.has_tag_name("error")) {
+        bail!(
+            "the partition table is unusable: {}",
+            e.text().unwrap_or_default().trim()
+        );
+    }
+    let mut out = Vec::new();
+    for p in table.children().filter(|c| c.has_tag_name("Partition")) {
+        let name = p.attribute("id").unwrap_or_default();
+        let size = p.attribute("size").unwrap_or_default();
+        let mib = parse_num(size)
+            .with_context(|| format!("partition {name:?} has a bad size {size:?}"))?;
+        if name.is_empty() {
+            bail!("a partition has no name");
+        }
+        out.push(Partition {
+            name: name.to_string(),
+            mib,
+        });
+    }
+    Ok(out)
+}
+
+/// The device's partition table as `spd_dump partition_list FILE` writes
+/// it: `<Partitions>` of `<Partition id="…" size="MiB"/>`, the last one
+/// `0xffffffff`, and an `<error>` element when the sizes aren't whole MiB.
+pub fn parse_partition_list(xml: &str) -> Result<Vec<Partition>> {
+    let doc = roxmltree::Document::parse(xml).context("parsing the device's partition list")?;
+    let t = doc
+        .descendants()
+        .find(|n| n.has_tag_name("Partitions"))
+        .context("the device's partition list has no <Partitions>")?;
+    read_partitions(t)
 }
 
 pub fn parse_num(s: &str) -> Option<u64> {
@@ -364,5 +421,28 @@ mod tests {
         assert_eq!(c.file("FDL").unwrap().base, 0x65000800);
         assert!(c.file("ProdNV").unwrap().backup);
         assert_eq!(c.file("ProdNV").unwrap().block.as_deref(), Some("prodnv"));
+        assert!(c.partitions.is_empty());
+    }
+
+    #[test]
+    fn parses_partition_tables() {
+        // The PAC config's table (MiB, last one the rest of the disk).
+        let xml = r#"<BMAConfig><ProductList><Product name="p"><Partitions>
+          <!-- size unit is MBytes -->
+          <Partition id="prodnv" size="64"/><Partition id="userdata" size="0xFFFFFFFF"/>
+        </Partitions></Product></ProductList><SchemeList><Scheme name="x">
+          <File><ID>FDL</ID><Type>FDL</Type><Block><Base>0x5500</Base></Block></File>
+        </Scheme></SchemeList></BMAConfig>"#;
+        let c = Config::parse(xml).unwrap();
+        assert_eq!(c.partition("prodnv").unwrap().mib, 64);
+        assert_eq!(c.partition("userdata").unwrap().mib, REST_OF_DISK);
+        // spd_dump's partition_list file, exactly as partition_list() prints it.
+        let dev = "<Partitions>\n    <Partition id=\"prodnv\" size=\"64\"/>\n    <Partition id=\"userdata\" size=\"0xffffffff\"/>\n</Partitions>\n";
+        assert_eq!(parse_partition_list(dev).unwrap(), c.partitions);
+        // Wrong unit size: spd_dump says not to use the table.
+        let bad = "<Partitions>\n    <Partition id=\"prodnv\" size=\"64\"/>\n<error>Wrong unit size, do not use this table!</error>\n</Partitions>\n";
+        let err = parse_partition_list(bad).unwrap_err().to_string();
+        assert!(err.contains("Wrong unit size"), "{err}");
+        assert!(parse_partition_list("not xml").is_err());
     }
 }

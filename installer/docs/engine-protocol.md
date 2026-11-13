@@ -85,8 +85,12 @@ unlocking; offer `--mode update` (keeps data) and `--mode full`.
 ### `space --device ID --profile P --workspace DIR [--delete-downloads] --json`
 Run before `build`; don't start the build when `ok` is false.
 ```json
-{"type":"space","need":13114372066,"free":78826295296,"ok":true,"build_need":13114372066,"flash_need":12875989004,"cached":0,"downloads":4767661249}
+{"type":"space","need":20460997435,"free":78826295296,"ok":true,"build_need":12970303164,"flash_need":20460997435,"cached":0,"downloads":4630452770}
 ```
+`need` is the larger of `build_need` (downloads still missing plus the
+working image, with headroom) and `flash_need` (the finished image, the
+partitions flashing unpacks next to it, and the downloads still missing
+unless `--delete-downloads`).
 
 ### `clean --workspace DIR [--downloads] [--image] [--scratch] [--backup] [--dry-run] --json`
 ```json
@@ -101,7 +105,13 @@ Final:
 {"type":"result","ok":true,"job":"DIR/jobs/anbernic-rg-cube-medium","image":"DIR/jobs/…/out/RG_Cube_Thimsy_medium.pac","bytes":7722216910}
 ```
 `--import DIR`: look in DIR for any needed file (matched by name and sha256)
-before downloading.
+before downloading. `--import FILE` (a file the user picked) is used when its
+name or size matches something the build needs; if none of the picked files
+does, the build fails with `bad_input` naming what it expected instead of
+downloading.
+
+`--set` isn't supported by `build` yet (no build step applies settings): it
+fails with `bad_input`. `resolve --set` still shows the effective settings.
 
 ### `detect --json [--watch]`
 ```json
@@ -110,16 +120,34 @@ before downloading.
 With `--watch`, a new line is printed whenever the list changes; runs until
 killed.
 
-### `flash --job DIR [--mode full|update] [--dry-run] --json`
-`full` (default): fresh install, every flashable partition, user data erased;
-NV/calibration partitions are backed up into the job and never written.
-`update`: only the partitions Thimsy changes; data kept.
+### `flash --job DIR --mode full|update [--dry-run] --json`
+`--mode` is required. `full`: fresh install, every flashable partition, user
+data erased; NV/calibration partitions are backed up into the job and never
+written or erased. `update`: only the partitions Thimsy changes; data kept.
 Streams stages `check`, `driver`, `prepare`, `wait_device`, `flash`, `reboot`,
 with `prompt` events for physical steps. `--dry-run` prints every tool command
 as `log` events and touches no device. Final:
 ```json
 {"type":"result","ok":true,"backup":"DIR/…/backup"}
 ```
+Before anything is written:
+- The image is checked against the size and sha256 recorded by `build`
+  (progress label `Checking the image`); a changed image fails with
+  `hash_mismatch`. Partitions unpacked earlier into `DIR/flash` are reused
+  only if they came from this exact image.
+- `spd_dump` reads the device's partition table first. Every partition to be
+  backed up, written or erased must exist with the size the firmware's
+  partition table gives; otherwise nothing is confirmed, nothing is written,
+  and the command fails with `wrong_device` (another model on the same USB ID,
+  or a stock layout that needs repartitioning, which this version doesn't do).
+- `spd_dump` gets each "yes" only when it asks, so if the engine is stopped
+  (the app's Cancel kills it) no further write can be confirmed. On Linux and
+  Windows `spd_dump` is also killed with the engine.
+
+Backups (`DIR/backup/<partition>.img`) are whole partitions and are kept
+even when flashing fails. An existing backup is never replaced: a later one
+is saved as `<partition>-<time>-<n>.img`, and one of the wrong size gets
+`.incomplete` added (and the command fails).
 
 ### `unlock --device ID --json`
 For devices whose unlock is `automated` (fastboot `flashing unlock` with
@@ -137,4 +165,9 @@ UAC prompt.
 ## Error codes
 `device_not_found`, `wrong_device`, `download_failed`, `hash_mismatch`,
 `not_enough_space`, `tool_missing`, `tool_failed`, `unsupported_host`,
-`profile_unavailable`, `unlock_guided`, `cancelled`, `internal`.
+`profile_unavailable`, `unlock_guided`, `cancelled`, `bad_input`, `internal`.
+
+`wrong_device`: the connected device's partition table doesn't match the
+firmware; nothing was written. `bad_input`: the command line asked for
+something this version can't do (e.g. `build --set`), or picked files the
+build can't use.

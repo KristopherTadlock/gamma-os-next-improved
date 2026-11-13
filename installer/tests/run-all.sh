@@ -1,18 +1,39 @@
 #!/usr/bin/env bash
 # Every test of the installer: engine lint + unit/CLI tests, the real-firmware
-# end-to-end test (when WORKSPACE and PACK_DIR are given), and the app's
-# analyzer + tests. Usage: run-all.sh [WORKSPACE PACK_DIR]
+# end-to-end test (when WORKSPACE and PACK_DIR are given), the maintainer
+# tools' tests, and the app's analyzer + tests. Prints one summary line per
+# step; when a step fails, its whole output, then stops.
+# Usage: run-all.sh [WORKSPACE PACK_DIR]
 set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
+LOG="$(mktemp)"
+trap 'rm -f "$LOG"' EXIT
+
+# step NAME SUMMARY_FILTER COMMAND...: runs COMMAND with its output in $LOG;
+# on success prints SUMMARY_FILTER's view of it, on failure all of it.
+step() {
+  local name="$1" filter="$2"; shift 2
+  if "$@" > "$LOG" 2>&1; then
+    echo "$name: $(eval "$filter" < "$LOG")"
+  else
+    local rc=$?
+    echo "== $name FAILED (exit $rc): $*" >&2
+    cat "$LOG" >&2
+    exit "$rc"
+  fi
+}
+engine_summary='grep -E "^test result" | awk '"'"'{p+=$4; f+=$6} END {print p " passed, " f " failed"}'"'"''
+
 cd "$HERE/../engine"
-cargo fmt --check
-cargo clippy --all-targets -q -- -D warnings
-cargo test --workspace -q 2>&1 | grep -E "^test result" | awk '{p+=$4; f+=$6} END {print "engine tests: " p " passed, " f " failed"; exit f>0}'
-cargo build --release -q
+step "cargo fmt" 'echo ok' cargo fmt --check
+step "clippy" 'echo ok' cargo clippy --all-targets -q -- -D warnings
+step "engine tests" "$engine_summary" cargo test --workspace -q
+step "engine build" 'echo ok' cargo build --release -q
 if [ $# -ge 2 ]; then
   rm -rf "$1/jobs"   # rebuild from the official firmware every time
-  "$HERE/e2e.sh" "$1" "$2" | tail -1
+  step "e2e" 'tail -1' "$HERE/e2e.sh" "$1" "$2"
 fi
+step "apply_pack tests" 'tail -1' python3 "$HERE/../tools/test_apply_pack.py"
 cd "$HERE/../app"
-flutter analyze --no-pub 2>&1 | tail -1
-flutter test --no-pub 2>&1 | tail -1
+step "flutter analyze" 'tail -1' flutter analyze --no-pub
+step "flutter test" 'tail -1' flutter test --no-pub

@@ -110,7 +110,6 @@ class _CrashingEngine extends FakeEngine {
     required String workspace,
     List<String> imports = const [],
     bool deleteDownloads = false,
-    Map<String, String> overrides = const {},
   }) => _Run([
     const StageEvent('fetch', 'Downloading'),
     const ErrorEvent(

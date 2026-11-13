@@ -100,6 +100,20 @@ fn rejects_malformed_catalogs() {
         .unwrap_err()
         .to_string();
     assert!(err.contains("no source firmware"), "{err}");
+    // A buildable device without a reference hash for a profile it can build.
+    let src = "source: { id: s, name: S, kind: file, parts: [], contains: f.pac, container: { format: pac, size: 1, sha256: x } }\n";
+    let root_heavy = "version: t\nrelease: R\nsystems: { heavy: sys }\nartifacts: [{ id: sys, file: sys.img, size: 1, sha256: \"0000000000000000000000000000000000000000000000000000000000000000\" }]\n";
+    let buildable = format!("{DEV}{src}build: [{{ op: pac_fix_crc }}]\n");
+    let cat = |dev: &str| {
+        Catalog::from_files(vec![
+            ("catalog.yaml".into(), root_heavy.into()),
+            ("profiles/heavy.yaml".into(), PROFILE.into()),
+            ("devices/d.yaml".into(), dev.into()),
+        ])
+    };
+    let err = cat(&buildable).unwrap_err().to_string();
+    assert!(err.contains("no expect hash"), "{err}");
+    cat(&format!("{buildable}expect: {{ heavy: abc }}\n")).unwrap();
     // Unknown op.
     let with_op = format!("{DEV}build: [{{ op: rm_rf }}]\n");
     assert!(Catalog::from_files(files(&[("devices/d.yaml", &with_op)])).is_err());

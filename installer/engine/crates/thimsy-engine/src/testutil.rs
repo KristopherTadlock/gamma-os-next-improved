@@ -55,7 +55,28 @@ pub fn build_pac(entries: &[E], version: &str, alias: &str) -> Vec<u8> {
 
 /// A PAC config XML for the given (id, type, block, base, backup) files.
 pub fn config_xml(files: &[(&str, &str, Option<&str>, u64, bool)]) -> Vec<u8> {
-    let mut x = String::from("<?xml version=\"1.0\"?>\n<BMAConfig><ProductList><Product name=\"test\"/></ProductList><SchemeList><Scheme name=\"test\">\n");
+    config_xml_with_table(files, &[])
+}
+
+/// The same with a `<Partitions>` table of (name, size in MiB).
+pub fn config_xml_with_table(
+    files: &[(&str, &str, Option<&str>, u64, bool)],
+    table: &[(&str, u64)],
+) -> Vec<u8> {
+    let mut x =
+        String::from("<?xml version=\"1.0\"?>\n<BMAConfig><ProductList><Product name=\"test\">");
+    if !table.is_empty() {
+        x.push_str("<Partitions>\n");
+        for (name, mib) in table {
+            if *mib == crate::pac::REST_OF_DISK {
+                x.push_str(&format!("<Partition id=\"{name}\" size=\"0xFFFFFFFF\"/>\n"));
+            } else {
+                x.push_str(&format!("<Partition id=\"{name}\" size=\"{mib}\"/>\n"));
+            }
+        }
+        x.push_str("</Partitions>");
+    }
+    x.push_str("</Product></ProductList><SchemeList><Scheme name=\"test\">\n");
     for (id, kind, block, base, backup) in files {
         let b = match block {
             Some(n) => format!("<Block id=\"{n}\"><Base>0x{base:x}</Base><Size>0x0</Size></Block>"),

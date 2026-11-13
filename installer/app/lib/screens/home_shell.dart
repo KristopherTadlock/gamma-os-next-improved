@@ -1,3 +1,7 @@
+import 'dart:io' show Platform;
+import 'dart:ui' show AppExitResponse;
+
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:material_ui/material_ui.dart';
 import 'package:provider/provider.dart';
 
@@ -20,7 +24,13 @@ import 'unlock_screen.dart';
 /// The single installer window: step rail at the start side, the current
 /// step beside it, Back / Next at the bottom. Mirrors for RTL languages.
 class HomeShell extends StatefulWidget {
-  const HomeShell({super.key});
+  /// Whether closing the window during a real install asks first. Defaults
+  /// to Windows and Linux, where the close button goes through the app; on
+  /// macOS the window is gone before the app is asked, so there's nothing
+  /// to show the question in.
+  final bool? guardWindowClose;
+
+  const HomeShell({super.key, this.guardWindowClose});
 
   @override
   State<HomeShell> createState() => _HomeShellState();
@@ -28,6 +38,7 @@ class HomeShell extends StatefulWidget {
 
 class _HomeShellState extends State<HomeShell> {
   bool _dialogOpen = false;
+  late final AppLifecycleListener _lifecycle;
 
   @override
   void initState() {
@@ -36,6 +47,26 @@ class _HomeShellState extends State<HomeShell> {
     if (s.catalog == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) => s.loadCatalog());
     }
+    _lifecycle = AppLifecycleListener(onExitRequested: _onExitRequested);
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  bool get _guardClose =>
+      widget.guardWindowClose ??
+      (!kIsWeb && (Platform.isWindows || Platform.isLinux));
+
+  /// Closing the window mid-install: same question as Stop.
+  Future<AppExitResponse> _onExitRequested() async {
+    final s = context.read<AppState>();
+    if (!_guardClose || !s.stopNeedsConfirmation) return AppExitResponse.exit;
+    if (!await confirmStopInstall(context)) return AppExitResponse.cancel;
+    await s.cancelFlash();
+    return AppExitResponse.exit;
   }
 
   Widget _screen(WizardStep step) => switch (step) {
@@ -207,6 +238,7 @@ class _HomeShellState extends State<HomeShell> {
                               key: ValueKey('rail-${step.name}'),
                               dense: true,
                               selected: step == s.step,
+                              // Locked while a build or install runs.
                               enabled: s.canGoTo(step),
                               leading: Icon(
                                 step.index < s.furthest.index
@@ -250,7 +282,7 @@ class _HomeShellState extends State<HomeShell> {
                           s.step != WizardStep.install)
                         TextButton(
                           key: const ValueKey('back'),
-                          onPressed: s.back,
+                          onPressed: s.busy ? null : s.back,
                           child: Text(l.back),
                         ),
                       const Spacer(),

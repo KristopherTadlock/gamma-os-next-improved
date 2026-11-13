@@ -52,15 +52,18 @@ pub fn check_space(
     let d = cat.device(device)?;
     let sp = resolve::space(cat, d, profile);
     let cache_dir = workspace.join("cache");
-    let mut arts: Vec<&Artifact> = d.artifacts.iter().collect();
+    // Exactly what `space` counts as downloads: with a device pack, the
+    // system image and patches come from it, not from separate files.
+    let mut arts: Vec<&Artifact> = Vec::new();
     if let Some(src) = &d.source {
         arts.extend(src.parts.iter());
     }
-    if let Some(sys) = cat.system_for(profile) {
-        arts.push(sys);
-    }
-    if let Some(b) = d.bundles.get(profile) {
-        arts.push(b);
+    match d.bundles.get(profile) {
+        Some(b) => arts.push(b),
+        None => {
+            arts.extend(d.artifacts.iter());
+            arts.extend(cat.system_for(profile));
+        }
     }
     let cached: u64 = arts
         .iter()
@@ -73,18 +76,19 @@ pub fn check_space(
         })
         .filter(|a| fs::metadata(cache_dir.join(&a.file)).is_ok_and(|m| m.len() == a.size))
         .map(|a| a.size)
-        .sum();
+        .sum::<u64>()
+        .min(sp.downloads);
     // New bytes the build writes: missing downloads + the working image.
     let build_need = sp.build_peak.saturating_sub(cached);
-    // Flashing later unpacks partitions next to the image; with
-    // delete-downloads the cache is gone by then.
+    // Flashing later unpacks partitions next to the finished image (which
+    // doesn't exist yet, so it counts in full); without delete-downloads
+    // the downloads still missing stay in the cache too.
     let after_build_kept = if delete_downloads {
         0
     } else {
-        sp.downloads.saturating_sub(cached)
+        sp.downloads - cached
     };
-    let flash_need =
-        (sp.image + sp.flash_extra + after_build_kept).saturating_sub(sp.image.min(build_need));
+    let flash_need = sp.image + sp.flash_extra + after_build_kept;
     let need = build_need.max(flash_need);
     let probe = if workspace.exists() {
         workspace.to_path_buf()
@@ -146,27 +150,109 @@ struct State {
 }
 
 /// The Thimsy build shipped with the installer: a `thimsy-build` folder next
-/// to the engine or one level up (next to the app). Searched before
-/// downloading, like an import folder.
+/// to the engine, one level up (next to the app), or next to the macOS
+/// `.app` bundle the engine is inside. Searched before downloading, like an
+/// import folder.
 pub fn bundled_build_dirs() -> Vec<PathBuf> {
     let mut out = Vec::new();
     if let Ok(dir) = std::env::var("THIMSY_BUILD_DIR") {
         out.push(PathBuf::from(dir));
     }
-    if let Some(dir) = std::env::current_exe()
-        .ok()
-        .and_then(|p| p.parent().map(Path::to_path_buf))
-    {
-        for cand in [
-            dir.join("thimsy-build"),
-            dir.join("..").join("thimsy-build"),
-        ] {
-            if cand.is_dir() {
-                out.push(cand);
-            }
-        }
+    if let Ok(exe) = std::env::current_exe() {
+        out.extend(build_dirs_near(&exe).into_iter().filter(|c| c.is_dir()));
     }
     out
+}
+
+/// Where a `thimsy-build` folder may sit for an engine at `exe`.
+pub fn build_dirs_near(exe: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    if let Some(dir) = exe.parent() {
+        out.push(dir.join("thimsy-build"));
+        out.push(dir.join("..").join("thimsy-build"));
+    }
+    let app = exe
+        .ancestors()
+        .skip(1)
+        .find(|a| a.extension().is_some_and(|x| x.eq_ignore_ascii_case("app")));
+    if let Some(folder) = app.and_then(Path::parent) {
+        out.push(folder.join("thimsy-build"));
+    }
+    out
+}
+
+/// Files the build can use from the user's picks: the official firmware
+/// (its download parts or the unpacked file), the device pack (or its
+/// parts), the system image and the patches.
+fn wanted_files<'a>(cat: &'a Catalog, d: &'a Device, profile: &str) -> Vec<(&'a str, u64)> {
+    let mut out = Vec::new();
+    let mut add = |a: &'a Artifact| {
+        out.push((a.file.as_str(), a.size));
+        out.extend(a.parts.iter().map(|p| (p.file.as_str(), p.size)));
+    };
+    if let Some(src) = &d.source {
+        src.parts.iter().for_each(&mut add);
+    }
+    if let Some(b) = d.bundles.get(profile) {
+        add(b);
+    }
+    if let Some(s) = cat.system_for(profile) {
+        add(s);
+    }
+    d.artifacts.iter().for_each(&mut add);
+    if let Some(src) = &d.source {
+        out.push((src.contains.as_str(), src.container.size));
+    }
+    out
+}
+
+/// When the user picked files (not folders) and none of them is anything
+/// this build uses, say so instead of quietly downloading everything.
+fn check_picked_files(cat: &Catalog, d: &Device, profile: &str, imports: &[PathBuf]) -> Result<()> {
+    let picked: Vec<&PathBuf> = imports.iter().filter(|p| !p.is_dir()).collect();
+    if picked.is_empty() {
+        return Ok(());
+    }
+    let wanted = wanted_files(cat, d, profile);
+    let useful = picked.iter().any(|p| {
+        let name = p.file_name().map(|n| n.to_string_lossy().to_string());
+        let size = fs::metadata(p)
+            .ok()
+            .filter(|m| m.is_file())
+            .map(|m| m.len());
+        wanted
+            .iter()
+            .any(|(f, s)| name.as_deref() == Some(*f) || size == Some(*s))
+    });
+    if useful {
+        return Ok(());
+    }
+    let names: Vec<String> = picked.iter().map(|p| p.display().to_string()).collect();
+    let mut expected = Vec::new();
+    if let Some(b) = d.bundles.get(profile) {
+        expected.push(format!("the device pack {} ({} bytes)", b.file, b.size));
+    }
+    if let Some(src) = &d.source {
+        expected.push(format!(
+            "the official firmware {} ({} bytes) or its download parts ({})",
+            src.contains,
+            src.container.size,
+            src.parts
+                .iter()
+                .map(|p| p.file.as_str())
+                .collect::<Vec<_>>()
+                .join(", ")
+        ));
+    }
+    Err(EngineError::new(
+        Code::BadInput,
+        format!(
+            "none of the files you chose is used by this build ({}); expected {}",
+            names.join(", "),
+            expected.join(", or ")
+        ),
+    )
+    .into())
 }
 
 /// Fetches and unpacks a device's official source firmware into `dest`
@@ -232,6 +318,14 @@ pub fn output_name(d: &Device, profile: &str) -> String {
 
 pub fn build(cat: &Catalog, opts: &BuildOptions, rep: &Reporter) -> Result<JobRecord> {
     rep.stage("plan", "Checking the plan");
+    if !opts.overrides.is_empty() {
+        // `resolve` shows them, but no build step applies them yet.
+        return Err(EngineError::new(
+            Code::BadInput,
+            "custom settings (--set) aren't supported by this version yet; build without them",
+        )
+        .into());
+    }
     let plan = resolve::resolve(cat, &opts.device, &opts.profile, &opts.overrides, opts.host)?;
     if !plan.available {
         return Err(EngineError::new(
@@ -246,6 +340,7 @@ pub fn build(cat: &Catalog, opts: &BuildOptions, rep: &Reporter) -> Result<JobRe
         ));
     }
     let d = cat.device(&opts.device)?;
+    check_picked_files(cat, d, &opts.profile, &opts.imports)?;
     let src = d.source.as_ref().context("device has no source firmware")?;
     let system = cat.system_for(&opts.profile).cloned();
     let dir = job_dir(&opts.workspace, &d.id, &opts.profile);
@@ -462,6 +557,13 @@ pub fn build(cat: &Catalog, opts: &BuildOptions, rep: &Reporter) -> Result<JobRe
     }
 
     rep.stage("publish", "Finishing");
+    // Partitions unpacked from an earlier image must never be flashed with
+    // this one.
+    let flash_dir = dir.join("flash");
+    if flash_dir.exists() {
+        fs::remove_dir_all(&flash_dir)
+            .with_context(|| format!("removing {}", flash_dir.display()))?;
+    }
     fs::rename(&working, &final_path)?;
     let rec = JobRecord {
         engine: crate::VERSION.into(),
@@ -746,4 +848,33 @@ fn run_op(
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn finds_the_bundled_build_next_to_the_engine_the_app_or_the_mac_app() {
+        let dirs = build_dirs_near(Path::new(
+            "/Applications/Thimsy Installer.app/Contents/MacOS/engine/thimsy-installer",
+        ));
+        assert!(
+            dirs.contains(&PathBuf::from("/Applications/thimsy-build")),
+            "{dirs:?}"
+        );
+        assert_eq!(
+            dirs[0],
+            PathBuf::from("/Applications/Thimsy Installer.app/Contents/MacOS/engine/thimsy-build")
+        );
+        // Windows/Linux layout: next to the engine or one level up only.
+        let dirs = build_dirs_near(Path::new("/opt/thimsy/engine/thimsy-installer"));
+        assert_eq!(
+            dirs,
+            [
+                PathBuf::from("/opt/thimsy/engine/thimsy-build"),
+                PathBuf::from("/opt/thimsy/engine/../thimsy-build"),
+            ]
+        );
+    }
 }

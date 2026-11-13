@@ -8,6 +8,7 @@ use crate::events::Reporter;
 use crate::host::Host;
 use anyhow::Result;
 use serde::Serialize;
+use std::path::Path;
 
 #[derive(Debug, Serialize)]
 pub struct DriverStatus {
@@ -113,10 +114,73 @@ pub fn ensure(d: &Device, host: Host, rep: &Reporter) -> Result<()> {
     install(d, rep)
 }
 
+/// A PowerShell single-quoted string literal.
+fn ps_quote(s: &str) -> String {
+    format!("'{}'", s.replace('\'', "''"))
+}
+
+/// One Windows command-line argument, quoted the way the C runtime splits
+/// command lines (`Start-Process` joins `-ArgumentList` items with spaces
+/// and quotes nothing itself).
+fn win_arg(a: &str) -> String {
+    if !a.is_empty() && !a.contains([' ', '\t', '"']) {
+        return a.to_string();
+    }
+    let mut out = String::from("\"");
+    let mut slashes = 0;
+    for c in a.chars() {
+        match c {
+            '\\' => slashes += 1,
+            '"' => {
+                out.push_str(&"\\".repeat(slashes * 2 + 1));
+                out.push('"');
+                slashes = 0;
+            }
+            c => {
+                out.push_str(&"\\".repeat(slashes));
+                out.push(c);
+                slashes = 0;
+            }
+        }
+    }
+    out.push_str(&"\\".repeat(slashes * 2));
+    out.push('"');
+    out
+}
+
+/// The PowerShell command that runs `wdi-simple` elevated (one UAC prompt,
+/// no console window) for one USB ID and exits with its exit code.
+pub fn ps_command(tool: &Path, vid: u16, pid: u16, label: &str, dest: &Path) -> String {
+    let args = [
+        "--vid".to_string(),
+        format!("0x{vid:04x}"),
+        "--pid".into(),
+        format!("0x{pid:04x}"),
+        "--type".into(),
+        "0".into(),
+        "--name".into(),
+        label.to_string(),
+        "--inf".into(),
+        format!("thimsy_{vid:04x}_{pid:04x}.inf"),
+        "--dest".into(),
+        dest.display().to_string(),
+    ];
+    let list = args
+        .iter()
+        .map(|a| ps_quote(&win_arg(a)))
+        .collect::<Vec<_>>()
+        .join(",");
+    format!(
+        "$p = Start-Process -FilePath {} -ArgumentList @({list}) -Verb RunAs -WindowStyle Hidden -Wait -PassThru; exit $p.ExitCode",
+        ps_quote(&tool.display().to_string())
+    )
+}
+
 #[cfg(windows)]
 pub fn install(d: &Device, rep: &Reporter) -> Result<()> {
     use std::process::Command;
     let tool = crate::tools::locate("wdi-simple")?;
+    let dest = std::env::temp_dir().join("thimsy-driver");
     for u in &d.identify.usb {
         rep.info(format!(
             "Installing WinUSB for {} ({:04x}:{:04x}); Windows asks for permission",
@@ -127,22 +191,11 @@ pub fn install(d: &Device, rep: &Reporter) -> Result<()> {
             rep.info(format!("WinUSB is already installed for {}", u.label));
             continue;
         }
-        let args = format!(
-            "--vid 0x{:04x} --pid 0x{:04x} --type 0 --name '{}' --inf thimsy_{:04x}_{:04x}.inf --dest $env:TEMP\\thimsy-driver",
-            u.vid,
-            u.pid,
-            u.label.replace('\'', ""),
-            u.vid,
-            u.pid
-        );
-        let ps = format!(
-            "$p = Start-Process -FilePath '{}' -ArgumentList \"{}\" -Verb RunAs -Wait -PassThru; exit $p.ExitCode",
-            tool.display(),
-            args
-        );
-        let st = Command::new("powershell")
-            .args(["-NoProfile", "-NonInteractive", "-Command", &ps])
-            .status()?;
+        let ps = ps_command(&tool, u.vid, u.pid, &u.label, &dest);
+        let mut cmd = Command::new("powershell");
+        cmd.args(["-NoProfile", "-NonInteractive", "-Command", &ps]);
+        crate::tools::hide_window(&mut cmd);
+        let st = cmd.status()?;
         if !st.success() {
             return Err(EngineError::new(
                 Code::ToolFailed,
@@ -181,5 +234,29 @@ mod tests {
             utf16.extend_from_slice(&u.to_le_bytes());
         }
         assert!(inf_is_winusb_for(&decode_inf(&utf16), 0x1782, 0x4d00));
+    }
+
+    #[test]
+    fn powershell_command_quotes_apostrophes_and_spaces() {
+        let cmd = ps_command(
+            Path::new(r"C:\Users\Ann O'Neil\Thimsy Installer\tools\wdi-simple.exe"),
+            0x1782,
+            0x4d00,
+            "Unisoc download mode",
+            Path::new(r"C:\Users\Ann O'Neil\AppData\Local\Temp\thimsy-driver"),
+        );
+        assert_eq!(
+            cmd,
+            concat!(
+                r"$p = Start-Process -FilePath 'C:\Users\Ann O''Neil\Thimsy Installer\tools\wdi-simple.exe' ",
+                r#"-ArgumentList @('--vid','0x1782','--pid','0x4d00','--type','0','--name','"Unisoc download mode"','--inf','thimsy_1782_4d00.inf','--dest','"C:\Users\Ann O''Neil\AppData\Local\Temp\thimsy-driver"') "#,
+                "-Verb RunAs -WindowStyle Hidden -Wait -PassThru; exit $p.ExitCode"
+            )
+        );
+        // Windows command-line quoting: quotes escaped, trailing backslashes doubled.
+        assert_eq!(win_arg(r#"a "b" c"#), r#""a \"b\" c""#);
+        assert_eq!(win_arg(r"C:\dir with space\"), r#""C:\dir with space\\""#);
+        assert_eq!(win_arg(""), r#""""#);
+        assert_eq!(win_arg("plain"), "plain");
     }
 }
