@@ -15,4 +15,16 @@ identify:
 notes:
   - "Planned: same flashing route as the RG Cube. Not buildable yet."
 guides:
-  unlock: { route: none, steps: [] }
+  unlock:
+    route: none
+    steps: []
+  download_mode:
+    - title: "Slide it open, hold Back and plug in"
+      body: "Turn the {device} off, unplug it and take out every SD card. Slide it open, then hold the Back button in the middle of the joypad and, still holding it, connect the USB cable to this computer. Keep holding until installation starts."
+    - title: "If installation stalls"
+      body: "Hold the Back button, Volume Down and Power together until installation starts again."
+  first_boot:
+    - title: "Wait through a blank screen"
+      body: "On the very first boot the screen may stay blank for up to a minute. This is normal; wait for the boot screen to appear."
+    - title: "If the screen stays black"
+      body: "Take out any SD card, then hold Volume Down and Power until the {device} restarts."

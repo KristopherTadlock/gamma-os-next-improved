@@ -15,4 +15,11 @@ notes:
 blocks:
   - "Don't install on units whose stock firmware is v1.26."
 guides:
-  unlock: { route: none, steps: [] }
+  unlock:
+    route: none
+    steps: []
+  download_mode:
+    - title: "Plug in the cable with the device off"
+      body: "Turn the {device} off completely. When the installer asks, connect the USB cable to this computer."
+    - title: "If it isn't found"
+      body: "Unplug the cable. Hold Power and Volume Down for at least 60 seconds, then, still holding them, connect the USB cable. Keep holding until installation starts; finding the {device} can take 30 seconds or more."

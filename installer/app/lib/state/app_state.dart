@@ -265,6 +265,11 @@ class AppState extends ChangeNotifier {
 
   // --------------------------------------------------------------- install
   bool dryRun = false;
+
+  /// The mode the current or last flash run used. Fixed when it starts, so
+  /// the install screen never reports a dry run as a real install (or the
+  /// reverse), and "Run again" repeats the same mode.
+  bool flashRunDry = false;
   FlashMode flashMode = FlashMode.full;
   final RunState flashRun = RunState();
   EngineRun? _flashHandle;
@@ -567,6 +572,18 @@ class AppState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Whether Review may start a real install: devices that must already be
+  /// connected (not Unisoc, whose tool waits) need to have been detected.
+  bool get canInstallForReal =>
+      plan?.connectFirst == false || matchedDevice != null;
+
+  /// Repeats the last run in the same mode (never switches a dry run to a
+  /// real install: that only happens from Review, after its confirmation).
+  void runAgain() {
+    dryRun = flashRunDry;
+    startFlash();
+  }
+
   /// Review's Install button (after the confirmation dialog).
   void install() {
     _advanceTo(WizardStep.install);
@@ -578,8 +595,9 @@ class AppState extends ChangeNotifier {
     if (flashRun.running || j == null) return;
     flashRun.reset();
     flashRun.running = true;
+    flashRunDry = dryRun;
     notifyListeners();
-    final run = engine.flash(job: j, dryRun: dryRun, mode: flashMode);
+    final run = engine.flash(job: j, dryRun: flashRunDry, mode: flashMode);
     _flashHandle = run;
     _follow(run, flashRun, onDone: () => _flashHandle = null);
   }
@@ -699,7 +717,9 @@ class AppState extends ChangeNotifier {
           _ => true,
         };
       case WizardStep.connect:
-        return matchedDevice != null || dryRun;
+        // Unisoc: the flash tool waits for the device, so connecting comes
+        // after installing starts (download mode lasts only seconds otherwise).
+        return matchedDevice != null || dryRun || plan?.connectFirst == false;
       case WizardStep.review:
         return false; // Install button instead
       case WizardStep.install:

@@ -12,4 +12,9 @@ support:
 notes:
   - "Planned: Qualcomm EDL install on every computer. Not buildable yet."
 guides:
-  unlock: { route: none, steps: [] }
+  unlock:
+    route: none
+    steps: []
+  download_mode:
+    - title: "Hold both volume buttons and plug in the cable"
+      body: "Turn the {device} off completely and unplug it. Hold Volume Down and Volume Up together and, still holding both, connect the USB cable to this computer. Keep holding until installation starts."

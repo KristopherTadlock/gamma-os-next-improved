@@ -14,45 +14,39 @@ class InstallScreen extends StatelessWidget {
     final s = context.watch<AppState>();
     final run = s.flashRun;
     return StepPage(
-      title: s.dryRun ? l.dryRun : l.installingTitle,
-      subtitle: run.running && !s.dryRun ? l.keepConnected : null,
+      title: s.flashRunDry ? l.dryRun : l.installingTitle,
+      subtitle: run.running && !s.flashRunDry ? l.keepConnected : null,
       children: [
         RunView(run, idleText: l.ready),
         if (run.ok)
           Notice(
             key: const ValueKey('install-complete'),
             icon: Icons.check_circle,
-            title: s.dryRun ? l.dryRunComplete : l.installWritten,
-            body: s.dryRun ? l.dryRunCompleteBody : l.installWrittenBody,
+            title: s.flashRunDry ? l.dryRunComplete : l.installWritten,
+            body: s.flashRunDry ? l.dryRunCompleteBody : l.installWrittenBody,
             color: Colors.green,
           ),
         const SizedBox(height: 12),
         Row(
           children: [
-            if (run.failed || (run.ok && s.dryRun))
+            if (run.failed || (run.ok && s.flashRunDry))
               FilledButton(
                 key: const ValueKey('run-again'),
-                onPressed: s.startFlash,
+                onPressed: s.runAgain,
                 child: Text(l.runAgain),
               ),
+            if (run.ok && s.flashRunDry) ...[
+              const SizedBox(width: 12),
+              OutlinedButton(
+                key: const ValueKey('back-to-review'),
+                onPressed: () => s.goTo(WizardStep.review),
+                child: Text(l.backToReview),
+              ),
+            ],
             if (run.running)
               OutlinedButton(onPressed: s.cancelFlash, child: Text(l.stop)),
           ],
         ),
-        if (!run.running)
-          ExpansionTile(
-            tilePadding: EdgeInsets.zero,
-            title: Text(l.advanced),
-            children: [
-              SwitchListTile(
-                contentPadding: EdgeInsets.zero,
-                title: Text(l.dryRun),
-                subtitle: Text(l.dryRunHelp),
-                value: s.dryRun,
-                onChanged: s.setDryRun,
-              ),
-            ],
-          ),
       ],
     );
   }

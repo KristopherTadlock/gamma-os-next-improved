@@ -15,4 +15,9 @@ identify:
 notes:
   - "Planned: same flashing route as the RG Cube. Not buildable yet."
 guides:
-  unlock: { route: none, steps: [] }
+  unlock:
+    route: none
+    steps: []
+  download_mode:
+    - title: "Hold Back and the Anbernic button, then plug in"
+      body: "Turn the {device} off and unplug it. Hold the Back button and the Anbernic button next to it and, still holding both, connect the USB cable to this computer. Keep holding until installation starts."

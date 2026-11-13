@@ -133,7 +133,7 @@ class ReviewScreen extends StatelessWidget {
             style: FilledButton.styleFrom(
               padding: const EdgeInsets.symmetric(horizontal: 32, vertical: 20),
             ),
-            onPressed: s.job == null || (!s.dryRun && s.matchedDevice == null)
+            onPressed: s.job == null || (!s.dryRun && !s.canInstallForReal)
                 ? null
                 : () => _confirm(context, s),
             icon: const Icon(Icons.system_update),

@@ -26,7 +26,7 @@ grep -q 'write_part prodnv' "$WS/dry.jsonl" && fail "prodnv must never be writte
 grep -q 'read_part prodnv' "$WS/dry.jsonl" && pass "prodnv backed up" || fail "prodnv backup"
 "$ENGINE" --json flash --job "$JOB" --dry-run --mode update > "$WS/dry-update.jsonl"
 n=$(grep -o 'write_part [a-z_]*' "$WS/dry-update.jsonl" | sort -u | wc -l)
-[ "$n" = 4 ] && pass "update writes 4 partitions" || fail "update wrote $n partitions"
+[ "$n" = 5 ] && pass "update writes 5 partitions" || fail "update wrote $n partitions"
 grep -q 'erase_part' "$WS/dry-update.jsonl" && fail "update must not erase" || pass "update keeps data"
 
 # 4. Flash through the fake spd_dump.
@@ -34,6 +34,20 @@ export FAKE_SPD_LOG="$WS/spd.log"; rm -f "$FAKE_SPD_LOG"
 THIMSY_TOOLS_DIR="$HERE/fake-tools" "$ENGINE" --json flash --job "$JOB" --mode full > "$WS/flash.jsonl"
 tail -1 "$WS/flash.jsonl" | grep -q '"ok":true' && pass "flash (fake spd_dump)" || fail "flash"
 grep -q '"type":"prompt","id":"enter_download_mode"' "$WS/flash.jsonl" && pass "download-mode prompt" || fail "prompt"
+grep -q '"enter_download_mode".*Back button' "$WS/flash.jsonl" && pass "prompt says hold Back" || fail "prompt wording"
+# The prompt stays up while spd_dump waits: the install stage starts only
+# once the device answers (spd_dump logs that on stderr).
+p=$(grep -n '"id":"enter_download_mode"' "$WS/flash.jsonl" | head -1 | cut -d: -f1)
+v=$(grep -n 'BSL_REP_VER' "$WS/flash.jsonl" | head -1 | cut -d: -f1)
+f=$(grep -n '"type":"stage","stage":"flash"' "$WS/flash.jsonl" | head -1 | cut -d: -f1)
+[ -n "$p" ] && [ -n "$v" ] && [ -n "$f" ] && [ "$p" -lt "$v" ] && [ "$v" -lt "$f" ] \
+  && pass "install stage starts when the device answers" || fail "stage order (prompt $p, device $v, flash $f)"
+python3 -I -c "
+import json, sys
+ev = [json.loads(l) for l in open(sys.argv[1]) if l.startswith('{')]
+w = [e for e in ev if e.get('type') == 'progress' and e.get('label', '').startswith('Wrote')]
+sys.exit(0 if w and w[-1]['done'] == w[-1]['total'] else 1)" "$WS/flash.jsonl" \
+  && pass "write progress reaches 100%" || fail "write progress"
 [ "$(grep -c '^write_part' "$FAKE_SPD_LOG")" -ge 50 ] && pass "all partitions written" || fail "write count"
 grep -q '^write_part super .* 5872025600$' "$FAKE_SPD_LOG" && pass "super written at full size" || fail "super size"
 [ -f "$JOB/backup/prodnv.img" ] && pass "NV backup kept with the job" || fail "backup"

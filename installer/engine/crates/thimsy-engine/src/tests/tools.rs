@@ -42,7 +42,9 @@ fn runs_a_tool_feeding_stdin_and_reading_lines() {
         stdin: vec!["yes".into()],
     };
     tools::run(&inv, dir.path(), &rep, |l| lines.push(l.to_string())).unwrap();
-    assert_eq!(lines, ["got:yes"]);
+    // Both streams reach the callback (spd_dump logs progress on stderr).
+    lines.sort();
+    assert_eq!(lines, ["got:yes", "to-stderr"]);
     assert!(sink
         .0
         .lock()

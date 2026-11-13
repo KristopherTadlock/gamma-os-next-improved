@@ -16,5 +16,12 @@ guides:
   unlock:
     route: automated
     steps:
-      - title: "Unlock in fastboot"
-        body: "Required before flashing; skipping it can brick the device."
+      - title: "Turn on OEM unlocking"
+        body: "On the {device}, open Settings, About and tap Build number seven times. Then, in Settings, Developer options, turn on USB debugging and OEM unlocking. Connect the {device} to this computer while it's on; it restarts into fastboot mode for the unlock."
+      - title: "Unlock before flashing"
+        body: "GammaOS's guide warns that flashing a {device} that isn't unlocked bricks it. After the unlock, the {device} restarts into its original Android. Wait until Android has started, then continue."
+  download_mode:
+    - title: "Connect it with USB debugging on"
+      body: "Turn the {device} on, with USB debugging still on in Developer options, and connect it to this computer. It restarts by itself and installation starts."
+    - title: "If installation doesn't start"
+      body: "Hold Power to turn the {device} off. Hold both volume buttons and, still holding them, connect the USB cable. Then keep tapping the Power button, with the volume buttons still held, until installation starts."

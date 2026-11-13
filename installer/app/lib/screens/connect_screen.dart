@@ -34,7 +34,17 @@ class ConnectScreen extends StatelessWidget {
               child: Text(l.installDriver),
             ),
           ),
-        if (match != null)
+        if (match == null && s.plan?.connectFirst == false)
+          // Unisoc: the flash tool must already be waiting when the device
+          // enters download mode, so it's connected after installing starts.
+          Notice(
+            key: const ValueKey('connect-later'),
+            icon: Icons.info_outline,
+            title: l.connectLaterTitle,
+            body: l.connectLaterBody,
+            color: scheme.primary,
+          )
+        else if (match != null)
           Notice(
             key: const ValueKey('device-connected'),
             icon: Icons.check_circle,

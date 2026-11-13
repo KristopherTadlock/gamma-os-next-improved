@@ -14,4 +14,12 @@ notes:
 blocks:
   - "Don't install on units made in March 2026 or later."
 guides:
-  unlock: { route: none, steps: [] }
+  unlock:
+    route: none
+    steps: []
+  download_mode:
+    - title: "Connect it with USB debugging on"
+      body: "On the {device}, open Settings, About and tap Build number seven times. Then, in Settings, Developer options, turn on USB debugging and OEM unlocking. Connect the {device} to this computer while it's on; it restarts into fastboot mode for the installation."
+  first_boot:
+    - title: "Restart with Power"
+      body: "When installation finishes, press the Power button once if the {device} hasn't restarted by itself."

@@ -392,6 +392,10 @@ class Plan {
   final int diskBytes;
   final List<String> partitions;
   final bool wipesData;
+
+  /// False when the flashing tool waits for the device (Unisoc): the user
+  /// connects it after installing starts, so the connect step doesn't wait.
+  final bool connectFirst;
   final Guides guides;
   final Map<String, Journey> journeys;
   const Plan({
@@ -408,6 +412,7 @@ class Plan {
     this.diskBytes = 0,
     this.partitions = const [],
     this.wipesData = true,
+    this.connectFirst = true,
     this.guides = const Guides(),
     this.journeys = Journey.defaults,
   });
@@ -430,6 +435,7 @@ class Plan {
       diskBytes: _i(j['disk_bytes']),
       partitions: [for (final p in _l(j['partitions'])) p.toString()],
       wipesData: j['wipes_data'] != false,
+      connectFirst: j['connect_first'] != false,
       guides: Guides.fromJson(_m(j['guides'])),
       journeys: j['journeys'] is Map && (j['journeys'] as Map).isNotEmpty
           ? {

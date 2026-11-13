@@ -178,7 +178,9 @@ jobs:
           cp dl/engine/* "$ENG/" && cp dl/tools/* "$ENG/tools/"
           chmod +x "$ENG"/thimsy-installer* "$ENG"/tools/* || true
           cp ../../LICENSE ../../NOTICE "$ENG/" 2>/dev/null || true
-          "$ENG"/thimsy-installer* --json catalog | head -c 300; echo
+          # Smoke test (to a file: piping into head would cut the output short).
+          "$ENG"/thimsy-installer* --json catalog > "$RUNNER_TEMP/catalog.json"
+          head -c 300 "$RUNNER_TEMP/catalog.json"; echo
           mkdir -p ../../dist
           case "$RUNNER_OS" in
             Linux) tar -C "$(dirname "$APP")" -czf "../../dist/$OUT" --transform "s,^bundle,ThimsyInstaller," bundle ;;

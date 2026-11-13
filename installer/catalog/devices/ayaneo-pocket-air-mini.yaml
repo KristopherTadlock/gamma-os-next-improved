@@ -13,4 +13,12 @@ host_message: "{device} is installed with MediaTek's SP Flash Tool, which doesn'
 notes:
   - "Planned: SP Flash Tool on Windows and Linux. Not buildable yet."
 guides:
-  unlock: { route: none, steps: [] }
+  unlock:
+    route: none
+    steps: []
+  download_mode:
+    - title: "Plug in the cable with the device off"
+      body: "Turn the {device} off completely. When the installer asks, connect the USB cable to this computer."
+  first_boot:
+    - title: "Wait for the first boot"
+      body: "The first boot takes 1 to 3 minutes, and the screen may seem stuck on the boot logo. This is normal."

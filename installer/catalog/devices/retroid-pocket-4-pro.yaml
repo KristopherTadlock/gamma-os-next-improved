@@ -17,5 +17,13 @@ guides:
   unlock:
     route: automated
     steps:
-      - title: "Unlock in fastboot"
-        body: "The installer sends the unlock command; confirm it on the device with Volume Up."
+      - title: "Turn on OEM unlocking"
+        body: "On the {device}, open Settings, About and tap Build number seven times. Then, in Settings, Developer options, turn on USB debugging and OEM unlocking. Connect the {device} to this computer while it's on; it restarts into fastboot mode for the unlock."
+      - title: "Confirm with Volume Up"
+        body: "When the {device} asks, press Volume Up within 3 seconds to confirm the unlock."
+  download_mode:
+    - title: "Connect it with USB debugging on"
+      body: "Turn the {device} on, with USB debugging still on in Developer options, and connect it to this computer. It restarts into fastboot mode for the installation."
+  first_boot:
+    - title: "Restart with Power"
+      body: "When installation finishes, press the Power button once if the {device} hasn't restarted by itself."

@@ -12,4 +12,12 @@ support:
 notes:
   - "Planned: microSD card install on every computer. Not buildable yet."
 guides:
-  unlock: { route: none, steps: [] }
+  unlock:
+    route: none
+    steps: []
+  download_mode:
+    - title: "Install from the microSD card"
+      body: "Turn the {device} off, put the card in and turn it on. It installs onto its internal storage from the card by itself. Leave it alone until it finishes, then turn it off and take the card out."
+  first_boot:
+    - title: "Wait on the Anbernic logo"
+      body: "The first boot can take 1 to 3 minutes and may seem stuck on the Anbernic logo. This is normal."

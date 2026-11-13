@@ -12,4 +12,12 @@ support:
 notes:
   - "Planned: microSD card install on every computer. Not buildable yet."
 guides:
-  unlock: { route: none, steps: [] }
+  unlock:
+    route: none
+    steps: []
+  download_mode:
+    - title: "Start from the microSD card"
+      body: "Take any other microSD card out of the {device}, put the Thimsy card in and turn it on. Thimsy runs from the card and leaves the internal storage untouched: to go back to the original system, turn it off and take the card out."
+  first_boot:
+    - title: "Copy games without a card reader"
+      body: "Don't put the card back in a computer to copy games: it holds an encrypted Android layout, so the computer won't show your storage. Copy games over USB file transfer (MTP), with ADB Explorer or from a network share instead."

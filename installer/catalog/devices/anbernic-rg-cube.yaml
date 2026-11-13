@@ -75,13 +75,13 @@ guides:
     route: guided
     steps:
       - title: "Unlock with GammaOS's own steps"
-        body: "The RG Cube is unlocked once, with the steps from GammaOS Next's installation guide (the Unisoc T820 section). The installer doesn't run that tool itself. Follow the guide, then come back and continue."
+        body: "The {device} is unlocked once, with the UnlockBootloader tool from GammaOS Next's installation guide (Unisoc T820, Step 2): turn the {device} off, start the tool, then hold the Back button while you connect the USB cable. The installer doesn't run that tool itself. Follow the guide, then come back and continue."
         link: "https://github.com/TheGammaSqueeze/GammaOSNext/wiki/GammaOS-Next-Installation"
       - title: "Check it's unlocked"
-        body: "When the device shows LOCK FLAG IS: UNLOCK, it's unlocked. Turn it off and continue."
+        body: "When the screen shows INFO: LOCK FLAG IS: UNLOCK!!!, it's unlocked. Unplug the cable, make sure the {device} is off, and continue."
   download_mode:
-    - title: "Hold Volume Down and plug in the cable"
-      body: "Turn the RG Cube off. Hold Volume Down and connect the USB cable to this computer. Keep holding until installation starts. The screen stays black; that's normal."
+    - title: "Hold Back and plug in the cable"
+      body: "Turn the {device} off and unplug it. Hold the Back button and, still holding it, connect the USB cable to this computer. Keep holding until installation starts."
   first_boot:
     - title: "Wait for the first boot"
       body: "The first start takes a few minutes while Thimsy sets up your emulators. Don't turn it off."

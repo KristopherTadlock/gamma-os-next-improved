@@ -335,6 +335,44 @@ void main() {
     await tap(tester, key('confirm-install-yes'));
     expect(engine.calls, contains('flash full dry'));
     expect(find.text('Dry run complete'), findsOneWidget);
+
+    // A dry run can't turn into a real install from the install screen:
+    // no switch there, and "Run again" repeats the dry run.
+    expect(find.byType(SwitchListTile), findsNothing);
+    await tap(tester, key('run-again'));
+    expect(engine.calls.where((c) => c == 'flash full dry').length, 2);
+    expect(engine.calls.where((c) => c == 'flash full'), isEmpty);
+
+    // Back on Review, turning dry run off doesn't allow a real install of a
+    // device that must be connected first and wasn't detected.
+    await tap(tester, key('back-to-review'));
+    await tap(tester, find.text('Advanced'));
+    await tap(tester, key('dry-run'));
+    final install = tester.widget<ButtonStyleButton>(key('install-button'));
+    expect(install.onPressed, isNull);
+    expect(engine.calls.where((c) => c == 'flash full'), isEmpty);
+  });
+
+  testWidgets('Unisoc: connect after installing starts', (tester) async {
+    final engine = FakeEngine(
+      step: Duration.zero,
+      detectDevice: 'other',
+      connectFirst: false,
+    );
+    await start(tester, engine);
+    await pickAndBuild(tester, 'anbernic-rg-cube');
+    await tap(tester, key('backed-up'));
+    await next(tester);
+    await tap(tester, key('unlock-confirm'));
+    await next(tester);
+    // Nothing detected, and that's expected: the tool will wait for it.
+    expect(key('connect-later'), findsOneWidget);
+    expect(key('device-connected'), findsNothing);
+    await next(tester);
+    expect(find.text('Review'), findsWidgets);
+    await tap(tester, key('install-button'));
+    await tap(tester, key('confirm-install-yes'));
+    expect(engine.calls, contains('flash full'));
   });
 
   test('automated unlock runs the engine', () async {

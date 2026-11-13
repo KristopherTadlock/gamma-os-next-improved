@@ -15,4 +15,14 @@ identify:
 notes:
   - "Planned: same flashing route as the RG Cube. Not buildable yet."
 guides:
-  unlock: { route: guided, steps: [] }
+  unlock:
+    route: guided
+    steps:
+      - title: "Unlock with GammaOS's own steps"
+        body: "The {device} is unlocked once, with the UnlockBootloader tool from GammaOS Next's installation guide (Unisoc T820, Step 2): turn the {device} off, start the tool, then hold the Back button while you connect the USB cable. The installer doesn't run that tool itself. Follow the guide, then come back and continue."
+        link: "https://github.com/TheGammaSqueeze/GammaOSNext/wiki/GammaOS-Next-Installation#anbernic-rg556--rg-cube--rg406h--rg406v--rg476h--rg-slide"
+      - title: "Check it's unlocked"
+        body: "When the screen shows INFO: LOCK FLAG IS: UNLOCK!!!, it's unlocked. Unplug the cable, make sure the {device} is off, and continue."
+  download_mode:
+    - title: "Hold Back and plug in the cable"
+      body: "Turn the {device} off and unplug it. Hold the Back button and, still holding it, connect the USB cable to this computer. Keep holding until installation starts."

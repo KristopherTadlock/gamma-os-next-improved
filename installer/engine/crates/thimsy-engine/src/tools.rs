@@ -91,24 +91,37 @@ pub fn run(
             writeln!(stdin, "{l}")?;
         }
     }
+    // Both streams reach on_line in arrival order: spd_dump logs progress
+    // (load_partition, BSL_REP_VER) on stderr and prompts on stdout.
+    let (tx, rx) = std::sync::mpsc::channel::<(bool, String)>();
     let stderr = child.stderr.take().unwrap();
-    let rep2 = rep.clone();
+    let tx_err = tx.clone();
     let err_thread = std::thread::spawn(move || {
-        let mut lines = Vec::new();
         for line in BufReader::new(stderr).lines().map_while(Result::ok) {
-            rep2.info(line.clone());
-            lines.push(line);
+            if tx_err.send((true, line)).is_err() {
+                break;
+            }
         }
-        lines
     });
     let stdout = child.stdout.take().unwrap();
-    // spd_dump prints prompts without newlines; split on '\n' and ':' prompts.
-    for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+    let out_thread = std::thread::spawn(move || {
+        for line in BufReader::new(stdout).lines().map_while(Result::ok) {
+            if tx.send((false, line)).is_err() {
+                break;
+            }
+        }
+    });
+    let mut err_lines = Vec::new();
+    for (is_err, line) in rx {
+        rep.info(line.clone());
         on_line(&line);
-        rep.info(line);
+        if is_err {
+            err_lines.push(line);
+        }
     }
+    let _ = err_thread.join();
+    let _ = out_thread.join();
     let status = child.wait()?;
-    let err_lines = err_thread.join().unwrap_or_default();
     if !status.success() {
         let last = err_lines.last().cloned().unwrap_or_default();
         return Err(EngineError::new(

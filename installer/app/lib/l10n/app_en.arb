@@ -206,6 +206,8 @@
   },
   "waitingDevice": "Waiting for the device…",
   "nothingConnected": "Nothing connected yet.",
+  "connectLaterTitle": "Don't connect it yet",
+  "connectLaterBody": "Press Next to start installing. When the installer asks, do the steps above. It waits up to 5 minutes for your device.",
   "seenOther": "Seen: {devices}. That isn't the selected device in the right mode yet.",
   "@seenOther": {
     "placeholders": {
@@ -249,7 +251,8 @@
   "keepConnected": "Don't unplug the cable or let this computer sleep.",
   "ready": "Ready.",
   "dryRunComplete": "Dry run complete",
-  "dryRunCompleteBody": "Nothing was written. Turn off Dry run to install for real.",
+  "dryRunCompleteBody": "Nothing was written. To install for real, go back to Review, turn off Dry run and confirm.",
+  "backToReview": "Back to review",
   "installWritten": "Thimsy is written",
   "installWrittenBody": "The device is restarting into Thimsy.",
   "runAgain": "Run again",

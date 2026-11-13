@@ -263,15 +263,21 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
     }
 
     rep.stage("wait_device", "Connect the device in download mode");
-    let step = d.guides.download_mode.first();
+    // The device's own button steps, translated with its name filled in.
+    let step = crate::resolve::trs(&d.guides.download_mode, &d.name)
+        .into_iter()
+        .next();
     rep.prompt(
         "enter_download_mode",
-        step.map_or("Connect the device in download mode", |s| s.title.as_str()),
-        step.map_or("", |s| s.body.as_str()),
+        step.as_ref()
+            .map_or("Connect the device in download mode", |s| s.title.as_str()),
+        step.as_ref().map_or("", |s| s.body.as_str()),
         None,
     );
 
-    rep.stage("flash", "Installing Thimsy");
+    // The prompt stays up while spd_dump waits for the device; the install
+    // stage starts when the device answers (its first BSL_REP_VER line).
+    let mut connected = false;
     let write_total: u64 = plan.writes.iter().map(|w| w.bytes).sum();
     let mut written = 0u64;
     let names: Vec<(String, u64)> = plan
@@ -280,6 +286,10 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
         .map(|w| (w.partition.clone(), w.bytes))
         .collect();
     tools::run(&inv, &flash_dir, rep, |line| {
+        if !connected && (line.starts_with("BSL_REP_VER") || line.starts_with("load_partition")) {
+            connected = true;
+            rep.stage("flash", "Installing Thimsy");
+        }
         // "load_partition: super, target: 0x..., written: 0x..."
         if let Some(rest) = line.strip_prefix("load_partition: ") {
             let name = rest.split(',').next().unwrap_or("").trim();
@@ -325,10 +335,17 @@ pub fn unlock(cat: &Catalog, device: &str, rep: &Reporter) -> Result<()> {
             Ok(())
         }
         "automated" => {
+            // The device's own confirmation step (its last unlock step) when
+            // the catalog has one: the keys differ between devices.
+            let own = crate::resolve::trs(&d.guides.unlock.steps, &d.name).pop();
             rep.prompt(
                 "confirm_unlock",
-                "Confirm on the device",
-                "Use the volume keys to choose Unlock, then press Power.",
+                own.as_ref()
+                    .map_or("Confirm on the device", |s| s.title.as_str()),
+                own.as_ref().map_or(
+                    "Use the volume keys to choose Unlock, then press Power.",
+                    |s| s.body.as_str(),
+                ),
                 None,
             );
             let inv = Invocation {

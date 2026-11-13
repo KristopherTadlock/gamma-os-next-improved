@@ -12,4 +12,19 @@ support:
 notes:
   - "Planned: fastboot install on every computer. Not buildable yet."
 guides:
-  unlock: { route: guided, steps: [] }
+  unlock:
+    route: guided
+    steps:
+      - title: "Unlock with GammaOS's own steps"
+        body: "The {device} is unlocked once, with the web unlock tool from GammaOS Next's installation guide (Anbernic RG405M / RG405V / RG505, Step 2). Restart the {device} into fastboot mode, open the tool in Google Chrome, click Connect, then Unlock. On the {device}, don't press Volume Down: press the Home / Back button to confirm. The installer doesn't run that tool itself. Follow the guide, then come back and continue."
+        link: "https://github.com/TheGammaSqueeze/GammaOSNext/wiki/GammaOS-Next-Installation#anbernic-rg405m--rg405v--rg505"
+      - title: "Check it's unlocked"
+        body: "When the screen shows Unlock bootloader success!, it's unlocked. If the {device} already shows INFO: LOCK FLAG IS : UNLOCK!!! briefly when it starts, it was unlocked before and you can skip the unlock."
+  download_mode:
+    - title: "Restart into fastbootd"
+      body: "Take the microSD card out and turn on USB debugging in Developer options. Connect the {device} to this computer while it's on. It restarts into fastbootd: the screen shows fastbootd in large red text."
+  first_boot:
+    - title: "Restart with Power"
+      body: "When installation finishes, press the Power button once if the {device} hasn't restarted by itself."
+    - title: "Wait on the Anbernic logo"
+      body: "The first boot can take 1 to 3 minutes and may seem stuck on the Anbernic logo. This is normal."

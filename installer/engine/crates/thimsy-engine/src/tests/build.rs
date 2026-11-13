@@ -136,7 +136,7 @@ flash:
   erase_full: [userdata, metadata]
   never_write: [UserData, Persist]
 guides:
-  download_mode: [{{ title: "Hold Volume Down", body: "Plug in the cable." }}]
+  download_mode: [{{ title: "Hold Back", body: "Turn the {{device}} off, hold Back and plug in the cable." }}]
   unlock: {{ route: guided, steps: [] }}
 "#,
             src_pac.len(),

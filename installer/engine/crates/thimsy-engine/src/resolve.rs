@@ -70,12 +70,14 @@ pub struct Journeys {
     pub returning: Journey,
 }
 
-fn trs(steps: &[Step]) -> Vec<Step> {
+/// Guide steps, translated, with `{device}` filled in (so devices with the
+/// same buttons can share one translated sentence).
+pub fn trs(steps: &[Step], device: &str) -> Vec<Step> {
     steps
         .iter()
         .map(|s| Step {
-            title: tr(&s.title),
-            body: tr(&s.body),
+            title: tr(&s.title).replace("{device}", device),
+            body: tr(&s.body).replace("{device}", device),
             link: s.link.clone(),
         })
         .collect()
@@ -132,6 +134,11 @@ pub struct Plan {
     pub partitions: Vec<String>,
     pub wipes_data: bool,
     pub journeys: Journeys,
+    /// Whether the device must already be connected in its flashing mode
+    /// before installing starts. False when the flashing tool waits for it
+    /// (Unisoc download mode only lasts a few seconds unless a tool is
+    /// already waiting, so the user connects it once installing has begun).
+    pub connect_first: bool,
     pub guides: GuidesOut,
 }
 
@@ -358,14 +365,15 @@ pub fn resolve(
         partitions,
         wipes_data: true,
         journeys: journeys(d),
+        connect_first: d.flash.as_ref().is_none_or(|f| f.method != "spd"),
         guides: GuidesOut {
-            backup: trs(&d.guides.backup),
+            backup: trs(&d.guides.backup, &d.name),
             unlock: UnlockOut {
                 route: d.guides.unlock.route.clone(),
-                steps: trs(&d.guides.unlock.steps),
+                steps: trs(&d.guides.unlock.steps, &d.name),
             },
-            download_mode: trs(&d.guides.download_mode),
-            first_boot: trs(&d.guides.first_boot),
+            download_mode: trs(&d.guides.download_mode, &d.name),
+            first_boot: trs(&d.guides.first_boot, &d.name),
         },
     })
 }

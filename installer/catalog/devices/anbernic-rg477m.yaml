@@ -13,4 +13,11 @@ host_message: "{device} is installed with MediaTek's SP Flash Tool, which doesn'
 notes:
   - "Planned: SP Flash Tool on Windows and Linux. Not buildable yet."
 guides:
-  unlock: { route: none, steps: [] }
+  unlock:
+    route: none
+    steps: []
+  download_mode:
+    - title: "Plug in the cable with the device off"
+      body: "Turn the {device} off completely. When the installer asks, connect the USB cable to this computer."
+    - title: "If it isn't found"
+      body: "Unplug the cable. Hold Power and Volume Down for at least 60 seconds, then, still holding them, connect the USB cable. Keep holding until installation starts; finding the {device} can take 30 seconds or more."

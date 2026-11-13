@@ -41,7 +41,12 @@ class FakeEngine extends Engine {
     this.detectDevice = 'anbernic-rg-cube',
     this.freeBytes = 120000000000,
     this.flashSpaceFailures = 0,
+    this.connectFirst = true,
   });
+
+  /// Whether plans say the device must be connected before installing
+  /// (false = like Unisoc, whose flash tool waits for it).
+  final bool connectFirst;
 
   static const _rgCube = {
     'id': 'anbernic-rg-cube',
@@ -339,6 +344,7 @@ class FakeEngine extends Engine {
       'disk_bytes': 19000000000,
       'partitions': ['super', 'vendor_boot_a', 'vendor_boot_b', 'logo'],
       'wipes_data': true,
+      'connect_first': connectFirst,
       'journeys': {
         'first_time': {
           'title': 'First time installing custom firmware',

@@ -5,6 +5,10 @@ given, writes dummy backups for read_part, and logs every command to
 $FAKE_SPD_LOG. Fails if any confirmation is missing."""
 import os, sys
 args = sys.argv[1:]
+def log_line(text):
+    # The real tool logs to stderr (DBG_LOG); only confirmations go to stdout.
+    sys.stderr.write(text + "\n"); sys.stderr.flush()
+connected = False
 log = open(os.environ.get("FAKE_SPD_LOG", os.devnull), "a")
 def confirm(what):
     sys.stdout.write(f'Answer "yes" to confirm the "{what}" command: ')
@@ -20,7 +24,11 @@ while i < len(args):
     elif a == "fdl":
         f, addr = args[i+1], args[i+2]
         if not os.path.getsize(f): sys.exit(f"empty {f}")
-        log.write(f"fdl {f} {addr}\n"); print(f"FDL loaded from {f} at {addr}"); i += 3
+        if not connected:
+            log_line("Waiting for connection (300s)")
+            log_line('BSL_REP_VER: "Spreadtrum Boot Block version 1.1"')
+            connected = True
+        log.write(f"fdl {f} {addr}\n"); log_line(f"FDL loaded from {f} at {addr}"); i += 3
     elif a == "read_part":
         name, off, size, out = args[i+1:i+5]
         os.makedirs(os.path.dirname(out) or ".", exist_ok=True)
@@ -30,8 +38,8 @@ while i < len(args):
         name, f = args[i+1], args[i+2]
         confirm("write partition")
         size = os.path.getsize(f)
-        print(f"\nfile size : 0x{size:x}")
-        print(f"load_partition: {name}, target: 0x{size:x}, written: 0x{size:x}")
+        log_line(f"file size : 0x{size:x}")
+        log_line(f"load_partition: {name}, target: 0x{size:x}, written: 0x{size:x}")
         log.write(f"write_part {name} {f} {size}\n"); i += 3
     elif a == "erase_part":
         confirm("erase partition")
