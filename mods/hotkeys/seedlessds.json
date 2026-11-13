@@ -1,0 +1,26 @@
+{
+  "id": "seedlessds",
+  "name": "SeedlessDS",
+  "packages": ["com.seedlessds.app"],
+  "note": "Save and load use SeedlessDS's quick save slot. The keys are bound after its first game. It has no rewind.",
+  "actions": {
+    "save_state": {"driver": "key", "key": "F2"},
+    "load_state": {"driver": "key", "key": "F4"},
+    "fast_forward": {"driver": "key_toggle", "key": "F6"},
+    "rewind": {"driver": "none"},
+    "quit": {"driver": "exit"}
+  },
+  "provision": [
+    {
+      "file": "/data/data/com.seedlessds.app/shared_prefs/keymap.xml",
+      "format": "xml_prefs",
+      "type": "int",
+      "mode": "add",
+      "values": {
+        "s_1": "136",
+        "s_2": "132",
+        "s_3": "134"
+      }
+    }
+  ]
+}

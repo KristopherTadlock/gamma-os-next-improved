@@ -1852,10 +1852,10 @@ index a3436ab84fa..4b959033df0 100644
 +  changes brightness.
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoAppFiles.cpp b/frameworks/base/cmds/gammaos-nano/NanoAppFiles.cpp
 new file mode 100644
-index 00000000000..9751c72285a
+index 00000000000..b7d2c79d52a
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/NanoAppFiles.cpp
-@@ -0,0 +1,392 @@
+@@ -0,0 +1,469 @@
 +/*
 + * Copyright (C) 2026 The Thimsy OS Project
 + *
@@ -1876,6 +1876,8 @@ index 00000000000..9751c72285a
 +#include "NanoBiosUtil.h"
 +
 +#include <ctype.h>
++#include <dirent.h>
++#include <stdint.h>
 +#include <stdlib.h>
 +#include <string.h>
 +#include <strings.h>
@@ -2005,6 +2007,35 @@ index 00000000000..9751c72285a
 +    while (from > 0 && ((*prefs)[from - 1] == ' ' || (*prefs)[from - 1] == '\t')) from--;
 +    if (to < prefs->size() && (*prefs)[to] == '\n') to++;
 +    prefs->erase(from, to - from);
++}
++
++int sdPrefsGetInt(const std::string& prefs, const std::string& name, int def) {
++    const std::string key = "<int name=\"" + name + "\" value=\"";
++    const size_t a = prefs.find(key);
++    if (a == std::string::npos) return def;
++    const char* v = prefs.c_str() + a + key.size();
++    char* end = nullptr;
++    const long n = strtol(v, &end, 10);
++    return end != v && *end == '"' && n >= INT32_MIN && n <= INT32_MAX ? (int)n : def;
++}
++
++bool sdPrefsSetInt(std::string* prefs, const std::string& name, int value) {
++    if (prefs->find("<map") == std::string::npos)
++        *prefs = "<?xml version='1.0' encoding='utf-8' standalone='yes' ?>\n<map>\n</map>\n";
++    const size_t empty = prefs->find("<map />");
++    if (empty != std::string::npos) prefs->replace(empty, 7, "<map>\n</map>");
++    const std::string tag = "<int name=\"" + name + "\" value=\"" + std::to_string(value) + "\" />";
++    const size_t a = prefs->find("<int name=\"" + name + "\"");
++    if (a != std::string::npos) {
++        const size_t b = prefs->find("/>", a);
++        if (b == std::string::npos) return false;
++        prefs->replace(a, b + 2 - a, tag);
++        return true;
++    }
++    const size_t end = prefs->rfind("</map>");
++    if (end == std::string::npos) return false;
++    prefs->insert(end, "    " + tag + "\n");
++    return true;
 +}
 +
 +std::string sdFileUri(const std::string& path) {
@@ -2190,13 +2221,12 @@ index 00000000000..9751c72285a
 +    return out;
 +}
 +
-+// CITRA_DIRECTORY, a folder picked through Android (a tree of the external storage provider:
-+// primary:<path> on internal storage, <volume>:<path> on a card).
-+std::string azaharDir(const std::string& prefs, std::string* uri) {
-+    *uri = sdPrefsGet(prefs, "CITRA_DIRECTORY");
++// A folder picked through Android: a tree of the external storage provider, primary:<path> on
++// internal storage, <volume>:<path> on a card. "" for any other address.
++static std::string storageTreeDir(const std::string& uri) {
 +    const size_t n = strlen(appdef::kExternalStorageTree);
-+    if (uri->compare(0, n, appdef::kExternalStorageTree) != 0) return std::string();
-+    std::string id = uri->substr(n);
++    if (uri.compare(0, n, appdef::kExternalStorageTree) != 0) return std::string();
++    std::string id = uri.substr(n);
 +    const size_t sl = id.find('/');   // .../tree/<id>/document/<id>
 +    id = sdUriDecode(sl == std::string::npos ? id : id.substr(0, sl));
 +    const size_t colon = id.find(':');
@@ -2204,6 +2234,12 @@ index 00000000000..9751c72285a
 +    const std::string vol = id.substr(0, colon), rel = id.substr(colon + 1);
 +    const std::string root = vol == "primary" ? std::string("/storage/emulated/0") : "/storage/" + vol;
 +    return sdTrimDir(rel.empty() ? root : root + "/" + rel);
++}
++
++// CITRA_DIRECTORY, a folder picked through Android.
++std::string azaharDir(const std::string& prefs, std::string* uri) {
++    *uri = sdPrefsGet(prefs, "CITRA_DIRECTORY");
++    return storageTreeDir(*uri);
 +}
 +
 +std::string azaharTreeUri(const std::string& volume, const std::string& rel) {   // as Android writes it
@@ -2215,6 +2251,47 @@ index 00000000000..9751c72285a
 +    }
 +    return u;
 +}
++
++std::string seedlessSaveDir(const std::string& prefs, int* location, std::string* uri) {
++    *location = sdPrefsGetInt(prefs, "_SaveLocation", kSeedlessSaveBesideGames);
++    uri->clear();
++    if (*location == kSeedlessSaveApp) return appdef::kSeedlessUserDir;
++    if (*location != kSeedlessSaveFolder) return std::string();
++    *uri = sdPrefsGet(prefs, "_SaveFolder");
++    return storageTreeDir(*uri);
++}
++
++// A profile's folder: "p" and the hash of the profile's name.
++static bool seedlessProfileDir(const std::string& n) {
++    const size_t i = n.compare(0, 2, "p-") == 0 ? 2 : n.compare(0, 1, "p") == 0 ? 1 : 0;
++    return i > 0 && i < n.size() && std::all_of(n.begin() + i, n.end(), [](char c) { return isdigit((unsigned char)c); });
++}
++
++static bool seedlessSavesIn(const std::string& dir, bool top) {
++    DIR* d = opendir(dir.c_str());
++    if (!d) return false;
++    bool ok = true;
++    while (ok) {
++        const dirent* e = readdir(d);
++        if (!e) break;
++        const std::string n = e->d_name;
++        if (n == "." || n == "..") continue;
++        struct stat st;
++        if (lstat((dir + "/" + n).c_str(), &st) != 0) { ok = false; break; }
++        if (S_ISDIR(st.st_mode)) {
++            ok = top && seedlessProfileDir(n) && seedlessSavesIn(dir + "/" + n, false);
++            continue;
++        }
++        const size_t dot = n.find_last_of('.');
++        const char* ext = dot == std::string::npos ? "" : n.c_str() + dot + 1;
++        ok = S_ISREG(st.st_mode) && (!strcasecmp(ext, "dsv") || !strcasecmp(ext, "sav") || !strcasecmp(ext, "dss")
++                                     || !strcasecmp(ext, "ra"));
++    }
++    closedir(d);
++    return ok;
++}
++
++bool seedlessSavesOnly(const std::string& dir) { return seedlessSavesIn(dir, true); }
 +
 +// memstick_dir.txt in its app folder, else the root of internal storage.
 +std::string ppssppMemstickAt(const std::string& root) {
@@ -2250,10 +2327,10 @@ index 00000000000..9751c72285a
 +}  // namespace android
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoAppFiles.h b/frameworks/base/cmds/gammaos-nano/NanoAppFiles.h
 new file mode 100644
-index 00000000000..d1d267bb3a2
+index 00000000000..8d13f2ac2b2
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/NanoAppFiles.h
-@@ -0,0 +1,90 @@
+@@ -0,0 +1,104 @@
 +/*
 + * Copyright (C) 2026 The Thimsy OS Project
 + *
@@ -2297,6 +2374,8 @@ index 00000000000..d1d267bb3a2
 +inline constexpr const char* kVita3kConfig = "/data/media/0/Android/data/org.vita3k.emulator/files/config.yml";
 +inline constexpr const char* kVita3kDefPref = "/storage/emulated/0/Android/data/org.vita3k.emulator/files/vita";
 +inline constexpr const char* kAzaharPrefs = "/data/data/org.azahar_emu.azahar/shared_prefs/org.azahar_emu.azahar_preferences.xml";
++inline constexpr const char* kSeedlessPrefs = "/data/data/com.seedlessds.app/shared_prefs/seedless_config.xml";
++inline constexpr const char* kSeedlessUserDir = "/data/data/com.seedlessds.app/files/SeedlessDS/user";
 +inline constexpr const char* kExternalStorageTree = "content://com.android.externalstorage.documents/tree/";
 +}  // namespace appdef
 +
@@ -2319,6 +2398,8 @@ index 00000000000..d1d267bb3a2
 +std::string sdPrefsGet(const std::string& prefs, const std::string& name);   // a <string>, "" = not set
 +bool sdPrefsSet(std::string* prefs, const std::string& name, const std::string& value);
 +void sdPrefsRemove(std::string* prefs, const std::string& name);
++int sdPrefsGetInt(const std::string& prefs, const std::string& name, int def);   // an <int>
++bool sdPrefsSetInt(std::string* prefs, const std::string& name, int value);
 +std::string sdFileUri(const std::string& path);   // as Uri.fromFile writes it
 +std::string sdUriDecode(const std::string& s);
 +std::string sdTrimDir(std::string d);   // no quotes, spaces or trailing slash; /sdcard as /storage/emulated/0
@@ -2337,6 +2418,16 @@ index 00000000000..d1d267bb3a2
 +std::string scummvmSetSavePath(const std::string& ini, const std::string& from, const std::string& dir);
 +std::string azaharDir(const std::string& prefs, std::string* uri);     // "" = unset or not a storage folder
 +std::string azaharTreeUri(const std::string& volume, const std::string& rel);
++// SeedlessDS's saves and states, by _SaveLocation (*location): kSeedlessSaveBesideGames (its default) beside
++// each game; kSeedlessSaveApp in its app folder (kSeedlessUserDir: backup/ and savestates/);
++// kSeedlessSaveFolder side by side in _SaveFolder (*uri), a folder picked through Android. The folder of the
++// last two ("" when the picked one is not a storage folder), else "".
++enum { kSeedlessSaveBesideGames = 0, kSeedlessSaveApp = 1, kSeedlessSaveFolder = 2 };
++std::string seedlessSaveDir(const std::string& prefs, int* location, std::string* uri);
++// The folder holds only SeedlessDS's files: game saves (.dsv, .sav), states (.dss) and their
++// RetroAchievements progress (.ra), at the top or in a profile's folder (p<number>). Only then is a picked
++// save folder moved whole: it may be the games' own folder.
++bool seedlessSavesOnly(const std::string& dir);
 +
 +// The same, read from the app's files under root ("" on the device). Paths as the app writes them.
 +std::string ppssppMemstickAt(const std::string& root);   // "" = a folder picked through Android
@@ -3863,10 +3954,10 @@ index 00000000000..5d320e97068
 +#endif // GAMMAOS_NANO_BIDI_H
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoBiosCatalog.cpp b/frameworks/base/cmds/gammaos-nano/NanoBiosCatalog.cpp
 new file mode 100644
-index 00000000000..c3027a083aa
+index 00000000000..eee0a9cb0b7
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/NanoBiosCatalog.cpp
-@@ -0,0 +1,760 @@
+@@ -0,0 +1,766 @@
 +/*
 + * Copyright (C) 2026 The Thimsy OS Project
 + *
@@ -3931,7 +4022,7 @@ index 00000000000..c3027a083aa
 +    {"psx", SEC_OPTIONAL, true, "PlayStation", "Beetle PSX HW, SwanStation, PCSX ReARMed", "", "Much better compatibility; recommended."},
 +    {"dc", SEC_OPTIONAL, true, "Dreamcast", "Flycast", "", "A few games need it."},
 +    {"gc", SEC_OPTIONAL, false, "GameCube", "Dolphin", "", "Plays the console's start-up animation."},
-+    {"nds", SEC_OPTIONAL, false, "Nintendo DS", "DraStic, built-in DS player", "", ""},
++    {"nds", SEC_OPTIONAL, false, "Nintendo DS", "DraStic, built-in DS player, SeedlessDS", "", ""},
 +    {"gba", SEC_OPTIONAL, false, "Game Boy Advance", "mGBA, gpSP", "", ""},
 +    {"gb", SEC_OPTIONAL, false, "Game Boy / Game Boy Color", "SameBoy, mGBA", "", "Shows the console's start-up screen."},
 +    {"md", SEC_OPTIONAL, false, "Genesis / Master System / Game Gear", "Genesis Plus GX", "", "Shows the console's start-up screen."},
@@ -3947,7 +4038,7 @@ index 00000000000..c3027a083aa
 +    {"3donorsa", SEC_OPTIONAL, false, "3DO", "Opera", "", "BIOS variants without the RSA check."},
 +    {"adam", SEC_SOME_GAMES, false, "ColecoVision", "GearColeco", "ADAM software", ""},
 +    {"dcflash", SEC_OPTIONAL, false, "Dreamcast", "Flycast", "", "Flash memory (settings) of a Dreamcast."},
-+    {"ndsfw", SEC_OPTIONAL, false, "Nintendo DS", "DraStic", "", "Firmware of your own DS."},
++    {"ndsfw", SEC_OPTIONAL, false, "Nintendo DS", "DraStic, SeedlessDS", "", "Firmware of your own DS."},
 +    {"pspfont", SEC_OPTIONAL, false, "PSP", "PPSSPP", "", "Fonts from a PSP's flash0 (PPSSPP has its own)."},
 +    {"mt32", SEC_OPTIONAL, false, "ScummVM", "ScummVM", "", "Roland MT-32 / CM-32L sound."},
 +    {"3ds", SEC_OPTIONAL, false, "Nintendo 3DS", "Azahar", "", "From your own 3DS. Not needed for decrypted games: Azahar has its own fonts and system data. The real shared font fixes Chinese, Korean and Taiwanese text."},
@@ -4040,9 +4131,9 @@ index 00000000000..c3027a083aa
 +      S(SLOT_DOLPHIN_GC, "USA/IPL.bin"), S(SLOT_DOLPHIN_GC, "JAP/IPL.bin")),
 +
 +    F("nds", "bios7.bin", "ARM7 BIOS", 16384, "24f67bdea115a2c847c8813a262502ee1607b7df", "df692a80a5b1bc90728bc3dfc76cd948", REC_ALL,
-+      S(SLOT_DRASTIC, "nds_bios_arm7.bin"), S(SLOT_DRASTIC_NANO, "nds_bios_arm7.bin")),
++      S(SLOT_DRASTIC, "nds_bios_arm7.bin"), S(SLOT_DRASTIC_NANO, "nds_bios_arm7.bin"), S(SLOT_SEEDLESSDS, "nds_bios_arm7.bin")),
 +    F("nds", "bios9.bin", "ARM9 BIOS", 4096, "bfaac75f101c135e32e2aaf541de6b1be4c8c62d", "a392174eb3e572fed6447e956bde4b25", REC_ALL,
-+      S(SLOT_DRASTIC, "nds_bios_arm9.bin"), S(SLOT_DRASTIC_NANO, "nds_bios_arm9.bin")),
++      S(SLOT_DRASTIC, "nds_bios_arm9.bin"), S(SLOT_DRASTIC_NANO, "nds_bios_arm9.bin"), S(SLOT_SEEDLESSDS, "nds_bios_arm9.bin")),
 +
 +    F("gba", "gba_bios.bin", "", 16384, "300c20df6731a33952ded8c436f7f186d25d3492", "a860e8c0b6d573d191e4ec7db1b1e4f6", REC_ALL, RA("")),
 +
@@ -4112,7 +4203,9 @@ index 00000000000..c3027a083aa
 +    FN("dcflash", "dc_flash.bin", "Flash memory", 131072, 0, S(SLOT_FLYCAST, "dc_nvmem.bin", SLOTF_IF_ABSENT), RA("dc/dc_nvmem.bin", SLOTF_IF_ABSENT)),
 +
 +    FN("ndsfw", "firmware.bin", "DS firmware", 131072, 0, S(SLOT_DRASTIC, "nds_firmware.bin", SLOTF_IF_ABSENT)),
-+    FN("ndsfw", "firmware.bin", "DS Lite firmware", 262144, 0, S(SLOT_DRASTIC, "nds_firmware.bin", SLOTF_IF_ABSENT)),
++    // SeedlessDS reads only a 256 KB firmware.
++    FN("ndsfw", "firmware.bin", "DS Lite firmware", 262144, 0, S(SLOT_DRASTIC, "nds_firmware.bin", SLOTF_IF_ABSENT),
++       S(SLOT_SEEDLESSDS, "nds_firmware.bin", SLOTF_IF_ABSENT)),
 +    FN("ndsfw", "firmware.bin", "DS firmware (iQue)", 524288, 0, S(SLOT_DRASTIC, "nds_firmware.bin", SLOTF_IF_ABSENT)),
 +
 +    FN("pspfont", "jpn0.pgf", "", 0, 0, S(SLOT_PPSSPP_FONT, "", SLOTF_IF_ABSENT)),
@@ -4347,6 +4440,7 @@ index 00000000000..c3027a083aa
 +        case SLOT_AZAHAR: return "org.azahar_emu.azahar";
 +        case SLOT_HAKUX: return "com.rfandango.haku_x";
 +        case SLOT_VITA3K: return "org.vita3k.emulator";
++        case SLOT_SEEDLESSDS: return "com.seedlessds.app";
 +        default: return "";
 +    }
 +}
@@ -4365,6 +4459,7 @@ index 00000000000..c3027a083aa
 +        case SLOT_AZAHAR: return "Azahar";
 +        case SLOT_HAKUX: return "hakuX";
 +        case SLOT_VITA3K: return "Vita3K";
++        case SLOT_SEEDLESSDS: return "SeedlessDS";
 +        default: return "";
 +    }
 +}
@@ -4384,6 +4479,7 @@ index 00000000000..c3027a083aa
 +        case SLOT_AZAHAR: return "Azahar's folder (only when one has been chosen in Azahar)";
 +        case SLOT_HAKUX: return "hakuX's app folder, files/console";
 +        case SLOT_VITA3K: return "installed by Vita3K itself into its memory card folder (pref-path)";
++        case SLOT_SEEDLESSDS: return "SeedlessDS's app folder, files/SeedlessDS/system";
 +        default: return "";
 +    }
 +}
@@ -4402,6 +4498,7 @@ index 00000000000..c3027a083aa
 +        case SLOT_AZAHAR: return "microSD card/emulator_config/azahar";
 +        case SLOT_HAKUX: return "unchanged";
 +        case SLOT_VITA3K: return "microSD card/emulator_config/vita3k (moves with Vita3K's memory card)";
++        case SLOT_SEEDLESSDS: return "unchanged";
 +        default: return "";
 +    }
 +}
@@ -4629,10 +4726,10 @@ index 00000000000..c3027a083aa
 +}  // namespace android
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoBiosCatalog.h b/frameworks/base/cmds/gammaos-nano/NanoBiosCatalog.h
 new file mode 100644
-index 00000000000..7ecb88230af
+index 00000000000..f1c61602f83
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/NanoBiosCatalog.h
-@@ -0,0 +1,172 @@
+@@ -0,0 +1,173 @@
 +/*
 + * Copyright (C) 2026 The Thimsy OS Project
 + *
@@ -4696,6 +4793,7 @@ index 00000000000..7ecb88230af
 +    SLOT_AZAHAR,          // Azahar's folder (CITRA_DIRECTORY)
 +    SLOT_HAKUX,           // /data/data/com.rfandango.haku_x/files/console
 +    SLOT_VITA3K,          // installed by Vita3K itself (its install service)
++    SLOT_SEEDLESSDS,      // /data/data/com.seedlessds.app/files/SeedlessDS/system
 +    SLOT_KIND_COUNT
 +};
 +
@@ -6889,10 +6987,10 @@ index 00000000000..56f72d59f4e
 +}  // namespace android
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoBiosWorker.cpp b/frameworks/base/cmds/gammaos-nano/NanoBiosWorker.cpp
 new file mode 100644
-index 00000000000..c89eae54164
+index 00000000000..518d939c987
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/NanoBiosWorker.cpp
-@@ -0,0 +1,1062 @@
+@@ -0,0 +1,1066 @@
 +/*
 + * Copyright (C) 2026 The Thimsy OS Project
 + *
@@ -6953,6 +7051,9 @@ index 00000000000..c89eae54164
 +const char kMupenFiles[] = "/data/media/0/Android/data/org.mupen64plusae.v3.fzurita/files";
 +const char kScummvmExtra[] = "/data/data/org.scummvm.scummvm/files/extra";
 +const char kHakuxConsole[] = "/data/data/com.rfandango.haku_x/files/console";
++// The core reads the BIOS and firmware from <its data folder>/system, the data folder being
++// files/SeedlessDS (EmuAssets.DATA_DIR, PathCache.systemDir).
++const char kSeedlessSys[] = "/data/data/com.seedlessds.app/files/SeedlessDS/system";
 +const char kVita3kPkg[] = "org.vita3k.emulator";
 +const char kVita3kAppPrefs[] = "/data/data/org.vita3k.emulator/shared_prefs/vita3k_app.xml";
 +const char kVita3kStage[] = "/data/media/0/Android/data/org.vita3k.emulator/files/nano-install";
@@ -7440,6 +7541,7 @@ index 00000000000..c89eae54164
 +            }
 +            case SLOT_AZAHAR: { std::string prefs, uri; appPrefsRead(P(appdef::kAzaharPrefs), &prefs, R); const std::string a = azaharDir(prefs, &uri); if (!a.empty()) b = at(a); break; }
 +            case SLOT_HAKUX: b = P(kHakuxConsole); break;
++            case SLOT_SEEDLESSDS: b = P(kSeedlessSys); break;
 +            default: break;
 +        }
 +        while (b.size() > 1 && b.back() == '/') b.pop_back();
@@ -46321,10 +46423,10 @@ index 7b4e9412c26..6c42e1edbfe 100644
  
 diff --git a/frameworks/base/cmds/gammaos-nano/NanoSdMove.cpp b/frameworks/base/cmds/gammaos-nano/NanoSdMove.cpp
 new file mode 100644
-index 00000000000..242c9485553
+index 00000000000..e83df321640
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/NanoSdMove.cpp
-@@ -0,0 +1,1400 @@
+@@ -0,0 +1,1445 @@
 +/*
 + * Copyright (C) 2026 The Thimsy OS Project
 + *
@@ -46421,15 +46523,17 @@ index 00000000000..242c9485553
 +static const char* const kAzaharPrefs = appdef::kAzaharPrefs;
 +static const char* const kHakuxPkg = "com.rfandango.haku_x";
 +static const char* const kHakuxNative = "/data/data/com.rfandango.haku_x/files/native";
++static const char* const kSeedlessPkg = "com.seedlessds.app";
++static const char* const kSeedlessPrefs = appdef::kSeedlessPrefs;
 +
 +enum { kGroupRetroArch = 0, kGroupDrasticNano, kGroupPpsspp, kGroupFlycast, kGroupEsde, kGroupDrastic, kGroupMupen,
-+       kGroupArmsx2, kGroupScummvm, kGroupVita3k, kGroupDolphin, kGroupAzahar, kGroupHakux };
++       kGroupArmsx2, kGroupScummvm, kGroupVita3k, kGroupDolphin, kGroupAzahar, kGroupHakux, kGroupSeedless };
 +
 +static const std::pair<int, const char*> kGroupPkg[] = {
 +    {kGroupRetroArch, "com.retroarch.aarch64"}, {kGroupPpsspp, kPpssppPkg}, {kGroupFlycast, kFlycastPkg},
 +    {kGroupDrastic, kDrasticPkg}, {kGroupMupen, kMupenPkg}, {kGroupArmsx2, kArmsx2Pkg},
 +    {kGroupScummvm, kScummvmPkg}, {kGroupVita3k, kVita3kPkg}, {kGroupDolphin, kDolphinPkg},
-+    {kGroupAzahar, kAzaharPkg}, {kGroupHakux, kHakuxPkg}};
++    {kGroupAzahar, kAzaharPkg}, {kGroupHakux, kHakuxPkg}, {kGroupSeedless, kSeedlessPkg}};
 +
 +static const char* groupPkg(int group) {   // "" = built in (the DS emulator)
 +    for (const auto& gp : kGroupPkg) if (gp.first == group) return gp.second;
@@ -47288,6 +47392,34 @@ index 00000000000..242c9485553
 +        }
 +    }
 +
++    if (packageInstalled(kSeedlessPkg)) {   // its saves and states; kept beside the games (its default), they stay there
++        std::string prefs, uri;
++        sdReadPrefs(kSeedlessPrefs, &prefs);
++        int location = kSeedlessSaveBesideGames;
++        const std::string from = seedlessSaveDir(prefs, &location, &uri);
++        const std::string volume = sd.substr(sd.find_last_of('/') + 1);
++        const std::string to = card + "/seedlessds";
++        bool any = false;
++        if (location == kSeedlessSaveApp) {   // both into one: in a picked folder it keeps them side by side
++            for (const char* part : {"backup", "savestates"}) {
++                FileCopyPair p{from + "/" + part, to};
++                p.move = true; p.backup = backup + "/seedlessds"; p.group = kGroupSeedless;
++                pairs.push_back(p);
++            }
++            any = true;
++        } else if (location == kSeedlessSaveFolder && !from.empty() && sdExists(from)
++                   && uri != azaharTreeUri(volume, "emulator_config/seedlessds")) {
++            FileCopyPair p{rawStoragePath(from), to};
++            p.move = true; p.backup = backup + "/seedlessds"; p.group = kGroupSeedless;
++            pairs.push_back(p);
++            any = true;
++        }
++        if (any) {
++            mSdMoveEmuDirs["seedlessds"] = to;
++            mFileJobStopPkgs.push_back(kSeedlessPkg);
++        }
++    }
++
 +    // No setting for these folders: each is moved, and a link to the card takes its place (linkTo).
 +    // Android/data is the storage's own folder to apps here (no FUSE in between), so they follow it.
 +    // A folder an earlier move set aside but did not empty (<folder>.nanomove: stopped part way) goes to
@@ -47364,7 +47496,9 @@ index 00000000000..242c9485553
 +        // must not take (or delete) another program's files on their word. The engine checks the
 +        // root again when it runs.
 +        p.srcRoot = sdSourceRoot(p.src, groupPkg(p.group));
-+        if (!p.srcRoot.empty() && !(p.move && sdTooBroad(p.src, false))) continue;
++        const bool notJustSaves = p.group == kGroupSeedless && !sdUnder(sdCanon(p.src), appdef::kSeedlessUserDir)
++                                  && !seedlessSavesOnly(p.src);
++        if (!p.srcRoot.empty() && !(p.move && sdTooBroad(p.src, false)) && !notJustSaves) continue;
 +        ALOGW("sdmove: %s is not a folder emulator files are moved from", p.src.c_str());
 +        char msg[600];
 +        snprintf(msg, sizeof(msg), trDyn("%s holds more than emulator settings, so nothing was moved. Give the emulator a folder of its own first."),
@@ -47507,6 +47641,19 @@ index 00000000000..242c9485553
 +            sdPrefsRemove(&prefs, "LIME3DS_DIRECTORY");   // a different one asks to update the folder
 +            return sdPrefsSet(&prefs, "CITRA_DIRECTORY", azaharTreeUri(volume, "emulator_config/azahar"))
 +                   && sdWriteAppFile(kAzaharPrefs, prefs);
++        }
++        case kGroupSeedless: {   // a folder of its own only as one picked through Android, like Azahar
++            auto it = mSdMoveEmuDirs.find("seedlessds");
++            if (it == mSdMoveEmuDirs.end()) return true;
++            system("am force-stop com.seedlessds.app >/dev/null 2>&1");
++            sdMkdirs(it->second);
++            const std::string volume = mSdMoveRoot.substr(mSdMoveRoot.find_last_of('/') + 1);
++            if (!sdUriGrant(kSeedlessPkg, volume, "emulator_config/seedlessds")) return false;
++            std::string prefs;
++            sdReadPrefs(kSeedlessPrefs, &prefs);
++            return sdPrefsSetInt(&prefs, "_SaveLocation", kSeedlessSaveFolder)
++                   && sdPrefsSet(&prefs, "_SaveFolder", azaharTreeUri(volume, "emulator_config/seedlessds"))
++                   && sdWriteAppFile(kSeedlessPrefs, prefs);
 +        }
 +    }
 +    return true;
@@ -52541,6 +52688,48 @@ index 00000000000..84dab5ba8dd
 +        }
 +    }
 +}
+diff --git a/frameworks/base/cmds/gammaos-nano/ps3xmb/daijishou/NintendoDS.json b/frameworks/base/cmds/gammaos-nano/ps3xmb/daijishou/NintendoDS.json
+index 901d0f56315..635bcbbb160 100644
+--- a/frameworks/base/cmds/gammaos-nano/ps3xmb/daijishou/NintendoDS.json
++++ b/frameworks/base/cmds/gammaos-nano/ps3xmb/daijishou/NintendoDS.json
+@@ -75,6 +75,16 @@
+       "killPackageProcessesWarning": false,
+       "extra": ""
+     },
++    {
++      "name": "nds - SeedlessDS",
++      "uniqueId": "nds.com.seedlessds.app",
++      "description": null,
++      "acceptedFilenameRegex": "^(.*)\\.(?:nds|dsi|srl|ids|zip|7z|rar)$",
++      "amStartArguments": "-n com.seedlessds.app/com.seedlessds.app.LaunchGame\n-e rom_path {file.path}\n--activity-clear-task",
++      "killPackageProcesses": true,
++      "killPackageProcessesWarning": false,
++      "extra": ""
++    },
+     {
+       "name": "nds - NooDS",
+       "uniqueId": "nds.com.hydra.noods",
+diff --git a/frameworks/base/cmds/gammaos-nano/ps3xmb/daijishou/NintendoDSi.json b/frameworks/base/cmds/gammaos-nano/ps3xmb/daijishou/NintendoDSi.json
+index 8d3021dda16..3c7ccd3a721 100644
+--- a/frameworks/base/cmds/gammaos-nano/ps3xmb/daijishou/NintendoDSi.json
++++ b/frameworks/base/cmds/gammaos-nano/ps3xmb/daijishou/NintendoDSi.json
+@@ -75,6 +75,16 @@
+       "killPackageProcessesWarning": false,
+       "extra": ""
+     },
++    {
++      "name": "ndsi - SeedlessDS",
++      "uniqueId": "ndsi.com.seedlessds.app",
++      "description": null,
++      "acceptedFilenameRegex": "^(.*)\\.(?:nds|dsi|srl|ids|zip|7z|rar)$",
++      "amStartArguments": "-n com.seedlessds.app/com.seedlessds.app.LaunchGame\n-e rom_path {file.path}\n--activity-clear-task",
++      "killPackageProcesses": true,
++      "killPackageProcessesWarning": false,
++      "extra": ""
++    },
+     {
+       "name": "ndsi - NooDS",
+       "uniqueId": "ndsi.com.hydra.noods",
 diff --git a/frameworks/base/cmds/gammaos-nano/ps3xmb/i18n/ar.json b/frameworks/base/cmds/gammaos-nano/ps3xmb/i18n/ar.json
 index 41460c4134e..2d92a7483d7 100644
 --- a/frameworks/base/cmds/gammaos-nano/ps3xmb/i18n/ar.json
@@ -102651,10 +102840,10 @@ index 00000000000..c3fb5034524
 +b1d0202d8fed536d2c68908386cd72780a0648579f3f0e753bc6777ad8c7e2ec
 diff --git a/frameworks/base/cmds/gammaos-nano/test/e2e/NanoBiosWorker_e2e_test.cpp b/frameworks/base/cmds/gammaos-nano/test/e2e/NanoBiosWorker_e2e_test.cpp
 new file mode 100644
-index 00000000000..d9c6da6c238
+index 00000000000..a3955ed4ffa
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/test/e2e/NanoBiosWorker_e2e_test.cpp
-@@ -0,0 +1,391 @@
+@@ -0,0 +1,436 @@
 +// The BIOS installer's worker end to end on a fixture tree (a fake /data and a card under a scratch
 +// folder, Env.root): what lands where, what is left alone, and what it runs. `m gammaos_nano_bios_e2e_tests`.
 +// Runs as any user: chown and SELinux label failures are only logged.
@@ -103045,6 +103234,51 @@ index 00000000000..d9c6da6c238
 +  const InstallProgress p = install();
 +  EXPECT_EQ(lynx, get(sys + "/lynxboot.img")) << allLines(p);
 +  EXPECT_FALSE(exists(raSystem + "/lynxboot.img"));
++}
++
++// SeedlessDS (not shipped) reads the DS BIOS and a 256 KB firmware from files/SeedlessDS/system in its
++// app folder, under the same names as DraStic.
++TEST_F(BiosE2e, SeedlessDsGetsTheDsFilesWhenInstalled) {
++  const std::string bios7 = pattern(16384, 8), bios9 = pattern(4096, 9);
++  const std::string sha7 = sha1Hex(bios7.data(), bios7.size()), sha9 = sha1Hex(bios9.data(), bios9.size());
++  for (auto& f : catalog) {
++    if (!strcmp(f.row, "nds") && !strcmp(f.name, "bios7.bin")) f.sha1 = sha7.c_str();
++    if (!strcmp(f.row, "nds") && !strcmp(f.name, "bios9.bin")) f.sha1 = sha9.c_str();
++  }
++  put(folder + "/ds/arm7.bin", bios7);
++  put(folder + "/ds/arm9.bin", bios9);
++  std::string lite = pattern(262144, 10);
++  memcpy(&lite[8], "MAC", 3);
++  put(folder + "/ds/firmware.bin", lite);
++  put(root + "/data/system/packages.list", get(root + "/data/system/packages.list") +
++      "com.seedlessds.app 10106 0 /data/user/0/com.seedlessds.app default 3003\n");
++  mkdirs(root + "/data/data/com.seedlessds.app");
++
++  const InstallProgress p = install();
++  const std::string report = allLines(p);
++  const std::string sys = root + "/data/data/com.seedlessds.app/files/SeedlessDS/system";
++  EXPECT_EQ(bios7, get(sys + "/nds_bios_arm7.bin")) << report;
++  EXPECT_EQ(bios9, get(sys + "/nds_bios_arm9.bin")) << report;
++  EXPECT_EQ(lite, get(sys + "/nds_firmware.bin")) << report;   // the 128 KB one is not for it
++  EXPECT_EQ(bios7, get(drastic + "/nds_bios_arm7.bin")) << report;
++  EXPECT_FALSE(hasLine(p, "SeedlessDS not installed")) << report;
++  EXPECT_EQ(0u, rec.forceStopped().count("com.seedlessds.app"));   // no settings of its are written
++}
++
++TEST_F(BiosE2e, SeedlessDsSkippedWhenNotInstalled) {
++  const std::string bios9 = pattern(4096, 9);
++  const std::string sha9 = sha1Hex(bios9.data(), bios9.size());
++  for (auto& f : catalog)
++    if (!strcmp(f.row, "nds") && !strcmp(f.name, "bios9.bin")) f.sha1 = sha9.c_str();
++  put(folder + "/arm9.bin", bios9);
++  std::string lite = pattern(262144, 10);
++  memcpy(&lite[8], "MAC", 3);
++  put(folder + "/ds/firmware.bin", lite);
++
++  const InstallProgress p = install();
++  EXPECT_EQ(bios9, get(drastic + "/nds_bios_arm9.bin")) << allLines(p);
++  EXPECT_FALSE(exists(root + "/data/data/com.seedlessds.app")) << allLines(p);
++  EXPECT_TRUE(hasLine(p, "SeedlessDS not installed")) << allLines(p);
 +}
 diff --git a/frameworks/base/cmds/gammaos-nano/test/e2e/NanoFileJob_e2e_test.cpp b/frameworks/base/cmds/gammaos-nano/test/e2e/NanoFileJob_e2e_test.cpp
 new file mode 100644
@@ -104449,10 +104683,10 @@ index 00000000000..13e3afe4011
 +    main()
 diff --git a/frameworks/base/cmds/gammaos-nano/test/unit/NanoAppFiles_test.cpp b/frameworks/base/cmds/gammaos-nano/test/unit/NanoAppFiles_test.cpp
 new file mode 100644
-index 00000000000..3f98ec55528
+index 00000000000..f822627bb44
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/test/unit/NanoAppFiles_test.cpp
-@@ -0,0 +1,282 @@
+@@ -0,0 +1,377 @@
 +// The microSD move's source allowlist (audit H4) and the emulator settings parsers it reads.
 +
 +#include <gtest/gtest.h>
@@ -104734,6 +104968,101 @@ index 00000000000..3f98ec55528
 +  EXPECT_EQ("", sdPrefsGet(e, "x"));
 +  EXPECT_EQ("/storage/emulated/0/x", sdTrimDir(" '/sdcard/x/' "));
 +  EXPECT_EQ("/data/data/p/f", sdTrimDir("/data/user/0/p/f"));
++}
++
++TEST(Parsers, PrefsInt) {
++  EXPECT_EQ(7, sdPrefsGetInt("<map />", "_SaveLocation", 7));
++  EXPECT_EQ(1, sdPrefsGetInt("<map>\n    <int name=\"_SaveLocation\" value=\"1\" />\n</map>", "_SaveLocation", 0));
++  EXPECT_EQ(-1, sdPrefsGetInt("<map><int name=\"s_1\" value=\"-1\" /></map>", "s_1", 0));
++  EXPECT_EQ(0, sdPrefsGetInt("<map><int name=\"_SaveLocation\" value=\"x\" /></map>", "_SaveLocation", 0));
++  EXPECT_EQ(0, sdPrefsGetInt("<map><int name=\"_SaveLocationOld\" value=\"2\" /></map>", "_SaveLocation", 0));
++  std::string p = "<map />";
++  ASSERT_TRUE(sdPrefsSetInt(&p, "_SaveLocation", 2));
++  EXPECT_EQ(2, sdPrefsGetInt(p, "_SaveLocation", 0));
++  ASSERT_TRUE(sdPrefsSet(&p, "_SaveFolder", "content://x"));
++  ASSERT_TRUE(sdPrefsSetInt(&p, "_SaveLocation", 1));
++  EXPECT_EQ(1, sdPrefsGetInt(p, "_SaveLocation", 0));
++  EXPECT_EQ(std::string::npos, p.find("value=\"2\""));
++  EXPECT_EQ("content://x", sdPrefsGet(p, "_SaveFolder"));
++  std::string none;
++  ASSERT_TRUE(sdPrefsSetInt(&none, "k", 3));
++  EXPECT_EQ(3, sdPrefsGetInt(none, "k", 0));
++}
++
++// SeedlessDS: _SaveLocation 0 (beside each game, its default), 1 (its app folder), 2 (a picked folder).
++TEST(Parsers, SeedlessDs) {
++  int loc = -1;
++  std::string uri;
++  EXPECT_EQ("", seedlessSaveDir("", &loc, &uri));
++  EXPECT_EQ(kSeedlessSaveBesideGames, loc);
++  EXPECT_EQ("", seedlessSaveDir("<map><int name=\"_SaveLocation\" value=\"0\" /></map>", &loc, &uri));
++  EXPECT_EQ(appdef::kSeedlessUserDir,
++            seedlessSaveDir("<map><int name=\"_SaveLocation\" value=\"1\" /></map>", &loc, &uri));
++  EXPECT_EQ(kSeedlessSaveApp, loc);
++  const std::string card = azaharTreeUri("1234-ABCD", "emulator_config/seedlessds");
++  const std::string prefs = "<map>\n    <string name=\"_SaveFolder\">" + card +
++                            "</string>\n    <int name=\"_SaveLocation\" value=\"2\" />\n</map>\n";
++  EXPECT_EQ("/storage/1234-ABCD/emulator_config/seedlessds", seedlessSaveDir(prefs, &loc, &uri));
++  EXPECT_EQ(kSeedlessSaveFolder, loc);
++  EXPECT_EQ(card, uri);
++  EXPECT_EQ("/storage/emulated/0/DS Saves",
++            seedlessSaveDir("<map><string name=\"_SaveFolder\">" + azaharTreeUri("primary", "DS Saves") +
++                            "</string><int name=\"_SaveLocation\" value=\"2\" /></map>", &loc, &uri));
++  // Picked but no folder (or not a storage folder): nothing to move.
++  EXPECT_EQ("", seedlessSaveDir("<map><int name=\"_SaveLocation\" value=\"2\" /></map>", &loc, &uri));
++  EXPECT_EQ("", seedlessSaveDir("<map><string name=\"_SaveFolder\">content://com.example.docs/tree/1</string>"
++                                "<int name=\"_SaveLocation\" value=\"2\" /></map>", &loc, &uri));
++}
++
++TEST(SdSourceRoot, AcceptsSeedlessDsFolders) {
++  const char* pkg = "com.seedlessds.app";
++  for (const char* part : {"/backup", "/savestates"}) {
++    const std::string src = std::string(appdef::kSeedlessUserDir) + part;
++    EXPECT_EQ("/data/data/com.seedlessds.app", sdSourceRoot(src, pkg)) << src;
++    EXPECT_FALSE(sdTooBroad(src, false)) << src;
++    EXPECT_EQ("", sdSourceRoot(src, "me.magnum.melondualds")) << src;
++  }
++  EXPECT_EQ("/data/data/com.seedlessds.app", sdSourceRoot("/data/user/0/com.seedlessds.app/files/SeedlessDS/user/backup", pkg));
++  int loc = 0;
++  std::string uri;
++  const std::string picked = seedlessSaveDir(
++      "<map><string name=\"_SaveFolder\">" + azaharTreeUri("primary", "DS Saves") + "</string>"
++      "<int name=\"_SaveLocation\" value=\"2\" /></map>", &loc, &uri);
++  EXPECT_EQ("/data/media/0", sdSourceRoot(picked, pkg));
++  EXPECT_FALSE(sdTooBroad(picked, false));
++  EXPECT_EQ("/mnt/media_rw/1234-ABCD", sdSourceRoot("/storage/1234-ABCD/DS Saves", pkg));
++}
++
++TEST(SeedlessDs, SavesOnlyFolder) {
++  TempDir t("seedless");
++  const std::string d = realDir(t);
++  auto touch = [](const std::string& p) { FILE* f = fopen(p.c_str(), "w"); if (f) fclose(f); };
++  EXPECT_TRUE(seedlessSavesOnly(d));   // empty
++  touch(d + "/Mario Kart DS.dsv");
++  touch(d + "/Mario Kart DS_0.dss");
++  touch(d + "/Mario Kart DS_0.ra");
++  touch(d + "/Other.SAV");
++  mkdirs(d + "/p-1234567");
++  touch(d + "/p-1234567/Mario Kart DS_8.dss");
++  mkdirs(d + "/p42");
++  EXPECT_TRUE(seedlessSavesOnly(d));
++  touch(d + "/p42/game.nds");   // a game in a profile's folder
++  EXPECT_FALSE(seedlessSavesOnly(d));
++  unlink((d + "/p42/game.nds").c_str());
++  mkdirs(d + "/p42/deeper");
++  EXPECT_FALSE(seedlessSavesOnly(d));
++  rmdir((d + "/p42/deeper").c_str());
++  touch(d + "/Mario Kart DS.nds");   // the games' own folder
++  EXPECT_FALSE(seedlessSavesOnly(d));
++  unlink((d + "/Mario Kart DS.nds").c_str());
++  mkdirs(d + "/subfolder");
++  EXPECT_FALSE(seedlessSavesOnly(d));
++  rmdir((d + "/subfolder").c_str());
++  ASSERT_EQ(0, symlink("/etc/passwd", (d + "/link.dsv").c_str()));
++  EXPECT_FALSE(seedlessSavesOnly(d));
++  unlink((d + "/link.dsv").c_str());
++  EXPECT_TRUE(seedlessSavesOnly(d));
++  EXPECT_FALSE(seedlessSavesOnly(d + "/not-there"));
 +}
 diff --git a/frameworks/base/cmds/gammaos-nano/test/unit/NanoBidi_test.cpp b/frameworks/base/cmds/gammaos-nano/test/unit/NanoBidi_test.cpp
 new file mode 100644
@@ -106069,10 +106398,10 @@ index 00000000000..f45c6c86d8c
 +}
 diff --git a/frameworks/base/cmds/gammaos-nano/test/unit/NanoLaunch_test.cpp b/frameworks/base/cmds/gammaos-nano/test/unit/NanoLaunch_test.cpp
 new file mode 100644
-index 00000000000..e4f02b2b8c7
+index 00000000000..5d1c9966684
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/test/unit/NanoLaunch_test.cpp
-@@ -0,0 +1,635 @@
+@@ -0,0 +1,658 @@
 +/*
 + * Copyright (C) 2026 GammaOS
 + *
@@ -106607,6 +106936,29 @@ index 00000000000..e4f02b2b8c7
 +    EXPECT_EQ(appVisiblePath("/data/media/0/ROMs/a.nes"), "/sdcard/ROMs/a.nes");
 +    EXPECT_EQ(appVisiblePath("/mnt/media_rw/AB-CD/a.nes"), "/storage/AB-CD/a.nes");
 +    EXPECT_EQ(appVisiblePath("/storage/emulated/0/a.nes"), "/storage/emulated/0/a.nes");
++}
++
++// SeedlessDS's LaunchGame alias reads the ROM from the rom_path extra (a file path, not a URI).
++TEST(NanoLaunchSeedlessDs, TemplateBuildsLaunchGameIntent) {
++    std::vector<Template> found;
++    for (const auto& t : bundledTemplates())
++        if (t.where == "NintendoDS.json: nds - SeedlessDS" || t.where == "NintendoDSi.json: ndsi - SeedlessDS")
++            found.push_back(t);
++    ASSERT_EQ(found.size(), 2u);
++    for (const auto& t : found) {
++        for (const std::string& rom : {std::string("/data/media/0/ROMs/nds/Mario Kart DS (USA) [!].nds"),
++                                       std::string("/mnt/media_rw/1234-ABCD/ROMs/nds/Game #1.zip")}) {
++            const std::string path = appVisiblePath(rom);
++            const auto toks = tokensOf(t.tmpl, "", safContentUri(rom, ""), path);
++            const std::vector<std::string> want = {"-n", "com.seedlessds.app/com.seedlessds.app.LaunchGame",
++                                                   "-e", "rom_path", path, "--activity-clear-task"};
++            EXPECT_EQ(toks, want) << t.where;
++            EXPECT_TRUE(isValidComponent(toks[1]));
++            EXPECT_EQ(joinTabbed(toks), "-n\tcom.seedlessds.app/com.seedlessds.app.LaunchGame\t-e\trom_path\t" + path +
++                                            "\t--activity-clear-task") << t.where;
++            EXPECT_EQ(shellArgv(joinShell(toks)), argvOf(want)) << t.where;
++        }
++    }
 +}
 +
 +TEST(NanoLaunchValidate, PackageNames) {
@@ -107373,7 +107725,7 @@ index 00000000000..8040178d45b
 +}  // namespace nanotest
 diff --git a/frameworks/base/cmds/gammaos-nano/thimsy-dexopt.sh b/frameworks/base/cmds/gammaos-nano/thimsy-dexopt.sh
 new file mode 100644
-index 00000000000..adaac208075
+index 00000000000..aae161013af
 --- /dev/null
 +++ b/frameworks/base/cmds/gammaos-nano/thimsy-dexopt.sh
 @@ -0,0 +1,29 @@
@@ -107389,7 +107741,7 @@ index 00000000000..adaac208075
 +
 +SPEED="com.retroarch.aarch64 org.ppsspp.ppsspp com.flycast.emulator org.dolphinemu.dolphinemu
 +com.armsx2 org.azahar_emu.azahar org.vita3k.emulator org.mupen64plusae.v3.fzurita
-+org.scummvm.scummvm com.dsemu.drastic me.magnum.melondualds com.rfandango.haku_x
++org.scummvm.scummvm com.dsemu.drastic me.magnum.melondualds com.seedlessds.app com.rfandango.haku_x
 +com.shatteredpixel.shatteredpixeldungeon"
 +
 +installed=$(pm list packages -3 2>/dev/null | sed 's/^package://')

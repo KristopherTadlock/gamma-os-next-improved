@@ -258,14 +258,14 @@ Emulators: M64Plus FZ, Mupen64Plus. Required for 64DD disks (not listed in setup
 
 ### Nintendo DS
 
-Emulators: DraStic, built-in DS player. Optional (not listed in setup). Optional (not listed in setup). Firmware of your own DS.
+Emulators: DraStic, built-in DS player, SeedlessDS. Optional (not listed in setup). Optional (not listed in setup). Firmware of your own DS.
 
 | File | Size | SHA-1 / check | MD5 | Listed | How | Installed to |
 |---|---|---|---|---|---|---|
-| `bios7.bin` ARM7 BIOS | 16 KB | `24f67bdea115a2c847c8813a262502ee1607b7df` | `df692a80a5b1bc90728bc3dfc76cd948` | no | Put it anywhere in the folder you pick (any name) | DraStic `system/nds_bios_arm7.bin`; built-in DS player `system/nds_bios_arm7.bin` |
-| `bios9.bin` ARM9 BIOS | 4 KB | `bfaac75f101c135e32e2aaf541de6b1be4c8c62d` | `a392174eb3e572fed6447e956bde4b25` | no | Put it anywhere in the folder you pick (any name) | DraStic `system/nds_bios_arm9.bin`; built-in DS player `system/nds_bios_arm9.bin` |
+| `bios7.bin` ARM7 BIOS | 16 KB | `24f67bdea115a2c847c8813a262502ee1607b7df` | `df692a80a5b1bc90728bc3dfc76cd948` | no | Put it anywhere in the folder you pick (any name) | DraStic `system/nds_bios_arm7.bin`; built-in DS player `system/nds_bios_arm7.bin`; SeedlessDS `system/nds_bios_arm7.bin` |
+| `bios9.bin` ARM9 BIOS | 4 KB | `bfaac75f101c135e32e2aaf541de6b1be4c8c62d` | `a392174eb3e572fed6447e956bde4b25` | no | Put it anywhere in the folder you pick (any name) | DraStic `system/nds_bios_arm9.bin`; built-in DS player `system/nds_bios_arm9.bin`; SeedlessDS `system/nds_bios_arm9.bin` |
 | `firmware.bin` DS firmware | 128 KB | matched by name and size |  | no | Must keep this exact name | DraStic `system/nds_firmware.bin` (only if none there) |
-| `firmware.bin` DS Lite firmware | 256 KB | matched by name and size |  | no | Must keep this exact name | DraStic `system/nds_firmware.bin` (only if none there) |
+| `firmware.bin` DS Lite firmware | 256 KB | matched by name and size |  | no | Must keep this exact name | DraStic `system/nds_firmware.bin` (only if none there); SeedlessDS `system/nds_firmware.bin` (only if none there) |
 | `firmware.bin` DS firmware (iQue) | 512 KB | matched by name and size |  | no | Must keep this exact name | DraStic `system/nds_firmware.bin` (only if none there) |
 
 ### PGM
@@ -472,5 +472,6 @@ Emulators: hakuX. Optional (not listed in setup). Files of your own Xbox.
 | Azahar | Azahar's folder (only when one has been chosen in Azahar) | microSD card/emulator_config/azahar |
 | hakuX | hakuX's app folder, files/console | unchanged |
 | Vita3K | installed by Vita3K itself into its memory card folder (pref-path) | microSD card/emulator_config/vita3k (moves with Vita3K's memory card) |
+| SeedlessDS | SeedlessDS's app folder, files/SeedlessDS/system | unchanged |
 
 Arcade BIOS zips go to RetroArch's `system/fbneo/` (FBNeo) and `system/mame/bios/` (MAME). MAME 2003-Plus only reads BIOS zips from the folder of the game itself, so copy `neogeo.zip` / `pgm.zip` / `stvbios.zip` next to those games for it.

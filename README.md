@@ -136,6 +136,17 @@ starts with a game. It plays with a controller and fits the square screen.
 
 Edit `mods/added-apps.txt` to change the apps.
 
+[SeedlessDS](https://github.com/SapphireRhodonite/SeedlessDS) 1.0.1
+(GPL-3.0-or-later; its core is in
+[SeedlessDS-Core](https://github.com/SapphireRhodonite/SeedlessDS-Core)) is a
+supported Nintendo DS emulator for low-end devices, but isn't installed by
+default. It comes from WatermelonDS's developer and runs SeedlessCoreDS, which
+is reconstructed from DraStic r2.6.0.4a. Install its APK (package
+`com.seedlessds.app`) and choose it for Nintendo DS or DSi in Nano's Game
+Systems editor; WatermelonDS stays the default. Nano starts each game in it by
+its file path, the universal hotkeys bind its quick save, quick load and fast
+forward, and Install BIOS Files gives it the DS BIOS and a 256 KB firmware.
+
 ### ES-DE
 
 Building with `ESDE_APK=/path/to/ES-DE.apk` adds
@@ -494,8 +505,11 @@ It also changes Nano:
   replaced by a link to the card; apps reach `Android/data` and their own
   folder directly here, not through FUSE, so they follow it. GammaOS keeps
   RetroArch's and WatermelonDS's saves next to the ROMs, so those stay where
-  they are. An emulator that keeps its files on the card needs the card in to
-  start.
+  they are. SeedlessDS, if installed, does the same by default; set to keep its
+  saves and states in its app folder or a folder of their own, they move to
+  `emulator_config/seedlessds`, given to it like Azahar's folder. Its settings
+  stay in its app folder, which it has no setting for. An emulator that keeps
+  its files on the card needs the card in to start.
 - Both moves ask first, show their progress and never overwrite what is already
   on the card. Internal copies of files the card already had go to
   `Internal storage/Nano Backup`, and you choose: keep them there as a backup,

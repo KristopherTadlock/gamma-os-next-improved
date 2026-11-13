@@ -223,6 +223,7 @@ Bindings come from each emulator's source code at the shipped version.
 | ARMSX2 | F2 | F4 | F6 (toggle) | — | F8 (save and exit), then `exit` | `shared_prefs/ARMSX2.xml` `pad.*.keycode`. Not if "Emulate USB Keyboard" is on |
 | Azahar | F2 (quick slot) | F4 | F6 (turbo toggle) | — | F8 (close game), then `exit` | `shared_prefs` `InputMapping_HostAxis_<keycode>` sets. Azahar's own hotkey Enable button must be unset |
 | WatermelonDS | F2 | F4 | F6 (toggle) | F7 opens its rewind screen | F8 (exit game), then `exit` | `files/controller_config.json`. Rewind needs Rewind on in its settings |
+| SeedlessDS 1.0.1 (not installed by default) | F2 (quick slot) | F4 | F6 (toggle) | — | `exit` | `shared_prefs/keymap.xml` `s_1` (Fast Forward), `s_2` (Quick Save), `s_3` (Quick Load): its emulator shortcuts, which have no keys by default. The file exists once its first game has started. Only its first key map profile is bound. It has no rewind and no exit shortcut (Back opens its menu) |
 | ScummVM | — | — | Ctrl+F (SCUMM games) | — | Ctrl+Q, then `exit` | Built-in ScummVM keys |
 | drastic-nano | slot 0 | slot 0 | toggle | — | saves, then exits | Built in |
 | DraStic (app) | — | — | — | — | `exit` (Esc) | Its keymap is shared with drastic-nano, so it is left alone |
