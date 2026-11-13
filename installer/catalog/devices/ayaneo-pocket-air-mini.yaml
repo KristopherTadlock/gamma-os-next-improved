@@ -18,7 +18,9 @@ guides:
     steps: []
   download_mode:
     - title: "Plug in the cable with the device off"
-      body: "Turn the {device} off completely. When the installer asks, connect the USB cable to this computer."
+      body: "Turn the {device} off completely. When the installer asks, connect the USB cable to this computer, and leave it connected until installation finishes."
   first_boot:
+    - title: "Unplug it and turn it on"
+      body: "When installation finishes, unplug the cable and press Power to turn the {device} on."
     - title: "Wait for the first boot"
       body: "The first boot takes 1 to 3 minutes, and the screen may seem stuck on the boot logo. This is normal."

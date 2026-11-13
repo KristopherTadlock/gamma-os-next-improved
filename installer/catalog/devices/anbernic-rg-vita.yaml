@@ -21,3 +21,8 @@ guides:
   download_mode:
     - title: "Hold Back and the Anbernic button, then plug in"
       body: "Turn the {device} off and unplug it. Hold the Back button and the Anbernic button next to it and, still holding both, connect the USB cable to this computer. Keep holding until installation starts."
+  first_boot:
+    - title: "Unplug the cable when it restarts"
+      body: "When installation finishes, the {device} restarts by itself and sets up its storage. Unplug the cable then."
+    - title: "Wait for the first boot"
+      body: "The first start takes a few minutes while Thimsy sets up your emulators. Don't turn it off."

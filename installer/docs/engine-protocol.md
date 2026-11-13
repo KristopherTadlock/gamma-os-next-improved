@@ -134,6 +134,10 @@ One line:
 ```
 
 - `device_name`, `profile_name`: display names (`profile_name` translated).
+- `journeys`: `returning` is left out when it would be the same as
+  `first_time` (a device that needs no unlock and has no update mode). For a
+  device that needs no unlock but can update, it's titled "Already runs
+  GammaOS or Thimsy" instead of "Already unlocked".
 - `host`, `install`: this computer and the device's install support on it.
 - `host_message`: set when this computer can't install the device; show it and
   offer only build-and-export.

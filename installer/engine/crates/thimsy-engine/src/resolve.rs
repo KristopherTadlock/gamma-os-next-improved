@@ -67,7 +67,10 @@ pub struct Journey {
 #[derive(Debug, Clone, Serialize)]
 pub struct Journeys {
     pub first_time: Journey,
-    pub returning: Journey,
+    /// Absent when it would be the same as `first_time`: a device that
+    /// needs no unlock and has no update mode.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub returning: Option<Journey>,
 }
 
 /// Guide steps, translated, with `{device}` filled in (so devices with the
@@ -86,27 +89,42 @@ pub fn trs(steps: &[Step], device: &str) -> Vec<Step> {
 fn journeys(d: &Device) -> Journeys {
     let needs_unlock = d.guides.unlock.route != "none";
     let can_update = d.flash.as_ref().is_some_and(|f| !f.update.is_empty());
+    let modes = if can_update { vec!["update".into(), "full".into()] } else { vec!["full".into()] };
+    let update_note = can_update.then(|| {
+        tr(d.update_requires.as_deref().unwrap_or("Keeps your data. Only when the device already runs a compatible Thimsy or GammaOS build."))
+    });
     Journeys {
         first_time: Journey {
             title: tr("First time installing custom firmware"),
             body: if needs_unlock {
                 tr("Your {device} still runs its original firmware. The installer walks you through unlocking it, then does a fresh install that erases the device.")
             } else {
-                tr("Your {device} runs its original firmware. The installer does a fresh install that erases the device.")
+                tr("The installer does a fresh install that erases your {device}, whatever it runs now.")
             }
             .replace("{device}", &d.name),
             unlock: needs_unlock,
             modes: vec!["full".into()],
             update_note: None,
         },
-        returning: Journey {
-            title: tr("Already unlocked: install new firmware"),
-            body: tr("Your {device} already runs custom firmware (it was unlocked before). Unlocking is skipped.").replace("{device}", &d.name),
-            unlock: false,
-            modes: if can_update { vec!["update".into(), "full".into()] } else { vec!["full".into()] },
-            update_note: can_update.then(|| {
-                tr(d.update_requires.as_deref().unwrap_or("Keeps your data. Only when the device already runs a compatible Thimsy or GammaOS build."))
-            }),
+        // A device that's never unlocked isn't "already unlocked".
+        returning: if needs_unlock {
+            Some(Journey {
+                title: tr("Already unlocked: install new firmware"),
+                body: tr("Your {device} already runs custom firmware (it was unlocked before). Unlocking is skipped.").replace("{device}", &d.name),
+                unlock: false,
+                modes,
+                update_note,
+            })
+        } else if can_update {
+            Some(Journey {
+                title: tr("Already runs GammaOS or Thimsy: install new firmware"),
+                body: tr("Your {device} already runs GammaOS or Thimsy. Choose how to install the new firmware.").replace("{device}", &d.name),
+                unlock: false,
+                modes,
+                update_note,
+            })
+        } else {
+            None
         },
     }
 }
@@ -437,6 +455,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn devices_without_an_unlock_offer_no_already_unlocked_journey() {
+        let cat = Catalog::bundled().unwrap();
+        // RG Vita: download mode needs no unlock, and there's no update mode.
+        let plan = resolve(&cat, "anbernic-rg-vita", "heavy", &[], Host::Windows).unwrap();
+        assert!(!plan.journeys.first_time.unlock);
+        assert!(!plan.journeys.first_time.body.contains("unlock"), "{}", plan.journeys.first_time.body);
+        assert!(plan.journeys.returning.is_none());
+        let json = serde_json::to_value(&plan.journeys).unwrap();
+        assert!(json.get("returning").is_none(), "{json}");
+    }
+
+    #[test]
     fn rg_cube_plans() {
         let cat = Catalog::bundled().unwrap();
         let plan = resolve(&cat, "anbernic-rg-cube", "heavy", &[], Host::Linux).unwrap();
@@ -444,8 +474,9 @@ mod tests {
         assert!(plan.excluded.is_empty());
         assert!(plan.host_message.is_none());
         assert!(plan.journeys.first_time.unlock);
-        assert!(!plan.journeys.returning.unlock);
-        assert_eq!(plan.journeys.returning.modes, ["update", "full"]);
+        let returning = plan.journeys.returning.as_ref().unwrap();
+        assert!(!returning.unlock);
+        assert_eq!(returning.modes, ["update", "full"]);
         let light = resolve(&cat, "anbernic-rg-cube", "light", &[], Host::Linux).unwrap();
         assert!(!light.available);
         // A user override of a device-fixed setting is reported, not applied.

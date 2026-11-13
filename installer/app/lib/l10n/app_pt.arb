@@ -214,5 +214,7 @@
   "gettingReadyTitle": "A preparar",
   "gettingReadyBody": "A verificar a imagem e a extrair as partições. Não ligue ainda o dispositivo: ser-lhe-á pedido.",
   "connectNowTitle": "Ligue agora o seu {device}",
-  "waitingForDevice": "O instalador espera pelo seu {device} até 5 minutos. Ainda não foi escrito nada."
+  "waitingForDevice": "O instalador espera pelo seu {device} até 5 minutos. Ainda não foi escrito nada.",
+  "macAccessoryTitle": "Num Mac, permita o acessório de imediato",
+  "macAccessoryBody": "Na primeira vez que o seu {device} se ligar, o macOS pode perguntar “Permitir que o acessório se ligue?”. O modo de transferência dura apenas alguns segundos, por isso clique em “Permitir” de imediato. Ou configure isto antes: em Definições do Sistema, Privacidade e segurança, defina “Permitir que os acessórios se liguem” como “Automaticamente quando desbloqueado”."
 }

@@ -646,3 +646,22 @@ String spaceProblemText(
   'probe_failed' => l.spaceProbeFailed,
   _ => l.spaceBody(formatBytes(need), formatBytes(free), drive),
 };
+
+/// macOS on Apple silicon asks before a new USB accessory may connect, and
+/// a Unisoc device leaves download mode within seconds if it isn't answered.
+class MacAccessoryNotice extends StatelessWidget {
+  final String device;
+  const MacAccessoryNotice(this.device, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return Notice(
+      key: const ValueKey('mac-accessory'),
+      icon: Icons.laptop_mac,
+      title: l.macAccessoryTitle,
+      body: l.macAccessoryBody(device),
+      color: Theme.of(context).colorScheme.tertiary,
+    );
+  }
+}

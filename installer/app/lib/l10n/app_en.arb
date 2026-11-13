@@ -393,5 +393,14 @@
         "type": "String"
       }
     }
+  },
+  "macAccessoryTitle": "On a Mac, allow the accessory straight away",
+  "macAccessoryBody": "The first time your {device} connects, macOS may ask “Allow accessory to connect?”. Download mode only lasts a few seconds, so click Allow at once. Or set it up beforehand: in System Settings, Privacy & Security, set Allow accessories to connect to “Automatically when unlocked”.",
+  "@macAccessoryBody": {
+    "placeholders": {
+      "device": {
+        "type": "String"
+      }
+    }
   }
 }

@@ -24,6 +24,8 @@ guides:
     - title: "If installation stalls"
       body: "Hold the Back button, Volume Down and Power together until installation starts again."
   first_boot:
+    - title: "Unplug the cable when it restarts"
+      body: "When installation finishes, the {device} restarts by itself and sets up its storage. Unplug the cable then."
     - title: "Wait through a blank screen"
       body: "On the very first boot the screen may stay blank for up to a minute. This is normal; wait for the boot screen to appear."
     - title: "If the screen stays black"

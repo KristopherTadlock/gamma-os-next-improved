@@ -108,9 +108,10 @@ fn availability_host_and_journeys() {
     assert!(resolve::require_host(c.device("d").unwrap(), Host::Linux).is_err());
     assert!(resolve::require_host(c.device("d").unwrap(), Host::Windows).is_ok());
     assert!(p.journeys.first_time.unlock);
-    assert!(!p.journeys.returning.unlock);
+    let returning = p.journeys.returning.as_ref().unwrap();
+    assert!(!returning.unlock);
     assert_eq!(
-        p.journeys.returning.modes,
+        returning.modes,
         ["full"],
         "no update list → reinstall only"
     );

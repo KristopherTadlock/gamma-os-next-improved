@@ -16,7 +16,7 @@ guides:
     route: guided
     steps:
       - title: "Unlock with GammaOS's own steps"
-        body: "The {device} is unlocked once, with the web unlock tool from GammaOS Next's installation guide (Anbernic RG405M / RG405V / RG505, Step 2). Restart the {device} into fastboot mode, open the tool in Google Chrome, click Connect, then Unlock. On the {device}, don't press Volume Down: press the Home / Back button to confirm. The installer doesn't run that tool itself. Follow the guide, then come back and continue."
+        body: "The {device} is unlocked once, with the web unlock tool from GammaOS Next's installation guide (Anbernic RG405M / RG405V / RG505, Step 2). Take the microSD card out, turn on USB debugging in Developer options and restart the {device} into fastboot mode with adb reboot bootloader: the screen shows fastboot mode next to the Anbernic logo. Open the tool in Google Chrome, click Connect, choose the device, then click Unlock. On the {device}, don't press Volume Down: press the Home / Back button to confirm. On Linux or macOS, the guide's unisoc-unlock tool does the same. Unlocking erases the {device}. The installer doesn't run these tools itself. Follow the guide, then come back and continue."
         link: "https://github.com/TheGammaSqueeze/GammaOSNext/wiki/GammaOS-Next-Installation#anbernic-rg405m--rg405v--rg505"
       - title: "Check it's unlocked"
         body: "When the screen shows Unlock bootloader success!, it's unlocked. If the {device} already shows INFO: LOCK FLAG IS : UNLOCK!!! briefly when it starts, it was unlocked before and you can skip the unlock."

@@ -214,5 +214,7 @@
   "gettingReadyTitle": "正在准备",
   "gettingReadyBody": "正在检查镜像并解出分区。先不要连接设备：到时会提示你。",
   "connectNowTitle": "现在连接 {device}",
-  "waitingForDevice": "安装程序最多等待 {device} 5 分钟。尚未写入任何内容。"
+  "waitingForDevice": "安装程序最多等待 {device} 5 分钟。尚未写入任何内容。",
+  "macAccessoryTitle": "在 Mac 上请立即允许配件连接",
+  "macAccessoryBody": "你的 {device} 首次连接时，macOS 可能会询问“允许配件连接？”。下载模式只持续几秒钟，所以请立即点击“允许”。也可以提前设置：在“系统设置”>“隐私与安全性”中，将“允许配件连接”设为“解锁时自动”。"
 }

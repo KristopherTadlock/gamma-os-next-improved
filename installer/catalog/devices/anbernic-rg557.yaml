@@ -15,11 +15,19 @@ notes:
 blocks:
   - "Don't install on units whose stock firmware is v1.26."
 guides:
+  backup:
+    - title: "Copy your games and saves"
+      body: "A fresh install erases the internal storage. Copy ROMs, saves, screenshots and anything else you want to keep to your computer or the microSD card. Games on the microSD card are not touched."
+    - title: "Check the storage size"
+      body: "In Android Settings, Storage, check whether the {device} has 128 GB or 256 GB. Each size needs its own layout, and installing the wrong one can brick the {device}."
   unlock:
     route: none
     steps: []
   download_mode:
     - title: "Plug in the cable with the device off"
-      body: "Turn the {device} off completely. When the installer asks, connect the USB cable to this computer."
+      body: "Turn the {device} off completely. When the installer asks, connect the USB cable to this computer, and leave it connected until installation finishes."
     - title: "If it isn't found"
       body: "Unplug the cable. Hold Power and Volume Down for at least 60 seconds, then, still holding them, connect the USB cable. Keep holding until installation starts; finding the {device} can take 30 seconds or more."
+  first_boot:
+    - title: "Wait for the first boot"
+      body: "The first boot takes 1 to 3 minutes, and the screen may seem stuck on the boot logo. This is normal."

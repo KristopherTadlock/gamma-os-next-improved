@@ -12,9 +12,17 @@ support:
 notes:
   - "Planned: Qualcomm EDL install on every computer. Not buildable yet."
 guides:
+  backup:
+    - title: "Copy your games and saves"
+      body: "A fresh install erases the internal storage. Copy ROMs, saves, screenshots and anything else you want to keep to your computer or the microSD card. Games on the microSD card are not touched."
+    - title: "Check the serial number"
+      body: "In Settings, Handheld Settings, About Device, Device Information, note the first four characters of the SN (MQ65 or MQ66). Each hardware revision needs its own firmware."
   unlock:
     route: none
     steps: []
   download_mode:
     - title: "Hold both volume buttons and plug in the cable"
       body: "Turn the {device} off completely and unplug it. Hold Volume Down and Volume Up together and, still holding both, connect the USB cable to this computer. Keep holding until installation starts."
+  first_boot:
+    - title: "Wait for the first boot"
+      body: "The first boot takes 1 to 3 minutes, and the screen may seem stuck on the boot logo. This is normal."

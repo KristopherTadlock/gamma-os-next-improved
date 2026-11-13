@@ -214,5 +214,7 @@
   "gettingReadyTitle": "Préparation",
   "gettingReadyBody": "Vérification de l'image et extraction des partitions. Ne branchez pas encore votre appareil : on vous le demandera.",
   "connectNowTitle": "Branchez votre {device} maintenant",
-  "waitingForDevice": "Le programme d'installation attend votre {device} jusqu'à 5 minutes. Rien n'a encore été écrit."
+  "waitingForDevice": "Le programme d'installation attend votre {device} jusqu'à 5 minutes. Rien n'a encore été écrit.",
+  "macAccessoryTitle": "Sur un Mac, autorisez l'accessoire tout de suite",
+  "macAccessoryBody": "La première fois que votre {device} se connecte, macOS peut demander « Autoriser l'accessoire à se connecter ? ». Le mode téléchargement ne dure que quelques secondes : cliquez donc tout de suite sur « Autoriser ». Vous pouvez aussi le régler à l'avance : dans Réglages Système, Confidentialité et sécurité, réglez « Autoriser les accessoires à se connecter » sur « Automatiquement si déverrouillé »."
 }

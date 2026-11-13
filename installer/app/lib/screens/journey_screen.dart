@@ -91,6 +91,9 @@ class _JourneyCard extends StatelessWidget {
                 Text(
                   journey.unlock
                       ? l.journeyIncludesUnlock
+                      // A device that's never unlocked doesn't "skip" it.
+                      : context.watch<AppState>().unlockRoute == 'none'
+                      ? l.noUnlockNeeded
                       : l.journeySkipsUnlock,
                   style: Theme.of(context).textTheme.bodySmall,
                 ),

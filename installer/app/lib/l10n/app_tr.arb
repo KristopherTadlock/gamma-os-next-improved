@@ -214,5 +214,7 @@
   "gettingReadyTitle": "Hazırlanıyor",
   "gettingReadyBody": "Kalıp denetleniyor ve bölümler açılıyor. Cihazınızı henüz bağlamayın: size söylenecek.",
   "connectNowTitle": "{device} cihazını şimdi bağlayın",
-  "waitingForDevice": "Yükleyici {device} cihazını 5 dakikaya kadar bekliyor. Henüz hiçbir şey yazılmadı."
+  "waitingForDevice": "Yükleyici {device} cihazını 5 dakikaya kadar bekliyor. Henüz hiçbir şey yazılmadı.",
+  "macAccessoryTitle": "Mac'te aksesuara hemen izin verin",
+  "macAccessoryBody": "{device} cihazınız ilk kez bağlandığında macOS “Aksesuarın bağlanmasına izin verilsin mi?” diye sorabilir. İndirme modu yalnızca birkaç saniye sürer, bu yüzden hemen “İzin Ver” düğmesine tıklayın. Ya da bunu önceden ayarlayın: Sistem Ayarları, Gizlilik ve Güvenlik bölümünde Aksesuarların bağlanmasına izin ver ayarını “Kilit açıkken otomatik olarak” yapın."
 }

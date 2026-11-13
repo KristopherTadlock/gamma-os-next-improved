@@ -214,5 +214,7 @@
   "gettingReadyTitle": "Preparazione",
   "gettingReadyBody": "Controllo dell'immagine ed estrazione delle partizioni. Non collegare ancora il dispositivo: ti verrà chiesto.",
   "connectNowTitle": "Collega ora il tuo {device}",
-  "waitingForDevice": "Il programma attende il tuo {device} fino a 5 minuti. Non è stato ancora scritto nulla."
+  "waitingForDevice": "Il programma attende il tuo {device} fino a 5 minuti. Non è stato ancora scritto nulla.",
+  "macAccessoryTitle": "Su un Mac, consenti subito l'accessorio",
+  "macAccessoryBody": "La prima volta che il tuo {device} si collega, macOS potrebbe chiedere «Consentire la connessione dell'accessorio?». La modalità download dura solo pochi secondi, quindi fai subito clic su «Consenti». Oppure configuralo prima: in Impostazioni di Sistema, Privacy e sicurezza, imposta «Consenti la connessione degli accessori» su «Automaticamente quando sbloccato»."
 }

@@ -19,10 +19,15 @@ guides:
     route: guided
     steps:
       - title: "Unlock with GammaOS's own steps"
-        body: "The {device} is unlocked once, with the UnlockBootloader tool from GammaOS Next's installation guide (Unisoc T820, Step 2): turn the {device} off, start the tool, then hold the Back button, the button on the right side of the screen, while you connect the USB cable. The installer doesn't run that tool itself. Follow the guide, then come back and continue."
+        body: "The {device} is unlocked once, on a Windows PC: the UnlockBootloader tool from GammaOS Next's installation guide (Unisoc T820, Steps 1 and 2) only runs on Windows. Install the Unisoc USB driver from the guide's UnisocTools first. Then turn the {device} off and unplug it, start UnlockBootloader.bat and, within 30 seconds, hold the Back button (the button on the right side of the screen) and, still holding it, connect the USB cable. Let go when text appears on the screen. Unlocking erases the {device}. The installer doesn't run that tool itself. Follow the guide, then come back and continue."
         link: "https://github.com/TheGammaSqueeze/GammaOSNext/wiki/GammaOS-Next-Installation#anbernic-rg556--rg-cube--rg406h--rg406v--rg476h--rg-slide"
       - title: "Check it's unlocked"
-        body: "When the screen shows INFO: LOCK FLAG IS: UNLOCK!!!, it's unlocked. Unplug the cable, make sure the {device} is off, and continue."
+        body: "When the screen shows INFO: LOCK FLAG IS: UNLOCK!!!, it's unlocked. Unplug the cable and make sure the {device} is off (if it restarts, hold Power until it turns off), then continue."
   download_mode:
     - title: "Hold Back and plug in the cable"
       body: "Turn the {device} off and unplug it. Hold the Back button, the button on the right side of the screen, and, still holding it, connect the USB cable to this computer. Keep holding until installation starts."
+  first_boot:
+    - title: "Unplug the cable when it restarts"
+      body: "When installation finishes, the {device} restarts by itself and sets up its storage. Unplug the cable then."
+    - title: "Wait for the first boot"
+      body: "The first start takes a few minutes while Thimsy sets up your emulators. Don't turn it off."

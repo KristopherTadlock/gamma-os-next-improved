@@ -39,6 +39,10 @@ class ConnectScreen extends StatelessWidget {
         ],
         GuideList(s.plan?.guides.downloadMode ?? const []),
         const SizedBox(height: 12),
+        if (later && s.host == 'macos') ...[
+          MacAccessoryNotice(s.device?.name ?? ''),
+          const SizedBox(height: 12),
+        ],
         if (s.detectError != null) ...[
           DetectErrorNotice(s),
           const SizedBox(height: 12),

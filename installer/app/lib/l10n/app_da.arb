@@ -214,5 +214,7 @@
   "gettingReadyTitle": "Gør klar",
   "gettingReadyBody": "Kontrollerer aftrykket og pakker partitionerne ud. Tilslut ikke enheden endnu: du bliver bedt om det.",
   "connectNowTitle": "Tilslut {device} nu",
-  "waitingForDevice": "Installationsprogrammet venter op til 5 minutter på {device}. Intet er skrevet endnu."
+  "waitingForDevice": "Installationsprogrammet venter op til 5 minutter på {device}. Intet er skrevet endnu.",
+  "macAccessoryTitle": "På en Mac: Tillad tilbehøret med det samme",
+  "macAccessoryBody": "Første gang {device} tilsluttes, spørger macOS måske »Vil du tillade, at tilbehøret opretter forbindelse?«. Download-tilstanden varer kun få sekunder, så klik på »Tillad« med det samme. Du kan også indstille det på forhånd: Gå til Systemindstillinger, Anonymitet og sikkerhed, og sæt »Tillad, at tilbehør opretter forbindelse« til »Automatisk, når den er låst op«."
 }

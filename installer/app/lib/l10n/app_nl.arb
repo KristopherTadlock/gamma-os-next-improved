@@ -214,5 +214,7 @@
   "gettingReadyTitle": "Klaarmaken",
   "gettingReadyBody": "De image wordt gecontroleerd en de partities worden uitgepakt. Sluit uw apparaat nog niet aan: daar wordt om gevraagd.",
   "connectNowTitle": "Sluit uw {device} nu aan",
-  "waitingForDevice": "Het installatieprogramma wacht tot 5 minuten op uw {device}. Er is nog niets geschreven."
+  "waitingForDevice": "Het installatieprogramma wacht tot 5 minuten op uw {device}. Er is nog niets geschreven.",
+  "macAccessoryTitle": "Sta het accessoire op een Mac meteen toe",
+  "macAccessoryBody": "De eerste keer dat uw {device} verbinding maakt, kan macOS vragen: ‘Accessoire toestaan verbinding te maken?’ De downloadmodus duurt maar een paar seconden, dus klik meteen op ‘Sta toe’. Of stel het vooraf in: zet in Systeeminstellingen, Privacy en beveiliging, ‘Sta accessoires toe verbinding te maken’ op ‘Automatisch indien ontgrendeld’."
 }

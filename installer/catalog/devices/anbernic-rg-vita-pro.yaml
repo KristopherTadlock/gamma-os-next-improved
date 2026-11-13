@@ -19,5 +19,7 @@ guides:
     - title: "Install from the microSD card"
       body: "Turn the {device} off, put the card in and turn it on. It installs onto its internal storage from the card by itself. Leave it alone until it finishes, then turn it off and take the card out."
   first_boot:
+    - title: "Turn it on"
+      body: "After you take the card out, press Power to turn the {device} on."
     - title: "Wait on the Anbernic logo"
       body: "The first boot can take 1 to 3 minutes and may seem stuck on the Anbernic logo. This is normal."

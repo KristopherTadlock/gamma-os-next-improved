@@ -214,5 +214,7 @@
   "gettingReadyTitle": "Przygotowywanie",
   "gettingReadyBody": "Sprawdzanie obrazu i rozpakowywanie partycji. Nie podłączaj jeszcze urządzenia: zostaniesz o to poproszony.",
   "connectNowTitle": "Podłącz teraz {device}",
-  "waitingForDevice": "Instalator czeka na {device} do 5 minut. Nic jeszcze nie zostało zapisane."
+  "waitingForDevice": "Instalator czeka na {device} do 5 minut. Nic jeszcze nie zostało zapisane.",
+  "macAccessoryTitle": "Na Macu od razu pozwól na podłączenie akcesorium",
+  "macAccessoryBody": "Gdy Twoje urządzenie {device} połączy się po raz pierwszy, macOS może zapytać „Pozwolić na podłączenie akcesorium?”. Tryb pobierania trwa tylko kilka sekund, więc od razu kliknij „Pozwól”. Możesz też ustawić to wcześniej: w Ustawieniach systemowych, w sekcji Prywatność i ochrona, ustaw opcję „Pozwalaj na podłączanie akcesoriów” na „Automatycznie, gdy odblokowany”."
 }

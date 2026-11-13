@@ -214,5 +214,7 @@
   "gettingReadyTitle": "Valmistellaan",
   "gettingReadyBody": "Tarkistetaan levykuvaa ja puretaan osioita. Älä vielä kytke laitetta: sinua pyydetään.",
   "connectNowTitle": "Kytke {device} nyt",
-  "waitingForDevice": "Asennusohjelma odottaa laitetta {device} enintään 5 minuuttia. Mitään ei ole vielä kirjoitettu."
+  "waitingForDevice": "Asennusohjelma odottaa laitetta {device} enintään 5 minuuttia. Mitään ei ole vielä kirjoitettu.",
+  "macAccessoryTitle": "Salli lisävaruste heti Macissa",
+  "macAccessoryBody": "Kun laite {device} muodostaa yhteyden ensimmäistä kertaa, macOS saattaa kysyä ”Sallitaanko lisävarusteen muodostaa yhteys?”. Lataustila kestää vain muutaman sekunnin, joten valitse ”Salli” heti. Voit myös määrittää asian etukäteen: valitse Järjestelmäasetuksissa kohdassa Tietosuoja ja turvallisuus asetukselle ”Salli lisävarusteiden muodostaa yhteys” arvo ”Automaattisesti, kun lukitus on avattu”."
 }

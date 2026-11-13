@@ -214,5 +214,7 @@
   "gettingReadyTitle": "Gjør klart",
   "gettingReadyBody": "Kontrollerer bildefilen og pakker ut partisjonene. Ikke koble til enheten ennå: du blir bedt om det.",
   "connectNowTitle": "Koble til {device} nå",
-  "waitingForDevice": "Installasjonsprogrammet venter opptil 5 minutter på {device}. Ingenting er skrevet ennå."
+  "waitingForDevice": "Installasjonsprogrammet venter opptil 5 minutter på {device}. Ingenting er skrevet ennå.",
+  "macAccessoryTitle": "På en Mac: tillat tilbehøret med en gang",
+  "macAccessoryBody": "Første gang {device} kobler til, kan macOS spørre «Vil du tillate at tilbehøret kobler til?». Nedlastingsmodusen varer bare noen sekunder, så klikk på «Tillat» med en gang. Eller still det inn på forhånd: I Systeminnstillinger, Personvern og sikkerhet setter du «Tillat at tilbehør kobler til» til «Automatisk når den er låst opp»."
 }

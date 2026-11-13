@@ -214,5 +214,7 @@
   "gettingReadyTitle": "Wird vorbereitet",
   "gettingReadyBody": "Das Image wird geprüft und die Partitionen werden entpackt. Schließen Sie Ihr Gerät noch nicht an: Sie werden dazu aufgefordert.",
   "connectNowTitle": "Jetzt {device} anschließen",
-  "waitingForDevice": "Das Installationsprogramm wartet bis zu 5 Minuten auf {device}. Bisher wurde nichts geschrieben."
+  "waitingForDevice": "Das Installationsprogramm wartet bis zu 5 Minuten auf {device}. Bisher wurde nichts geschrieben.",
+  "macAccessoryTitle": "Auf einem Mac das Zubehör sofort erlauben",
+  "macAccessoryBody": "Wenn sich {device} zum ersten Mal verbindet, fragt macOS möglicherweise „Verbindung des Zubehörs erlauben?“. Der Download-Modus hält nur wenige Sekunden, klicken Sie also sofort auf „Erlauben“. Oder richten Sie es vorher ein: Stellen Sie in den Systemeinstellungen unter „Datenschutz & Sicherheit“ die Option „Verbindung von Zubehör erlauben“ auf „Automatisch, wenn entsperrt“."
 }

@@ -214,5 +214,7 @@
   "gettingReadyTitle": "Förbereder",
   "gettingReadyBody": "Kontrollerar avbildningen och packar upp partitionerna. Anslut inte enheten än: du blir ombedd.",
   "connectNowTitle": "Anslut {device} nu",
-  "waitingForDevice": "Installationsprogrammet väntar upp till 5 minuter på {device}. Inget har skrivits än."
+  "waitingForDevice": "Installationsprogrammet väntar upp till 5 minuter på {device}. Inget har skrivits än.",
+  "macAccessoryTitle": "På en Mac: tillåt tillbehöret direkt",
+  "macAccessoryBody": "Första gången {device} ansluts kan macOS fråga ”Vill du tillåta att tillbehöret ansluts?”. Nedladdningsläget varar bara några sekunder, så klicka genast på ”Tillåt”. Eller ställ in det i förväg: i Systeminställningar, Integritet och säkerhet ställer du in Tillåt att tillbehör ansluts på ”Automatiskt när den är upplåst”."
 }

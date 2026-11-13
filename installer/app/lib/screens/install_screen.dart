@@ -54,6 +54,15 @@ class InstallScreen extends StatelessWidget {
       title: title,
       subtitle: subtitle,
       children: [
+        // The device is plugged in now: macOS may ask to allow it, and its
+        // download mode doesn't wait long.
+        if (run.running &&
+            stage == 'wait_device' &&
+            s.host == 'macos' &&
+            s.plan?.connectFirst == false) ...[
+          MacAccessoryNotice(name),
+          const SizedBox(height: 12),
+        ],
         RunView(
           shown,
           idleText: l.ready,

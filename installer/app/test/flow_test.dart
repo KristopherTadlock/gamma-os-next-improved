@@ -390,6 +390,7 @@ void main() {
     expect(find.text('Connect your device'), findsNothing);
     expect(key('connect-steps-later'), findsOneWidget);
     expect(key('dry-run-continue'), findsNothing);
+    expect(key('mac-accessory'), findsNothing);
     await next(tester);
     expect(find.text('Review'), findsWidgets);
     expect(
@@ -405,6 +406,30 @@ void main() {
     await tap(tester, key('install-button'));
     await tap(tester, key('confirm-install-yes'));
     expect(engine.calls, contains('flash full'));
+  });
+
+  testWidgets('Unisoc on a Mac: says to allow the accessory at once', (
+    tester,
+  ) async {
+    final engine = FakeEngine(
+      step: Duration.zero,
+      host: 'macos',
+      detectDevice: 'other',
+      connectFirst: false,
+    );
+    await start(tester, engine);
+    await pickAndBuild(tester, 'anbernic-rg-cube');
+    await tap(tester, key('backed-up'));
+    await next(tester);
+    await tap(tester, key('unlock-confirm'));
+    await next(tester);
+    expect(find.text('Get ready to connect'), findsOneWidget);
+    expect(key('mac-accessory'), findsOneWidget);
+    expect(
+      find.textContaining('macOS may ask “Allow accessory to connect?”'),
+      findsOneWidget,
+    );
+    expect(find.textContaining('your Anbernic RG Cube connects'), findsOneWidget);
   });
 
   test('automated unlock runs the engine', () async {
