@@ -484,15 +484,16 @@ fn entry_hash(entries: &[job::EntryHash], index: usize) -> Result<&str> {
         .with_context(|| format!("no checksum for PAC entry {index}"))
 }
 
-/// What `spd_dump` said while it waited for the device (Windows: it tries
-/// WinUSB, then the serial port of whichever other driver Windows gave the
-/// device, and says why each one couldn't be opened).
+/// What the Windows `spd_dump` said while it waited for the device: it
+/// opens it through WinUSB only, stops when Windows gave it a serial-port
+/// driver instead (Unisoc's own, which can't send the request smartphone
+/// chipsets need), and says why libusb couldn't open it otherwise.
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct SpdConnect {
-    /// The serial port another program holds (`COM5`).
-    pub port_busy: Option<String>,
-    /// The device was there, but neither WinUSB nor a serial port could be
-    /// opened: what spd_dump said.
+    /// The serial-port driver the device has (`COM5, sprdvcom`).
+    pub serial_driver: Option<String>,
+    /// The device was there, but libusb couldn't open it: what spd_dump
+    /// said.
     pub unusable: Option<String>,
 }
 
@@ -502,14 +503,12 @@ impl SpdConnect {
         if l.starts_with("connected through ") {
             // Opened after all: whatever failed before doesn't matter.
             *self = SpdConnect::default();
-        } else if let Some(port) = l
-            .strip_prefix("serial port ")
-            .and_then(|r| r.strip_suffix(" is in use by another program"))
+        } else if let Some(found) = l
+            .strip_prefix("download mode uses a serial port driver (")
+            .and_then(|r| r.split_once(')'))
         {
-            self.port_busy = Some(port.to_string());
-        } else if l.starts_with("download mode is connected, but libusb can't open it")
-            || (l.starts_with("serial port ") && l.contains("can't be opened"))
-        {
+            self.serial_driver = Some(found.0.to_string());
+        } else if l.starts_with("download mode is connected, but libusb can't open it") {
             self.unusable = Some(l.to_string());
         }
     }
@@ -519,20 +518,21 @@ impl SpdConnect {
 fn not_connected(d: &Device, host: Host, seen: &SpdConnect, e: anyhow::Error) -> anyhow::Error {
     let detail = format!("{e:#}");
     if host == Host::Windows {
-        if let Some(port) = &seen.port_busy {
+        let why = match (&seen.serial_driver, &seen.unusable) {
+            (Some(found), _) => Some(format!(
+                "Windows still gives it another driver ({found}) instead of WinUSB"
+            )),
+            (None, Some(why)) => Some(format!(
+                "Windows gave it a driver the installer can't use ({why})"
+            )),
+            _ => None,
+        };
+        if let Some(why) = why {
             return EngineError::new(
                 Code::DeviceNotFound,
-                format!("the device is connected in download mode, but another program is using its serial port ({port}); nothing was written"),
+                format!("the device is connected in download mode, but {why}; nothing was written"),
             )
-            .hint("Close every other program that talks to the device (such as Unisoc's UnlockBootloader or ResearchDownload), then try again.")
-            .into();
-        }
-        if let Some(why) = &seen.unusable {
-            return EngineError::new(
-                Code::DeviceNotFound,
-                format!("the device is connected in download mode, but Windows gave it a driver the installer can't use ({why}); nothing was written"),
-            )
-            .hint("Unplug the device and try again. If it happens again, open Device Manager while the device is in download mode: it must use WinUSB or Unisoc's driver (a COM port).")
+            .hint("Repeat the download-mode steps, then try again. If it still isn't found, check in Device Manager that Unisoc download mode uses the WinUSB driver.")
             .into();
         }
     }
@@ -1196,44 +1196,66 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
     // backups and (update mode) its base were checked. Any write before
     // that is fatal.
     let checked = std::cell::Cell::new(false);
-    let on_line = |line: &str| -> Result<()> {
-        if !connected {
-            seen.line(line);
-        }
-        if !connected && (line.starts_with("BSL_REP_VER") || line.starts_with("load_partition")) {
-            connected = true;
-            rep.stage("flash", "Installing Thimsy");
-        }
-        if let Some((name, written, total)) = watch.line(line, checked.get())? {
-            rep.progress_for("Wrote {partition}", &name, written, total);
-        }
-        Ok(())
-    };
-    // Nothing is confirmed until the device's partition table matches,
-    // every backup was read in full and (update mode) the device holds the
-    // base the update relies on.
-    let approve = |n: usize| {
-        if n == 0 {
-            let (text, table) = read_device_table(&run_dir)?;
-            if let Err(e) = write_device_info(&run_dir, d, opts.mode, &text) {
-                rep.warn(format!(
-                    "couldn't record which device the backup is from: {e:#}"
-                ));
+    // Windows: once, when the device turned up on another driver.
+    let mut switched = false;
+    let mut switch_failed = false;
+    let ran = loop {
+        let on_line = |line: &str| -> Result<()> {
+            if !connected {
+                seen.line(line);
             }
-            check_device(&plan.checks, &table)?;
-            rep.info("The device's partition table matches this firmware");
-            check_backups(&plan, &run_dir)?;
-            if !plan.base.is_empty() {
-                check_base(&plan, &run_dir, &entries)?;
-                rep.info("The device runs the base this update needs");
+            if !connected && (line.starts_with("BSL_REP_VER") || line.starts_with("load_partition"))
+            {
+                connected = true;
+                rep.stage("flash", "Installing Thimsy");
             }
-            checked.set(true);
+            if let Some((name, written, total)) = watch.line(line, checked.get())? {
+                rep.progress_for("Wrote {partition}", &name, written, total);
+            }
+            Ok(())
+        };
+        // Nothing is confirmed until the device's partition table matches,
+        // every backup was read in full and (update mode) the device holds the
+        // base the update relies on.
+        let approve = |n: usize| {
+            if n == 0 {
+                let (text, table) = read_device_table(&run_dir)?;
+                if let Err(e) = write_device_info(&run_dir, d, opts.mode, &text) {
+                    rep.warn(format!(
+                        "couldn't record which device the backup is from: {e:#}"
+                    ));
+                }
+                check_device(&plan.checks, &table)?;
+                rep.info("The device's partition table matches this firmware");
+                check_backups(&plan, &run_dir)?;
+                if !plan.base.is_empty() {
+                    check_base(&plan, &run_dir, &entries)?;
+                    rep.info("The device runs the base this update needs");
+                }
+                checked.set(true);
+            }
+            Ok(())
+        };
+        let ran = tools::run_answering(&inv, &flash_dir, rep, on_line, approve);
+        if ran.is_err() && !connected && !switched && opts.host == Host::Windows {
+            if let Some(found) = seen.serial_driver.take() {
+                // spd_dump stopped before writing anything; the device
+                // stays in download mode while its driver is replaced.
+                switched = true;
+                if let Err(e) = crate::drivers::switch_to_winusb(d, rep, &found) {
+                    switch_failed = true;
+                    break Err(e);
+                }
+                continue;
+            }
         }
-        Ok(())
+        break ran;
     };
-    let ran = tools::run_answering(&inv, &flash_dir, rep, on_line, approve);
     let ran = ran.and_then(|()| watch.finish()).map_err(|e| {
         let code = crate::error::code_of(&e).0;
+        if switch_failed {
+            return e;
+        }
         if code == Code::ToolFailed && !connected {
             // The device never answered: nothing happened on it.
             return not_connected(d, opts.host, &seen, e);
@@ -1551,37 +1573,31 @@ mod tests {
         // What the Windows spd_dump prints while it waits.
         let mut seen = SpdConnect::default();
         seen.line("Waiting for connection (300s)");
-        seen.line("connected through serial port COM5");
-        assert_eq!(seen, SpdConnect::default());
-        seen.line("serial port COM5 is in use by another program");
-        assert_eq!(seen.port_busy.as_deref(), Some("COM5"));
+        seen.line("download mode uses a serial port driver (COM5, sprdvcom), not WinUSB");
+        assert_eq!(seen.serial_driver.as_deref(), Some("COM5, sprdvcom"));
+        // Still on that driver after the switch to WinUSB.
         let e = not_connected(d, Host::Windows, &seen, failed());
         assert_eq!(crate::error::code_of(&e).0, Code::DeviceNotFound);
         assert!(
-            e.to_string()
-                .contains("another program is using its serial port (COM5)"),
+            e.to_string().contains(
+                "Windows still gives it another driver (COM5, sprdvcom) instead of WinUSB"
+            ),
             "{e}"
         );
-        assert!(hint(&e).contains("UnlockBootloader"), "{}", hint(&e));
+        assert!(hint(&e).contains("uses the WinUSB driver"), "{}", hint(&e));
+        // Opened in the end.
+        let mut opened = seen.clone();
+        opened.line("connected through libusb (WinUSB)");
+        assert_eq!(opened, SpdConnect::default());
 
         let mut seen = SpdConnect::default();
         seen.line(
             "download mode is connected, but libusb can't open it : LIBUSB_ERROR_NOT_SUPPORTED",
         );
+        assert!(seen.serial_driver.is_none());
         let e = not_connected(d, Host::Windows, &seen, failed());
         assert!(e.to_string().contains("a driver the installer can't use (download mode is connected, but libusb can't open it : LIBUSB_ERROR_NOT_SUPPORTED)"), "{e}");
-        assert!(
-            hint(&e).contains("WinUSB or Unisoc's driver"),
-            "{}",
-            hint(&e)
-        );
-        let mut seen = SpdConnect::default();
-        seen.line("serial port COM7 can't be opened (error 31)");
-        assert!(seen.unusable.is_some() && seen.port_busy.is_none());
-        // Opened in the end (the port was free a moment later).
-        let mut opened = seen.clone();
-        opened.line("connected through serial port COM7");
-        assert_eq!(opened, SpdConnect::default());
+        assert!(hint(&e).contains("uses the WinUSB driver"), "{}", hint(&e));
 
         // Never seen at all: repeat the steps; WinUSB isn't a requirement.
         let e = not_connected(d, Host::Windows, &SpdConnect::default(), failed());

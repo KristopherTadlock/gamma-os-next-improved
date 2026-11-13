@@ -339,14 +339,17 @@ Errors while flashing:
   in download mode (nothing was written). The hint says to repeat the
   download-mode steps; on Linux, when the device is connected but couldn't be
   opened, it says to set up USB access (`drivers --install`). On Windows,
-  `spd_dump` opens the device through WinUSB or, failing that, through the
-  COM port of whichever serial driver Windows gave it (Unisoc's own driver),
-  and logs `connected through libusb (WinUSB)` or `connected through serial
-  port COMn`. While it waits it logs why neither could be opened; the error
-  then says another program holds the port (`serial port COMn is in use by
-  another program`: close Unisoc's tools) or that the device has a driver
-  the installer can't use (`download mode is connected, but libusb can't
-  open it : …`, with no usable port).
+  `spd_dump` opens the device through WinUSB only (logging `connected
+  through libusb (WinUSB)`). When Windows gave the connected device a
+  serial-port driver instead (Unisoc's own: smartphone chipsets need a USB
+  request such drivers can't send), it stops with `download mode uses a
+  serial port driver (COMn, service), not WinUSB`; the engine then installs
+  WinUSB again while the device is connected (one more UAC prompt; libwdi
+  replaces the driver on a connected device), logs it and runs `spd_dump`
+  again, once. If the device still has that driver, or libusb can't open
+  it for another reason (`download mode is connected, but libusb can't open
+  it : …`), the error says so and the hint points to Device Manager. A
+  declined or failed switch ends with that `tool_failed` error instead.
 - `tool_failed` (the tool is killed at once) when `spd_dump` reports a
   partial write (`load_partition: …, target: T, written: W` with W ≠ T),
   logs `unexpected response`, or writes anything before the checks above
@@ -375,17 +378,14 @@ on-device confirmation). For `guided` devices it returns
 ```
 `detail` is translated.
 - Windows: `ok` when the driver store has a WinUSB package for every
-  download-mode ID of the device, or a serial-port package (`Class=Ports`,
-  such as Unisoc's "SPRD U2S Diag") for the ones without WinUSB: `spd_dump`
-  can use either. `missing` otherwise. `--install` installs
+  download-mode ID of the device; `missing` otherwise. `--install` installs
   WinUSB behind one UAC prompt: an elevated, hidden Windows PowerShell (by
   absolute path) copies the bundled `wdi-simple.exe` into a fresh
   administrators-only folder under ProgramData, checks its sha256, runs it
   there for each ID and removes the folder; afterwards every ID must be in
-  the driver store. `flash` does the same in its `driver` stage when needed.
-  When WinUSB can't be installed (the prompt was declined, or Windows still
-  prefers another driver) but a serial-port package covers the ID, it only
-  warns and the flash goes on through that driver's port.
+  the driver store. `flash` does the same in its `driver` stage when needed
+  (and again, with the device connected, when Windows gave it another
+  driver: see `device_not_found` above).
 - Linux: `ok` when the engine runs as root or a udev rule in
   `/etc/udev/rules.d`, `/usr/lib/udev/rules.d` or `/lib/udev/rules.d`
   matches each ID (vendor and product on one line); `missing` otherwise.

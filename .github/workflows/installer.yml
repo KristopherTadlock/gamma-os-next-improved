@@ -197,7 +197,7 @@ jobs:
       run:
         shell: msys2 {0}
     steps:
-      # For installer/tools/spd_dump-windows-serial.patch.
+      # For installer/tools/spd_dump-windows-driver.patch.
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           path: thimsy
@@ -223,10 +223,11 @@ jobs:
       - name: Build spd_dump
         run: |
           git -c core.autocrlf=false clone "$SPD_DUMP_REPO" spd && cd spd && git checkout "$SPD_DUMP_COMMIT"
-          # Windows only: also flashes through the serial port of Unisoc's
-          # own driver (or usbser) when Windows didn't give the device WinUSB.
+          # Windows only: says when Windows bound the device to a serial-port
+          # driver (Unisoc's own, usbser) instead of WinUSB, so the engine can
+          # switch it to WinUSB.
           # (The checkout may have turned its line ends into CRLF.)
-          tr -d '\r' < ../thimsy/installer/tools/spd_dump-windows-serial.patch | git apply
+          tr -d '\r' < ../thimsy/installer/tools/spd_dump-windows-driver.patch | git apply
           make LIBS="-Wl,-Bstatic -lusb-1.0 -Wl,-Bdynamic -lsetupapi"
           mkdir -p ../out && cp spd_dump.exe ../out/ && cp LICENSE ../out/spd_dump-LICENSE
       - name: Build wdi-simple (WinUSB driver installer)
@@ -244,7 +245,7 @@ jobs:
       - name: Check the tools
         run: |
           test -x out/spd_dump.exe && test -x out/wdi-simple.exe
-          grep -q 'connected through serial port' out/spd_dump.exe || { echo "::error::spd_dump.exe was built without the serial-port patch"; exit 1; }
+          grep -q 'download mode uses a serial port driver' out/spd_dump.exe || { echo "::error::spd_dump.exe was built without the Windows driver patch"; exit 1; }
           # Only DLLs that come with Windows: anything from MSYS2 (libusb,
           # libgcc_s, libwinpthread, ...) isn't on a user's PC.
           allowed='^(kernel32|user32|gdi32|advapi32|shell32|ole32|oleaut32|comctl32|comdlg32|setupapi|cfgmgr32|newdev|version|shlwapi|ws2_32|crypt32|wintrust|bcrypt|ntdll|msvcrt|ucrtbase|rpcrt4|userenv|imagehlp|dbghelp|winmm|secur32|ncrypt|iphlpapi|winhttp|wininet|psapi|hid|winusb|uxtheme|dwmapi|imm32|mpr|netapi32|api-ms-win-[a-z0-9-]+)\.dll$'
