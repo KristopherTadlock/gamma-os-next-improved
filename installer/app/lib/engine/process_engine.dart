@@ -13,7 +13,8 @@ import 'engine.dart';
 class ProcessEngine extends Engine {
   final String executable;
 
-  /// Lines the engine printed on stderr, kept for the diagnostic bundle.
+  /// Lines the engine printed on stderr, kept for "Copy details".
+  @override
   final List<String> stderrLog = [];
 
   ProcessEngine([String? executable])
@@ -38,7 +39,9 @@ class ProcessEngine extends Engine {
     '--json',
   ], onStderr: stderrLog.add);
 
-  /// Runs a one-shot command; returns the first event matching [want].
+  /// Runs a one-shot command; returns the first event of type [T]. A
+  /// failed `result` (`ok` not true) is never returned: it throws, with the
+  /// engine's error when it sent one.
   Future<T> _one<T extends EngineEvent>(List<String> args) async {
     final run = _start(args);
     T? found;
@@ -47,7 +50,16 @@ class ProcessEngine extends Engine {
       if (e is T && found == null) found = e;
       if (e is ErrorEvent) error ??= e;
     }
-    if (found != null) return found;
+    if (found != null && !(found is ResultEvent && !found.ok)) return found;
+    if (found is ResultEvent) {
+      throw EngineException(
+        error ??
+            ErrorEvent(
+              code: 'internal',
+              message: '${args.first} failed without an error',
+            ),
+      );
+    }
     throw EngineException(
       error ??
           ErrorEvent(
@@ -85,6 +97,7 @@ class ProcessEngine extends Engine {
     required String device,
     required String profile,
     required String workspace,
+    List<String> imports = const [],
     bool deleteDownloads = false,
   }) async => (await _one<SpaceEvent>([
     'space',
@@ -94,6 +107,8 @@ class ProcessEngine extends Engine {
     profile,
     '--workspace',
     workspace,
+    for (final path in imports)
+      if (path.isNotEmpty) ...['--import', path],
     if (deleteDownloads) '--delete-downloads',
   ])).space;
 
@@ -105,6 +120,7 @@ class ProcessEngine extends Engine {
     bool image = false,
     bool scratch = false,
     bool backup = false,
+    List<String> paths = const [],
   }) => _one<ResultEvent>([
     'clean',
     '--workspace',
@@ -114,6 +130,8 @@ class ProcessEngine extends Engine {
     if (image) '--image',
     if (scratch) '--scratch',
     if (backup) '--backup',
+    for (final path in paths)
+      if (path.isNotEmpty) ...['--path', path],
   ]);
 
   @override

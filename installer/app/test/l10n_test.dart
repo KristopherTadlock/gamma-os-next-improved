@@ -75,6 +75,45 @@ void main() {
     });
   }
 
+  // Texts that name another part of the UI use that part's own label, in
+  // every language: a renamed or missing button shows up here.
+  group('texts point at UI that exists', () {
+    const references = {
+      'errEngineCrashedHint': ['copyDetails'],
+      'finishOnWindowsBody': ['imageSourceFiles'],
+      'connectLaterBody': ['stepReview'],
+      'fullInstallNeededBody': ['stepReview'],
+      'downloadModeAgain': ['runAgain'],
+    };
+    for (final f in arbs) {
+      final name = f.uri.pathSegments.last;
+      test(name, () {
+        final arb = readArb(f);
+        for (final MapEntry(key: k, value: labels) in references.entries) {
+          for (final label in labels) {
+            expect(
+              arb[k] as String,
+              contains(arb[label] as String),
+              reason: '$k in $name should name "${arb[label]}" ($label)',
+            );
+          }
+        }
+      });
+    }
+
+    test('no English text names UI that was removed or never existed', () {
+      final all = enKeys.map((k) => en[k] as String).join('\n');
+      for (final gone in [
+        'Already downloaded files', // the import option's old name
+        'diagnostic log', // there is no "save log"; Copy details is
+        'Press Next to start installing', // Next on Connect opens Review
+        'Copy the result to a Windows PC', // nothing there can import it
+      ]) {
+        expect(all, isNot(contains(gone)), reason: gone);
+      }
+    });
+  });
+
   test('every Thimsy language maps to a supported Flutter locale', () {
     final supported = AppLocalizations.supportedLocales.toSet();
     expect(languages, hasLength(22));

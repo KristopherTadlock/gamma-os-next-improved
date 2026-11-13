@@ -59,6 +59,25 @@ flash:
   fdl: [FDL, FDL2]
   # Update mode (already unlocked, keeps data): only what Thimsy changes.
   update: [Super, VENDORBOOT, VENDORBOOT_B, BootLogo, Fastboot_Logo]
+  # What an update relies on but doesn't write: the device must already hold
+  # exactly these GammaOS Next 1.2 images (both slots). Read back and
+  # compared before the first write; any difference means a full install.
+  update_check: [BOOT, BOOT_B, INITBOOT, INITBOOT_B, DTB, DTB_B, DTBO, DTBO_B,
+                 VBMETA, VBMETA_B, VBMETA_SYSTEM, VBMETA_SYSTEM_B, VBMETA_VENDOR, VBMETA_VENDOR_B,
+                 VBMETA_SYSTEM_EXT, VBMETA_SYSTEM_EXT_B, VBMETA_PRODUCT, VBMETA_PRODUCT_B,
+                 VBMETA_ODM, VBMETA_ODM_B]
+  # The partitions each mode writes, as plans show them (flashing refuses
+  # to start if the firmware would write anything else).
+  writes_full: [misc, trustos_a, trustos_b, sml_a, sml_b, uboot_a, uboot_b, logo, fbootlogo,
+                nr_modem_a, nr_modem_b, nr_deltanv_a, nr_deltanv_b, nr_phy_a, nr_phy_b,
+                l_agdsp_a, l_agdsp_b, pm_sys_a, pm_sys_b, ch_sys_a, ch_sys_b, teecfg_a, teecfg_b,
+                hypervsior_a, hypervsior_b, boot_a, boot_b, vendor_boot_a, vendor_boot_b,
+                init_boot_a, init_boot_b, dtb_a, dtb_b, dtbo_a, dtbo_b, super, cache,
+                vbmeta_a, vbmeta_b, vbmeta_system_a, vbmeta_system_b, vbmeta_vendor_a, vbmeta_vendor_b,
+                vbmeta_system_ext_a, vbmeta_system_ext_b, vbmeta_product_a, vbmeta_product_b,
+                vbmeta_odm_a, vbmeta_odm_b, avbmeta_rs_a, avbmeta_rs_b, common_rs1_a, common_rs1_b,
+                common_rs2_a, common_rs2_b, ise_a, ise_b, splloader, splloader_bak]
+  writes_update: [logo, fbootlogo, vendor_boot_a, vendor_boot_b, super]
   # Fresh install: erased like the vendor tool does; Android formats them on first boot.
   erase_full: [userdata, metadata]
   # Device-unique or diagnostic data: never written, even on a fresh install.

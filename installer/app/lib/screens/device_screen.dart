@@ -102,11 +102,9 @@ class _DeviceScreenState extends State<DeviceScreen> {
       return StepPage(
         title: l.deviceTitle,
         children: [
-          Notice(
-            icon: Icons.error_outline,
+          ErrorNotice(
             title: l.deviceListError,
-            body: describeError(l, s.catalogError!),
-            color: Theme.of(context).colorScheme.error,
+            error: errorEventOf(s.catalogError!),
             action: OutlinedButton(
               onPressed: s.loadCatalog,
               child: Text(l.tryAgain),

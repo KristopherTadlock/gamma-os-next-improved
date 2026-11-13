@@ -43,6 +43,9 @@ abstract class Engine {
   /// engine's stage titles, errors and guides come back translated.
   String language = 'en';
 
+  /// What the engine printed on stderr (free-form log), for "Copy details".
+  List<String> get stderrLog => const [];
+
   Future<Catalog> catalog();
 
   Future<Plan> resolve({
@@ -51,11 +54,14 @@ abstract class Engine {
     Map<String, String> overrides = const {},
   });
 
-  /// `space`: free space check for a build in [workspace].
+  /// `space`: free space check for a build in [workspace]. [imports] are
+  /// the files the user picked (`--import`), so they aren't counted as
+  /// downloads still to come.
   Future<SpaceInfo> space({
     required String device,
     required String profile,
     required String workspace,
+    List<String> imports = const [],
     bool deleteDownloads = false,
   });
 
@@ -83,7 +89,9 @@ abstract class Engine {
   EngineRun unlock({required String device});
 
   /// `clean`: with [dryRun], lists what can be removed (`items`); otherwise
-  /// removes the chosen kinds and reports `freed` bytes.
+  /// removes the chosen kinds, or only the listed [paths] (`--path`, items
+  /// from a dry run), and reports `freed` bytes. Throws [EngineException]
+  /// when the engine reports a failure.
   Future<ResultEvent> clean({
     required String workspace,
     bool dryRun = false,
@@ -91,8 +99,12 @@ abstract class Engine {
     bool image = false,
     bool scratch = false,
     bool backup = false,
+    List<String> paths = const [],
   });
 
-  /// Windows driver check (or install). Returns the `result` event.
+  /// USB access check (or install): the WinUSB driver on Windows, the udev
+  /// rule on Linux (`status` `ok` or `missing`); `not_required` on macOS.
+  /// Returns the `result` event; throws [EngineException] when the engine
+  /// reports a failure (a declined or failed install).
   Future<ResultEvent> drivers({required String device, bool install = false});
 }

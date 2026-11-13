@@ -43,6 +43,34 @@ case "$1" in
   detect)
     exec sleep 30
     ;;
+  drivers)
+    case "$*" in
+      *--install*)
+        # A declined install: an error, then a failed result.
+        echo '{"type":"error","code":"tool_failed","message":"pkexec: request dismissed","hint":"Approve the password prompt to allow access."}'
+        echo '{"type":"result","ok":false}'
+        exit 1 ;;
+      *) echo '{"type":"result","ok":true,"status":"missing","detail":"no udev rule"}' ;;
+    esac
+    ;;
+  clean)
+    case "$*" in
+      *--dry-run*)
+        echo '{"type":"result","ok":true,"items":[{"kind":"scratch","path":"/w/jobs/j/work","bytes":5}],"freed":0}' ;;
+      *--path\ /w/locked*)
+        echo '{"type":"error","code":"internal","message":"Permission denied (os error 13)"}'
+        echo '{"type":"result","ok":false}'
+        exit 1 ;;
+      *--path\ /w/silent*)
+        # A failed result with no error line.
+        echo '{"type":"result","ok":false}'
+        exit 1 ;;
+      *) echo '{"type":"result","ok":true,"items":[],"freed":5}' ;;
+    esac
+    ;;
+  space)
+    echo '{"type":"space","need":0,"free":0,"ok":false,"reason":"fat32"}'
+    ;;
   unlock)
     # Bytes that aren't UTF-8, then an exit without a result.
     [ "$3" = garbage ] && printf '\377\376\n' && exit 0
@@ -236,4 +264,70 @@ void main() {
       expect((events.last as ResultEvent).ok, isFalse);
     },
   );
+
+  group('failed results of one-shot commands are never swallowed', () {
+    test('a failed driver install throws with the engine\'s error', () async {
+      final status = await engine.drivers(device: 'd');
+      expect(status.str('status'), 'missing');
+      await expectLater(
+        engine.drivers(device: 'd', install: true),
+        throwsA(
+          isA<EngineException>()
+              .having((e) => e.code, 'code', 'tool_failed')
+              .having(
+                (e) => e.event.hint,
+                'hint',
+                'Approve the password prompt to allow access.',
+              ),
+        ),
+      );
+      expect(
+        engine.stderrLog.last,
+        'args: drivers --device d --install --lang en --json',
+      );
+    });
+
+    test('a failed clean throws, with or without an error line', () async {
+      final ok = await engine.clean(workspace: '/w', paths: const ['/w/a']);
+      expect(ok.data['freed'], 5);
+      await expectLater(
+        engine.clean(workspace: '/w', paths: const ['/w/locked']),
+        throwsA(
+          isA<EngineException>().having((e) => e.code, 'code', 'internal'),
+        ),
+      );
+      await expectLater(
+        engine.clean(workspace: '/w', paths: const ['/w/silent']),
+        throwsA(isA<EngineException>()),
+      );
+    });
+  });
+
+  test('clean --path is repeated, one per item, and nothing else', () async {
+    await engine.clean(
+      workspace: '/w',
+      paths: const ['/w/jobs/j/work', '/w/cache/a b.7z'],
+    );
+    expect(
+      engine.stderrLog.last,
+      'args: clean --workspace /w --path /w/jobs/j/work --path /w/cache/a b.7z '
+      '--lang en --json',
+    );
+  });
+
+  test('space passes the picked files as --import and reads reason', () async {
+    final info = await engine.space(
+      device: 'd',
+      profile: 'p',
+      workspace: '/w',
+      imports: const ['/dl/p.tar.001', '/dl/p.tar.002'],
+    );
+    expect(
+      engine.stderrLog.last,
+      'args: space --device d --profile p --workspace /w '
+      '--import /dl/p.tar.001 --import /dl/p.tar.002 --lang en --json',
+    );
+    expect(info.ok, isFalse);
+    expect(info.reason, 'fat32');
+  });
 }

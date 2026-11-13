@@ -1,0 +1,3 @@
+{"level":"info","message":"Installing WinUSB for Unisoc download mode (1782:4d00); Windows asks for permission","type":"log"}
+{"code":"tool_failed","hint":"Accept the Windows permission prompt, or install WinUSB with Zadig.","message":"driver install for Unisoc download mode (1782:4d00) failed (the Windows permission prompt was declined)","type":"error"}
+{"detail":"The driver installer isn't bundled with this build. Install WinUSB for the device's download mode with Zadig.","ok":false,"status":"missing","type":"result"}

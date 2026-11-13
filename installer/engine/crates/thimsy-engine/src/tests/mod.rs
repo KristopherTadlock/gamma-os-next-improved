@@ -8,4 +8,5 @@ mod lp;
 mod pac;
 mod parity;
 mod resolve;
+mod samples;
 mod tools;

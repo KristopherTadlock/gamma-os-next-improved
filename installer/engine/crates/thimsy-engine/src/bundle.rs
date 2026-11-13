@@ -33,7 +33,10 @@ fn octal(field: &[u8]) -> Result<u64> {
     if field.first().is_some_and(|b| b & 0x80 != 0) {
         let mut v: u64 = (field[0] & 0x7f) as u64;
         for &b in &field[1..] {
-            v = v.checked_mul(256).context("tar size overflows")? + b as u64;
+            v = v
+                .checked_mul(256)
+                .and_then(|v| v.checked_add(b as u64))
+                .context("tar size overflows")?;
         }
         return Ok(v);
     }
@@ -84,7 +87,7 @@ impl Bundle {
         let mut long_name: Option<String> = None;
         let mut header = [0u8; BLOCK as usize];
         let mut ended = false;
-        while pos + BLOCK <= total {
+        while pos.checked_add(BLOCK).is_some_and(|end| end <= total) {
             r.seek(SeekFrom::Start(pos))?;
             r.read_exact(&mut header)?;
             if header.iter().all(|&b| b == 0) {
@@ -109,7 +112,7 @@ impl Bundle {
             let size = octal(&header[124..136])?;
             let kind = header[156];
             let data = pos + BLOCK;
-            if data + size > total {
+            if crate::util::add(data, size).map_or(true, |end| end > total) {
                 bail!("the archive is cut short (a member runs past its end)");
             }
             match kind {
@@ -150,7 +153,12 @@ impl Bundle {
                     long_name = None;
                 }
             }
-            pos = data + size.div_ceil(BLOCK) * BLOCK;
+            // In range: data + size <= total was checked above.
+            pos = size
+                .div_ceil(BLOCK)
+                .checked_mul(BLOCK)
+                .and_then(|padded| data.checked_add(padded))
+                .context("tar member size overflows")?;
         }
         if !ended {
             bail!("the archive is cut short (no end-of-archive marker)");
@@ -383,6 +391,33 @@ mod tests {
                 Bundle::index(&[Span::whole(&p).unwrap()]).is_err(),
                 "cut at {cut}"
             );
+        }
+    }
+
+    /// A header claiming a size near 2^64 (GNU base-256): an error at
+    /// once, never an overflow (release builds stop on overflow).
+    #[test]
+    fn crafted_member_sizes_are_errors_not_overflows() {
+        let d = tempfile::tempdir().unwrap();
+        let p = d.path().join("evil.tar");
+        for size_field in [
+            [
+                0x80u8, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF,
+            ],
+            [0xFF; 12],
+            [0x80, 0, 0, 0, 0, 0, 0, 0, 0xFF, 0xFF, 0xFF, 0x00],
+        ] {
+            let mut h = header("big", 0).unwrap();
+            h[124..136].copy_from_slice(&size_field);
+            h[148..156].fill(b' ');
+            let sum: u64 = h.iter().map(|&b| b as u64).sum();
+            h[148..156].copy_from_slice(format!("{sum:06o}\0 ").as_bytes());
+            let mut t = h.to_vec();
+            t.extend_from_slice(&[0u8; 2048]);
+            std::fs::write(&p, &t).unwrap();
+            let started = std::time::Instant::now();
+            assert!(Bundle::index(&[Span::whole(&p).unwrap()]).is_err());
+            assert!(started.elapsed() < std::time::Duration::from_secs(1));
         }
     }
 }

@@ -26,14 +26,17 @@ engine_summary='grep -E "^test result" | awk '"'"'{p+=$4; f+=$6} END {print p " 
 
 cd "$HERE/../engine"
 step "cargo fmt" 'echo ok' cargo fmt --check
-step "clippy" 'echo ok' cargo clippy --all-targets -q -- -D warnings
-step "engine tests" "$engine_summary" cargo test --workspace -q
-step "engine build" 'echo ok' cargo build --release -q
+step "clippy" 'echo ok' cargo clippy --locked --all-targets -q -- -D warnings
+step "engine tests" "$engine_summary" cargo test --workspace --locked -q
+step "engine tests (test hooks)" "$engine_summary" cargo test --workspace --locked --features test-hooks -q
+# The engine as shipped: without the test-hooks feature.
+step "engine build" 'echo ok' cargo build --release --locked -q
 if [ $# -ge 2 ]; then
   rm -rf "$1/jobs"   # rebuild from the official firmware every time
   step "e2e" 'tail -1' "$HERE/e2e.sh" "$1" "$2"
 fi
-step "apply_pack tests" 'tail -1' python3 "$HERE/../tools/test_apply_pack.py"
+step "apply_pack tests" 'tail -1' python3 -I "$HERE/../tools/test_apply_pack.py"
 cd "$HERE/../app"
+step "flutter pub get" 'echo ok' flutter pub get --enforce-lockfile
 step "flutter analyze" 'tail -1' flutter analyze --no-pub
 step "flutter test" 'tail -1' flutter test --no-pub

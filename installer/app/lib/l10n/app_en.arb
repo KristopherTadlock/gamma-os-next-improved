@@ -143,7 +143,7 @@
   "buildTitle": "Download and build",
   "buildSubtitle": "Nothing is written to the device in this step.",
   "exportOnlyTitle": "Build and export only",
-  "exportOnlyBody": "This computer can build the image but not install it. Copy the result to a Windows PC and finish there.",
+  "exportOnlyBody": "This computer can build the image but not install it. The last step explains how to finish on a Windows PC.",
   "workspaceLabel": "Workspace folder",
   "workspaceHelp": "A folder on a local drive with enough space (not FAT32).",
   "changeFolder": "Change folder…",
@@ -207,7 +207,7 @@
   "waitingDevice": "Waiting for the device…",
   "nothingConnected": "Nothing connected yet.",
   "connectLaterTitle": "Don't connect it yet",
-  "connectLaterBody": "Press Next to start installing. When the installer asks, do the steps above. It waits up to 5 minutes for your device.",
+  "connectLaterBody": "Go on to Review and start installing. When the installer asks, do the steps above. It waits up to 5 minutes for your device.",
   "seenOther": "Seen: {devices}. That isn't the selected device in the right mode yet.",
   "@seenOther": {
     "placeholders": {
@@ -265,7 +265,7 @@
   "doneInstalledTitle": "Thimsy is installed",
   "imageReadyTitle": "Image ready",
   "finishOnWindows": "Finish on Windows",
-  "finishOnWindowsBody": "Copy the job folder below to the Windows PC, open Thimsy Installer there and choose the same device; point \"Already downloaded files\" at the copied folder.",
+  "finishOnWindowsBody": "On the Windows PC, open Thimsy Installer, choose the same device and profile, and build there. To skip downloading again, copy the files in this workspace's cache folder to that PC and pick them with “Use a file I already downloaded…”.",
   "allDone": "All done",
   "allDoneBody": "Enjoy Thimsy. Keep the job folder: it holds the backup of your device's calibration data and the image, in case you need to restore.",
   "openJobFolder": "Open job folder",
@@ -300,7 +300,7 @@
       }
     }
   },
-  "errEngineCrashedHint": "Save the diagnostic log and report it.",
+  "errEngineCrashedHint": "Press Copy details and include the copied text when you report the problem.",
   "errEngineMissing": "The installer engine could not be started.",
   "errEngineMissingHint": "Reinstall Thimsy Installer. Expected the engine at {path}.",
   "@errEngineMissingHint": {
@@ -315,5 +315,44 @@
   "detectStopped": "Stopped looking for the device.",
   "@detectStopped": {
     "description": "Connect and Review: the device watch (detect --watch) ended by itself; a Try again button follows."
+  },
+  "errTitleDeviceNotFound": "The device wasn't found",
+  "errTitleWrongDevice": "This firmware doesn't match the connected device",
+  "errTitleDownloadFailed": "A download failed",
+  "errTitleHashMismatch": "A file didn't pass its integrity check",
+  "errTitleToolMissing": "A tool the installer needs is missing",
+  "errTitleToolFailed": "The flashing tool reported a problem",
+  "errTitleProfileUnavailable": "This profile isn't available for this device",
+  "errTitleUnlockGuided": "This device is unlocked by following the steps",
+  "errTitleBadInput": "The installer can't use what was chosen",
+  "errTitleInternal": "The installer ran into a problem",
+  "errTitleBusy": "Another Thimsy Installer is using this workspace",
+  "errTitleFullInstallNeeded": "This device needs a full install",
+  "errTitleUnknown": "Something went wrong",
+  "copyDetails": "Copy details",
+  "detailsCopied": "Copied",
+  "fullInstallNeededBody": "Nothing was written. A full install works whatever the device runs now, but erases everything on it. Switching takes you back to Review to confirm.",
+  "switchToFull": "Switch to full install",
+  "updateCheckBody": "Before writing, the installer checks that the device runs matching firmware. If it doesn't, nothing is written and you can switch to a full install.",
+  "downloadModeAgain": "Put the device in download mode again, then press Run again.",
+  "driverNeededLinux": "Allow access to the device",
+  "driverLinuxBody": "Linux needs a device rule before Thimsy Installer can use the device over USB. Installing it asks for your password.",
+  "spaceFat32": "This drive uses FAT32, which can't hold files larger than 4 GB. Choose a folder on another drive.",
+  "spaceProbeFailed": "The free space on this drive couldn't be checked. Choose another folder.",
+  "freeUpSpaceButton": "Free up space…",
+  "freeUpSpaceHelp": "Removes files the installer can make or download again. Backups are kept.",
+  "cleanOtherImages": "Images built for other devices or profiles",
+  "deleteBackupsButton": "Delete backups…",
+  "deleteBackupsTitle": "Delete backups?",
+  "deleteBackupsBody": "Each folder holds a backup of your device's calibration data (Wi-Fi, Bluetooth, sensors). If you delete it and the calibration is ever damaged, it can't be restored. Only choose backups you have another copy of.",
+  "deleteSelected": "Delete selected",
+  "partitionsErases": "Erases: {names}",
+  "cleanFailed": "The files couldn't be removed",
+  "@partitionsErases": {
+    "placeholders": {
+      "names": {
+        "type": "String"
+      }
+    }
   }
 }

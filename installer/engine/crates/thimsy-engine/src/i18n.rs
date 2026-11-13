@@ -73,6 +73,28 @@ pub fn source_strings(
     for p in &cat.profiles {
         set.insert(p.name.clone());
         set.insert(p.summary.clone());
+        for it in p.emulators.iter().chain(&p.apps) {
+            set.insert(it.name.clone());
+            set.extend(it.systems.iter().cloned());
+        }
+        for c in &p.cores {
+            set.insert(c.system.clone());
+        }
+    }
+    // Shown as hints when a file can't be downloaded.
+    let mut notes = |a: &crate::catalog::Artifact| {
+        set.extend(a.note.iter().cloned());
+        for p in &a.parts {
+            set.extend(p.note.iter().cloned());
+        }
+    };
+    cat.root.artifacts.iter().for_each(&mut notes);
+    for d in &cat.devices {
+        d.artifacts.iter().for_each(&mut notes);
+        d.bundles.values().for_each(&mut notes);
+        if let Some(src) = &d.source {
+            src.parts.iter().for_each(&mut notes);
+        }
     }
     for d in &cat.devices {
         set.extend(d.notes.iter().cloned());
@@ -112,22 +134,24 @@ pub fn source_strings(
     for f in files {
         let text = std::fs::read_to_string(&f)?;
         let text = text.split("#[cfg(test)]").next().unwrap_or("");
-        // (call prefix, index of the first translatable literal argument)
-        for (prefix, skip) in [
-            ("tr(", 0),
-            (".stage(", 1),
-            (".prompt(", 1),
-            (".hint(", 0),
-            ("unwrap_or(", 0),
-            ("map_or(", 0),
-        ] {
+        // (call prefix, index of the first translatable literal argument,
+        // whether one word counts: titles and progress labels may be one)
+        for (prefix, skip, word) in SCANNED {
             let mut rest = text;
             while let Some(i) = rest.find(prefix) {
+                // `tr(` is a call, `push_str(` isn't.
+                let part_of_name = !prefix.starts_with('.')
+                    && rest[..i]
+                        .chars()
+                        .next_back()
+                        .is_some_and(|c| c.is_alphanumeric() || c == '_');
                 rest = &rest[i + prefix.len()..];
-                let lits = leading_literals(rest, 3);
-                let titles = skip == 1; // stage/prompt titles may be one word
-                for s in lits.into_iter().skip(skip) {
-                    if (titles || s.contains(' ')) && !s.is_empty() && !s.contains("{}") {
+                if part_of_name {
+                    continue;
+                }
+                let lits = leading_literals(rest, if *word && *skip == 0 { 1 } else { 3 });
+                for s in lits.into_iter().skip(*skip) {
+                    if (*word || s.contains(' ')) && !s.is_empty() && !s.contains("{}") {
                         set.insert(s);
                     }
                 }
@@ -136,6 +160,19 @@ pub fn source_strings(
     }
     Ok(set.into_iter().collect())
 }
+
+/// Calls whose literal arguments are translated: (prefix, index of the
+/// first translatable literal, whether a single word counts).
+const SCANNED: &[(&str, usize, bool)] = &[
+    ("tr(", 0, false),
+    (".stage(", 1, true),
+    (".prompt(", 1, true),
+    (".hint(", 0, false),
+    (".progress(", 0, true),
+    (".progress_for(", 0, true),
+    ("unwrap_or(", 0, false),
+    ("map_or(", 0, false),
+];
 
 /// Up to `n` consecutive string-literal arguments at the start of `s`.
 fn leading_literals(s: &str, n: usize) -> Vec<String> {
@@ -223,6 +260,55 @@ mod tests {
                 );
             }
         }
+    }
+
+    /// Every hint and progress label the engine shows can be translated:
+    /// its argument is a literal the scanner extracts, or a catalog text
+    /// (an artifact's `note`) with a literal fallback.
+    #[test]
+    fn hints_and_progress_labels_are_translatable() {
+        let cat = crate::catalog::Catalog::bundled().unwrap();
+        let src = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+        let known = source_strings(&cat, &src).unwrap();
+        let mut files = Vec::new();
+        for e in std::fs::read_dir(&src).unwrap().flatten() {
+            let p = e.path();
+            if p.extension().is_some_and(|x| x == "rs") && p.file_name().unwrap() != "testutil.rs" {
+                files.push(p);
+            }
+        }
+        let mut checked = 0;
+        for f in files {
+            let text = std::fs::read_to_string(&f).unwrap();
+            let text = text.split("#[cfg(test)]").next().unwrap();
+            for prefix in [".hint(", ".progress(", ".progress_for("] {
+                let mut rest = text;
+                while let Some(i) = rest.find(prefix) {
+                    rest = &rest[i + prefix.len()..];
+                    checked += 1;
+                    let arg: String = rest.chars().take(160).collect();
+                    let where_ = format!("{}: {prefix}{}", f.display(), &arg[..arg.len().min(60)]);
+                    match leading_literals(rest, 1).pop() {
+                        Some(lit) => assert!(
+                            known.contains(&lit),
+                            "{where_}: {lit:?} isn't in the source strings"
+                        ),
+                        None => {
+                            let a = arg.trim_start();
+                            assert!(
+                                a.starts_with("a.note.as_deref().unwrap_or(")
+                                    || a.starts_with("a.note\n")
+                                    || a.split_whitespace()
+                                        .collect::<String>()
+                                        .starts_with("a.note.as_deref().unwrap_or("),
+                                "{where_}: not a literal or a catalog text"
+                            );
+                        }
+                    }
+                }
+            }
+        }
+        assert!(checked > 20, "only {checked} calls found");
     }
 
     #[test]

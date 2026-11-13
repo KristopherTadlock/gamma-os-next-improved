@@ -391,7 +391,16 @@ class Plan {
   final List<Setting> settings;
   final int downloadBytes;
   final int diskBytes;
+
+  /// Legacy: the partitions of a full install, from engines that don't
+  /// send [partitionsFull] / [partitionsUpdate].
   final List<String> partitions;
+
+  /// Partitions written by `flash --mode full` / `--mode update`, and the
+  /// ones a full install erases; null when the engine doesn't send them.
+  final List<String>? partitionsFull;
+  final List<String>? partitionsUpdate;
+  final List<String>? erasesFull;
   final bool wipesData;
 
   /// False when the flashing tool waits for the device (Unisoc): the user
@@ -412,6 +421,9 @@ class Plan {
     this.downloadBytes = 0,
     this.diskBytes = 0,
     this.partitions = const [],
+    this.partitionsFull,
+    this.partitionsUpdate,
+    this.erasesFull,
     this.wipesData = true,
     this.connectFirst = true,
     this.guides = const Guides(),
@@ -434,7 +446,10 @@ class Plan {
       settings: [for (final s in _l(j['settings'])) Setting.fromJson(_m(s))],
       downloadBytes: _i(j['download_bytes']),
       diskBytes: _i(j['disk_bytes']),
-      partitions: [for (final p in _l(j['partitions'])) p.toString()],
+      partitions: _names(j['partitions']) ?? const [],
+      partitionsFull: _names(j['partitions_full']),
+      partitionsUpdate: _names(j['partitions_update']),
+      erasesFull: _names(j['erases_full']),
       wipesData: j['wipes_data'] != false,
       connectFirst: j['connect_first'] != false,
       guides: Guides.fromJson(_m(j['guides'])),
@@ -446,6 +461,12 @@ class Plan {
           : Journey.defaults,
     );
   }
+
+  /// Partitions `flash --mode full` writes (falls back to [partitions]).
+  List<String> get writtenByFull => partitionsFull ?? partitions;
+
+  /// Partitions `flash --mode update` writes (falls back to [partitions]).
+  List<String> get writtenByUpdate => partitionsUpdate ?? partitions;
 }
 
 /// Answer of `space`: how much the build (and flash) needs and how much the
@@ -458,6 +479,11 @@ class SpaceInfo {
   final int flashNeed;
   final int cached;
   final int downloads;
+
+  /// Why [ok] is false: `not_enough_space`, `fat32` (the drive can't hold
+  /// the image) or `probe_failed` (free space couldn't be read); null from
+  /// engines that don't say.
+  final String? reason;
   const SpaceInfo({
     required this.need,
     required this.free,
@@ -466,6 +492,7 @@ class SpaceInfo {
     this.flashNeed = 0,
     this.cached = 0,
     this.downloads = 0,
+    this.reason,
   });
   factory SpaceInfo.fromJson(Map<String, dynamic> j) => SpaceInfo(
     need: _i(j['need']),
@@ -475,6 +502,7 @@ class SpaceInfo {
     flashNeed: _i(j['flash_need']),
     cached: _i(j['cached']),
     downloads: _i(j['downloads']),
+    reason: j['reason'] as String?,
   );
 }
 
@@ -484,9 +512,58 @@ class CleanItem {
   final String kind;
   final String path;
   final int bytes;
-  const CleanItem(this.kind, this.path, this.bytes);
-  factory CleanItem.fromJson(Map<String, dynamic> j) =>
-      CleanItem(_s(j['kind']), _s(j['path']), _i(j['bytes']));
+
+  /// For backups: the device and time the engine reports (`info`, the run
+  /// folder's `device.json`), when it does.
+  final String? device;
+  final String? time;
+  const CleanItem(this.kind, this.path, this.bytes, {this.device, this.time});
+  factory CleanItem.fromJson(Map<String, dynamic> j) {
+    final info = _m(j['info']);
+    return CleanItem(
+      _s(j['kind']),
+      _s(j['path']),
+      _i(j['bytes']),
+      device: _label(info['device_name'] ?? info['device'] ?? j['device']),
+      time: _label(info['time'] ?? j['time']),
+    );
+  }
+
+  /// The path's folders, whichever separator it uses.
+  List<String> get _parts =>
+      path.split(RegExp(r'[\\/]')).where((p) => p.isNotEmpty).toList();
+
+  /// The job folder this item belongs to (`<workspace>/jobs/<job>`), or
+  /// null for items outside the jobs (downloads).
+  String? get jobName {
+    final parts = _parts;
+    final i = parts.lastIndexOf('jobs');
+    return i >= 0 && i + 1 < parts.length ? parts[i + 1] : null;
+  }
+
+  /// Device of a backup: the engine's, else the job folder's name.
+  String? get backupDevice => device ?? jobName;
+
+  /// Time of a backup: the engine's, else read from its `run-YYYYMMDD-HHMMSS`
+  /// folder name (UTC).
+  String? get backupTime {
+    final t = time;
+    if (t != null) {
+      final d = DateTime.tryParse(t)?.toUtc();
+      if (d == null) return t;
+      String two(int n) => n.toString().padLeft(2, '0');
+      return '${d.year}-${two(d.month)}-${two(d.day)} '
+          '${two(d.hour)}:${two(d.minute)}:${two(d.second)} UTC';
+    }
+    for (final part in _parts.reversed) {
+      final m = RegExp(r'^run-(\d{4})(\d{2})(\d{2})-(\d{2})(\d{2})(\d{2})')
+          .firstMatch(part);
+      if (m != null) {
+        return '${m[1]}-${m[2]}-${m[3]} ${m[4]}:${m[5]}:${m[6]} UTC';
+      }
+    }
+    return null;
+  }
 
   static List<CleanItem> listFrom(ResultEvent r) => [
     for (final i in _l(r.data['items'])) CleanItem.fromJson(_m(i)),
@@ -544,6 +621,23 @@ class JsonLinesDecoder extends StreamTransformerBase<String, EngineEvent> {
 }
 
 // --------------------------------------------------------------- helpers
+
+/// A list of partition names (strings, or objects with a `name`); null
+/// when the field is missing.
+List<String>? _names(Object? v) => v is List
+    ? [
+        for (final p in v)
+          p is Map ? _s(p['name'] ?? p['partition']) : p.toString(),
+      ]
+    : null;
+
+/// A display string from a string or an object with a `name`/`id`.
+String? _label(Object? v) => switch (v) {
+  null => null,
+  String s => s.isEmpty ? null : s,
+  Map m => (m['name'] ?? m['id'])?.toString(),
+  _ => v.toString(),
+};
 
 String _s(Object? v, [String fallback = '']) =>
     v == null ? fallback : v.toString();

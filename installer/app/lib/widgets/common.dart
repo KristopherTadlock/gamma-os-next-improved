@@ -1,5 +1,7 @@
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:material_ui/material_ui.dart';
 import 'package:file_selector/file_selector.dart';
+import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../engine/engine.dart';
@@ -74,6 +76,9 @@ class Notice extends StatelessWidget {
   final String? body;
   final Color? color;
   final Widget? action;
+
+  /// Shown under the body, before [action] (e.g. an expandable "Details").
+  final Widget? footer;
   const Notice({
     super.key,
     required this.icon,
@@ -81,6 +86,7 @@ class Notice extends StatelessWidget {
     this.body,
     this.color,
     this.action,
+    this.footer,
   });
 
   @override
@@ -109,6 +115,7 @@ class Notice extends StatelessWidget {
                     const SizedBox(height: 4),
                     Text(body!),
                   ],
+                  ?footer,
                   if (action != null) ...[const SizedBox(height: 8), action!],
                 ],
               ),
@@ -156,7 +163,19 @@ class GuideList extends StatelessWidget {
 class RunView extends StatelessWidget {
   final RunState run;
   final String idleText;
-  const RunView(this.run, {super.key, this.idleText = ''});
+
+  /// Shown in the error notice, for the error the run ended with.
+  final Widget? Function(ErrorEvent e)? errorAction;
+
+  /// Added to the error notice's text, for the error the run ended with.
+  final String? Function(ErrorEvent e)? errorExtra;
+  const RunView(
+    this.run, {
+    super.key,
+    this.idleText = '',
+    this.errorAction,
+    this.errorExtra,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -206,11 +225,12 @@ class RunView extends StatelessWidget {
         e.code != 'not_enough_space') {
       children.add(const SizedBox(height: 12));
       children.add(
-        Notice(
-          icon: Icons.error_outline,
-          title: errorMessage(l, e),
-          body: errorHint(l, e),
-          color: scheme.error,
+        ErrorNotice(
+          key: const ValueKey('run-error'),
+          error: e,
+          run: run,
+          extra: errorExtra?.call(e),
+          action: errorAction?.call(e),
         ),
       );
     }
@@ -312,13 +332,16 @@ Future<bool> confirmStopInstall(BuildContext context) async {
 }
 
 /// What the user chose in the not-enough-space dialog.
-enum SpaceChoice { chooseFolder, checkAgain, cancel }
+enum SpaceChoice { chooseFolder, freeUp, checkAgain, cancel }
 
-/// The not-enough-space dialog (build check or flash error).
+/// The not-enough-space dialog (build check or flash error). [details] is
+/// the engine's own (English) message, under an expandable "Details".
 Future<SpaceChoice> showSpaceDialog(
   BuildContext context, {
   required String message,
   required bool offerFolder,
+  bool offerFreeUp = true,
+  String? details,
 }) async {
   final l = AppLocalizations.of(context);
   final r = await showDialog<SpaceChoice>(
@@ -328,13 +351,29 @@ Future<SpaceChoice> showSpaceDialog(
       key: const ValueKey('space-dialog'),
       icon: const Icon(Icons.sd_storage),
       title: Text(l.spaceTitle),
-      content: Text(message),
+      content: SingleChildScrollView(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(message),
+            if (details != null && details.isNotEmpty && details != message)
+              ErrorDetails(details),
+          ],
+        ),
+      ),
       actions: [
         TextButton(
           key: const ValueKey('space-cancel'),
           onPressed: () => Navigator.of(ctx).pop(SpaceChoice.cancel),
           child: Text(l.cancel),
         ),
+        if (offerFreeUp)
+          TextButton(
+            key: const ValueKey('space-free-up'),
+            onPressed: () => Navigator.of(ctx).pop(SpaceChoice.freeUp),
+            child: Text(l.freeUpSpaceButton),
+          ),
         if (offerFolder)
           TextButton(
             key: const ValueKey('space-choose-folder'),
@@ -390,10 +429,40 @@ Future<List<String>> _pickPackWithFileSelector(AppLocalizations l) async {
   }
 }
 
-/// The message to show for [e]: the engine's own (already translated) text,
-/// or the app's translation for errors it raised itself.
+/// The translated title of every error code the engine sends (see
+/// installer/engine/crates/thimsy-engine/src/error.rs and
+/// docs/engine-protocol.md); null for a code this app doesn't know.
+String? errorTitleFor(AppLocalizations l, String code) => switch (code) {
+  'device_not_found' => l.errTitleDeviceNotFound,
+  'wrong_device' => l.errTitleWrongDevice,
+  'download_failed' => l.errTitleDownloadFailed,
+  'hash_mismatch' => l.errTitleHashMismatch,
+  'not_enough_space' => l.spaceTitle,
+  'tool_missing' => l.errTitleToolMissing,
+  'tool_failed' => l.errTitleToolFailed,
+  'unsupported_host' => l.needsWindowsTitle,
+  'profile_unavailable' => l.errTitleProfileUnavailable,
+  'unlock_guided' => l.errTitleUnlockGuided,
+  'cancelled' => l.errCancelled,
+  'bad_input' => l.errTitleBadInput,
+  'internal' => l.errTitleInternal,
+  'busy' => l.errTitleBusy,
+  'full_install_needed' => l.errTitleFullInstallNeeded,
+  _ => null,
+};
+
+/// The heading for [e]: the app's translation for its code (the engine's
+/// `message` stays English, so it's never the heading). Errors the app
+/// raised itself have their own translated text.
+String errorTitle(AppLocalizations l, ErrorEvent e) {
+  if (e.local) return errorMessage(l, e);
+  return errorTitleFor(l, e.code) ?? l.errTitleUnknown;
+}
+
+/// The app's translation for an error it raised itself; for engine errors,
+/// [errorTitle].
 String errorMessage(AppLocalizations l, ErrorEvent e) {
-  if (!e.local) return e.message;
+  if (!e.local) return errorTitle(l, e);
   return switch (e.code) {
     'engine_crashed' => l.errEngineCrashed(e.args['exit'] ?? '?'),
     'engine_missing' => l.errEngineMissing,
@@ -404,6 +473,8 @@ String errorMessage(AppLocalizations l, ErrorEvent e) {
   };
 }
 
+/// What to do about [e]: the engine's hint (translated by the engine), or
+/// the app's own for errors it raised.
 String? errorHint(AppLocalizations l, ErrorEvent e) {
   if (!e.local) return e.hint;
   return switch (e.code) {
@@ -413,14 +484,129 @@ String? errorHint(AppLocalizations l, ErrorEvent e) {
   };
 }
 
-/// Text for an error caught from a one-shot engine call.
+/// The engine's (English) message for [e], for "Details"; null when it adds
+/// nothing.
+String? errorDetails(ErrorEvent e) =>
+    e.message.trim().isEmpty ? null : e.message;
+
+/// [error] (from a one-shot engine call, or anything else thrown) as an
+/// error event.
+ErrorEvent errorEventOf(Object error) => error is EngineException
+    ? error.event
+    : ErrorEvent(code: 'internal', message: '$error');
+
+/// Text for an error caught from a one-shot engine call: its title and
+/// hint (the English message is left to "Details").
 String describeError(AppLocalizations l, Object error) {
-  if (error is EngineException) {
-    final hint = errorHint(l, error.event);
-    final msg = errorMessage(l, error.event);
-    return hint == null ? msg : '$msg\n$hint';
+  final e = errorEventOf(error);
+  final hint = errorHint(l, e);
+  final title = errorTitle(l, e);
+  return hint == null || hint.isEmpty ? title : '$title\n$hint';
+}
+
+/// An expandable "Details" holding the engine's English message.
+class ErrorDetails extends StatelessWidget {
+  final String text;
+  const ErrorDetails(this.text, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return ExpansionTile(
+      key: const ValueKey('error-details'),
+      title: Text(l.details),
+      tilePadding: EdgeInsets.zero,
+      childrenPadding: const EdgeInsets.only(bottom: 8),
+      expandedAlignment: AlignmentDirectional.centerStart,
+      children: [
+        SelectableText(
+          text,
+          key: const ValueKey('error-details-text'),
+          textDirection: TextDirection.ltr,
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+      ],
+    );
   }
-  return '$error';
+}
+
+/// An error notice: the translated title, the hint as the body, the
+/// engine's English message under "Details", and "Copy details" (the
+/// engine's stderr log plus [run]'s log, for a report).
+class ErrorNotice extends StatelessWidget {
+  final ErrorEvent error;
+  final RunState? run;
+
+  /// A heading for where it happened (e.g. "The device list could not be
+  /// loaded"); the error's own title then goes in the body.
+  final String? title;
+
+  /// More text after the hint.
+  final String? extra;
+  final IconData icon;
+  final Widget? action;
+  const ErrorNotice({
+    super.key,
+    required this.error,
+    this.run,
+    this.title,
+    this.extra,
+    this.icon = Icons.error_outline,
+    this.action,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    final own = errorTitle(l, error);
+    final heading = title ?? own;
+    final hint = errorHint(l, error);
+    final details = errorDetails(error);
+    return Notice(
+      icon: icon,
+      title: heading,
+      body: [
+        if (own != heading) own,
+        ?hint,
+        ?extra,
+      ].where((t) => t.trim().isNotEmpty).join('\n'),
+      color: Theme.of(context).colorScheme.error,
+      footer: details == null || details == own || error.local
+          ? null
+          : ErrorDetails(details),
+      action: Wrap(
+        spacing: 8,
+        runSpacing: 8,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: [
+          ?action,
+          CopyDetailsButton(run: run),
+        ],
+      ),
+    );
+  }
+}
+
+/// Copies the engine's stderr log and [run]'s log to the clipboard.
+class CopyDetailsButton extends StatelessWidget {
+  final RunState? run;
+  const CopyDetailsButton({super.key, this.run});
+
+  @override
+  Widget build(BuildContext context) {
+    final l = AppLocalizations.of(context);
+    return TextButton.icon(
+      key: const ValueKey('copy-details'),
+      icon: const Icon(Icons.copy, size: 18),
+      label: Text(l.copyDetails),
+      onPressed: () async {
+        final text = context.read<AppState>().diagnostics(run);
+        final messenger = ScaffoldMessenger.maybeOf(context);
+        await Clipboard.setData(ClipboardData(text: text));
+        messenger?.showSnackBar(SnackBar(content: Text(l.detailsCopied)));
+      },
+    );
+  }
 }
 
 /// Shown on Connect and Review when the device watch ended by itself: no
@@ -434,17 +620,11 @@ class DetectErrorNotice extends StatelessWidget {
     final e = state.detectError;
     if (e == null) return const SizedBox.shrink();
     final l = AppLocalizations.of(context);
-    final message = errorMessage(l, e);
-    final hint = errorHint(l, e);
-    return Notice(
+    return ErrorNotice(
       key: const ValueKey('detect-error'),
       icon: Icons.usb_off,
       title: l.detectStopped,
-      body: [
-        if (message != l.detectStopped) message,
-        ?hint,
-      ].where((t) => t.isNotEmpty).join('\n'),
-      color: Theme.of(context).colorScheme.error,
+      error: e,
       action: TextButton(
         key: const ValueKey('detect-retry'),
         onPressed: state.restartDetect,
@@ -453,3 +633,16 @@ class DetectErrorNotice extends StatelessWidget {
     );
   }
 }
+
+/// The space check's answer as a sentence, for a check that said no.
+String spaceProblemText(
+  AppLocalizations l, {
+  required String? reason,
+  required int need,
+  required int free,
+  required String drive,
+}) => switch (reason) {
+  'fat32' => l.spaceFat32,
+  'probe_failed' => l.spaceProbeFailed,
+  _ => l.spaceBody(formatBytes(need), formatBytes(free), drive),
+};

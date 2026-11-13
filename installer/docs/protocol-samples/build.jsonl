@@ -1,0 +1,35 @@
+{"stage":"plan","title":"Checking the plan","type":"stage"}
+{"level":"info","message":"Needs about 31.01 MB free in <workspace>; 150.64 GB available","type":"log"}
+{"stage":"fetch","title":"Downloading","type":"stage"}
+{"done":382435,"label":"Importing fw.7z.001","stage":"fetch","total":382435,"type":"progress"}
+{"done":382435,"label":"Checking fw.7z.001","stage":"fetch","total":382435,"type":"progress"}
+{"done":382435,"label":"Importing fw.7z.002","stage":"fetch","total":382435,"type":"progress"}
+{"done":382435,"label":"Checking fw.7z.002","stage":"fetch","total":382435,"type":"progress"}
+{"done":382434,"label":"Importing fw.7z.003","stage":"fetch","total":382434,"type":"progress"}
+{"done":382434,"label":"Checking fw.7z.003","stage":"fetch","total":382434,"type":"progress"}
+{"done":3670109,"label":"Importing thimsy-system.img.zst","stage":"fetch","total":3670109,"type":"progress"}
+{"done":3670109,"label":"Checking thimsy-system.img.zst","stage":"fetch","total":3670109,"type":"progress"}
+{"done":294,"label":"Importing vb.bsdiff","stage":"fetch","total":294,"type":"progress"}
+{"done":294,"label":"Checking vb.bsdiff","stage":"fetch","total":294,"type":"progress"}
+{"done":1453,"label":"Importing odm.bsdiff","stage":"fetch","total":1453,"type":"progress"}
+{"done":1453,"label":"Checking odm.bsdiff","stage":"fetch","total":1453,"type":"progress"}
+{"stage":"extract","title":"Unpacking the firmware","type":"stage"}
+{"done":12774372,"label":"Unpacking firmware.pac","stage":"extract","total":12774372,"type":"progress"}
+{"done":12774372,"label":"Checking the unpacked firmware","stage":"extract","total":12774372,"type":"progress"}
+{"stage":"assemble","title":"Building Thimsy for your device","type":"stage"}
+{"level":"info","message":"Step 1/7: patch VENDORBOOT","type":"log"}
+{"level":"info","message":"Step 2/7: patch VENDORBOOT_B","type":"log"}
+{"level":"info","message":"Step 3/7: grow system_a","type":"log"}
+{"level":"info","message":"system_a grew by 5.24 MB","type":"log"}
+{"level":"info","message":"Step 4/7: write system_a","type":"log"}
+{"done":8388608,"label":"Writing system_a","stage":"assemble","total":8388608,"type":"progress"}
+{"level":"info","message":"Step 5/7: patch odm_a","type":"log"}
+{"level":"info","message":"Step 6/7: set product name","type":"log"}
+{"level":"info","message":"Step 7/7: update checksums","type":"log"}
+{"done":12772248,"label":"Updating checksums","stage":"assemble","total":12772248,"type":"progress"}
+{"level":"info","message":"Data CRC 7b18","type":"log"}
+{"stage":"validate","title":"Checking the result","type":"stage"}
+{"done":12774372,"label":"Checksumming the image","stage":"validate","total":12774372,"type":"progress"}
+{"level":"info","message":"The image matches the reference build exactly","type":"log"}
+{"stage":"publish","title":"Finishing","type":"stage"}
+{"bytes":12774372,"image":"<workspace>/jobs/testdev-heavy/out/testdev-thimsy-heavy.pac","job":"<workspace>/jobs/testdev-heavy","matches_reference":true,"ok":true,"sha256":"7a7616a6d532aa177f638078e622fd783c779fedb8e29003a25bb5a35b986336","type":"result"}

@@ -1,0 +1,14 @@
+{"stage":"check","title":"Checking the build","type":"stage"}
+{"level":"info","message":"4 partitions to write (12.72 MB), 1 to back up, 2 to erase, 0 to compare","type":"log"}
+{"done":12774372,"label":"Checking the image","stage":"check","total":12774372,"type":"progress"}
+{"stage":"driver","title":"Checking the USB driver","type":"stage"}
+{"level":"warn","message":"No udev rule gives this user access to 1782:4d00; if the device isn't found, set up USB access and try again","type":"log"}
+{"stage":"prepare","title":"Preparing the partitions","type":"stage"}
+{"done":12728320,"label":"Checking the partitions","stage":"prepare","total":12728320,"type":"progress"}
+{"stage":"wait_device","title":"Connect the device in download mode","type":"stage"}
+{"body":"Turn the Test Device off, hold Back and plug in the cable.","id":"enter_download_mode","image":null,"title":"Hold Back","type":"prompt"}
+{"level":"info","message":"Running spd_dump --wait 300 keep_charge 1 fdl fdl.img 0x5500 fdl fdl2.img 0x9efffe00 partition_list ../backup/run-<time>/device-partitions.xml read_part prodnv 0 0x100000 ../backup/run-<time>/prodnv.img write_part vendor_boot_a vendor_boot_a.img write_part vendor_boot_b vendor_boot_b.img write_part boot_a boot_a.img write_part super super.img erase_part userdata erase_part metadata reset","type":"log"}
+{"level":"info","message":"Waiting for connection (300s)","type":"log"}
+{"level":"info","message":"libusb_open_device failed","type":"log"}
+{"code":"device_not_found","hint":"Repeat the download-mode steps and keep holding the button until installing starts, then try again.","message":"the device never answered in download mode (spd_dump failed (exit status: 1): libusb_open_device failed); nothing was written","type":"error"}
+{"ok":false,"type":"result"}

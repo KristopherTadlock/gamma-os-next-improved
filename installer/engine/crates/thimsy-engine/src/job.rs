@@ -34,12 +34,98 @@ pub struct SpaceCheck {
     #[serde(rename = "type")]
     pub kind: &'static str,
     pub need: u64,
+    /// Free bytes on the workspace's drive (0 when it couldn't be checked).
     pub free: u64,
     pub ok: bool,
+    /// Why `ok` is false: `fat32`, `probe_failed` or `not_enough_space`.
+    pub reason: Option<&'static str>,
+    /// What to do about it (translated), when `ok` is false.
+    pub hint: Option<String>,
     pub build_need: u64,
     pub flash_need: u64,
+    /// Download bytes already in the cache.
     pub cached: u64,
+    /// Download bytes the picked files (`--import`) stand in for.
+    pub imported: u64,
+    /// Every download this build uses, per the catalog.
     pub downloads: u64,
+}
+
+/// What the user's picked files and folders stand in for, in download
+/// bytes: used where they are (never copied), or copied into the cache.
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub struct FromImports {
+    pub in_place: u64,
+    pub copied: u64,
+}
+
+/// The downloads `imports` make unnecessary, the way `build` uses them: a
+/// device pack (or all its parts) used in place; the unpacked official
+/// firmware, which makes its download parts unnecessary; any other file by
+/// name and size, copied into the cache.
+pub fn from_imports(cat: &Catalog, d: &Device, profile: &str, imports: &[PathBuf]) -> FromImports {
+    let mut r = FromImports::default();
+    if imports.is_empty() {
+        return r;
+    }
+    let copied = |a: &Artifact| -> u64 {
+        if a.parts.is_empty() {
+            crate::fetch::find_in(imports, &a.file, a.size).map_or(0, |_| a.size)
+        } else {
+            a.parts
+                .iter()
+                .filter(|p| crate::fetch::find_in(imports, &p.file, p.size).is_some())
+                .map(|p| p.size)
+                .sum()
+        }
+    };
+    if let Some(src) = &d.source {
+        if crate::fetch::find_unpacked(imports, &src.contains, src.container.size).is_some() {
+            r.in_place += src.parts.iter().map(|p| p.size).sum::<u64>();
+        } else {
+            r.copied += src.parts.iter().map(copied).sum::<u64>();
+        }
+    }
+    match d.bundles.get(profile) {
+        Some(b) => {
+            if matches!(crate::fetch::local_bundle(imports, b), Ok(Some(_))) {
+                r.in_place += b.size;
+            }
+        }
+        None => {
+            r.copied += d.artifacts.iter().map(copied).sum::<u64>();
+            r.copied += cat.system_for(profile).map_or(0, copied);
+        }
+    }
+    r
+}
+
+/// The largest single file a build of `profile` writes (FAT32 can't hold
+/// one over 4 GiB).
+fn largest_file(cat: &Catalog, d: &Device, profile: &str) -> u64 {
+    let mut arts: Vec<&Artifact> = Vec::new();
+    if let Some(src) = &d.source {
+        arts.extend(src.parts.iter());
+    }
+    match d.bundles.get(profile) {
+        Some(b) => arts.push(b),
+        None => {
+            arts.extend(d.artifacts.iter());
+            arts.extend(cat.system_for(profile));
+        }
+    }
+    let image = d.source.as_ref().map_or(0, |s| s.container.size);
+    arts.iter()
+        .flat_map(|a| {
+            if a.parts.is_empty() {
+                vec![a.size]
+            } else {
+                a.parts.iter().map(|p| p.size).collect()
+            }
+        })
+        .chain([image])
+        .max()
+        .unwrap_or(0)
 }
 
 pub fn check_space(
@@ -47,6 +133,7 @@ pub fn check_space(
     device: &str,
     profile: &str,
     workspace: &Path,
+    imports: &[PathBuf],
     delete_downloads: bool,
 ) -> Result<SpaceCheck> {
     let d = cat.device(device)?;
@@ -78,37 +165,66 @@ pub fn check_space(
         .map(|a| a.size)
         .sum::<u64>()
         .min(sp.downloads);
-    // New bytes the build writes: missing downloads + the working image.
-    let build_need = sp.build_peak.saturating_sub(cached);
-    // Flashing later unpacks partitions next to the finished image (which
-    // doesn't exist yet, so it counts in full); without delete-downloads
-    // the downloads still missing stay in the cache too.
-    let after_build_kept = if delete_downloads {
-        0
-    } else {
-        sp.downloads - cached
-    };
-    let flash_need = sp.image + sp.flash_extra + after_build_kept;
+    let imp = from_imports(cat, d, profile, imports);
+    // Picked files used in place take no room; copies of them do (counted
+    // like downloads, but not as cached).
+    let in_place = imp.in_place.min(sp.downloads - cached);
+    let (build_need, flash_need) = sp.need(cached, in_place, delete_downloads);
     let need = build_need.max(flash_need);
-    let probe = if workspace.exists() {
-        workspace.to_path_buf()
-    } else {
-        workspace
-            .parent()
-            .map(Path::to_path_buf)
-            .unwrap_or_default()
+    let (free, reason, hint) = match crate::disk::probe(workspace) {
+        Err(_) => (
+            0,
+            Some("probe_failed"),
+            Some("The free space on this drive couldn't be checked. Choose another folder for the workspace."),
+        ),
+        Ok(p) if p.fat32 && largest_file(cat, d, profile) > crate::disk::FAT32_MAX_FILE => (
+            p.free,
+            Some("fat32"),
+            Some("This drive is formatted as FAT32, which can't hold files over 4 GB. Choose a workspace on another drive (NTFS, exFAT, APFS or ext4)."),
+        ),
+        Ok(p) if p.free < need => (
+            p.free,
+            Some("not_enough_space"),
+            Some("Choose a workspace on a drive with more free space (not FAT32), or free some space."),
+        ),
+        Ok(p) => (p.free, None, None),
     };
-    let free = fs4::available_space(&probe).unwrap_or(u64::MAX);
     Ok(SpaceCheck {
         kind: "space",
         need,
         free,
-        ok: free >= need,
+        ok: reason.is_none(),
+        reason,
+        hint: hint.map(crate::i18n::tr),
         build_need,
         flash_need,
         cached,
+        imported: imp.in_place + imp.copied,
         downloads: sp.downloads,
     })
+}
+
+/// The error `build` fails with when `check_space` says no.
+fn space_error(workspace: &Path, sc: &SpaceCheck) -> anyhow::Error {
+    match sc.reason {
+        Some("fat32") => EngineError::new(
+            Code::BadInput,
+            format!(
+                "{} is on a FAT32 drive, which can't hold the {} firmware image (files over 4 GB)",
+                workspace.display(),
+                util::human_bytes(sc.need)
+            ),
+        )
+        .hint("This drive is formatted as FAT32, which can't hold files over 4 GB. Choose a workspace on another drive (NTFS, exFAT, APFS or ext4).")
+        .into(),
+        Some("probe_failed") => EngineError::new(
+            Code::BadInput,
+            format!("the free space in {} couldn't be checked", workspace.display()),
+        )
+        .hint("The free space on this drive couldn't be checked. Choose another folder for the workspace.")
+        .into(),
+        _ => not_enough(workspace, sc.need, sc.free),
+    }
 }
 
 fn not_enough(workspace: &Path, need: u64, free: u64) -> anyhow::Error {
@@ -129,6 +245,70 @@ pub(crate) fn not_enough_space(workspace: &Path, need: u64, free: u64) -> anyhow
     not_enough(workspace, need, free)
 }
 
+/// Held while a command changes a workspace (build, flash, clean): an
+/// exclusive lock on `<workspace>/.thimsy.lock`, released when dropped
+/// (or when the engine exits, however it ends).
+#[derive(Debug)]
+pub struct WorkspaceLock {
+    _file: File,
+}
+
+/// Name of the lock file in a workspace.
+pub const LOCK_FILE: &str = ".thimsy.lock";
+
+/// Takes the workspace lock, or fails with `busy` when another run holds it.
+pub fn lock_workspace(workspace: &Path) -> Result<WorkspaceLock> {
+    fs::create_dir_all(workspace).with_context(|| format!("creating {}", workspace.display()))?;
+    let path = workspace.join(LOCK_FILE);
+    let file = OpenOptions::new()
+        .create(true)
+        .truncate(false)
+        .read(true)
+        .write(true)
+        .open(&path)
+        .with_context(|| format!("opening {}", path.display()))?;
+    // A lock just released may still be held for a moment by a process
+    // that was being started as it was dropped (fork copies descriptors
+    // until exec closes them): retry briefly before calling it busy.
+    let mut tries = 0;
+    let got = loop {
+        match fs4::FileExt::try_lock(&file) {
+            Err(fs4::TryLockError::WouldBlock) if tries < 20 => {
+                tries += 1;
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            r => break r,
+        }
+    };
+    match got {
+        Ok(()) => Ok(WorkspaceLock { _file: file }),
+        Err(fs4::TryLockError::WouldBlock) => Err(EngineError::new(
+            Code::Busy,
+            format!(
+                "another Thimsy Installer task is using {}",
+                workspace.display()
+            ),
+        )
+        .hint("Another Thimsy Installer task is using this workspace. Wait for it to finish, or close the other installer window.")
+        .into()),
+        Err(fs4::TryLockError::Error(e)) => {
+            Err(e).with_context(|| format!("locking {}", path.display()))
+        }
+    }
+}
+
+/// The workspace a job folder belongs to (`<workspace>/jobs/<job>`), or the
+/// folder itself when it isn't laid out that way.
+pub fn workspace_of(job: &Path) -> PathBuf {
+    match job.parent() {
+        Some(jobs) if jobs.file_name().is_some_and(|n| n == "jobs") => jobs
+            .parent()
+            .map(Path::to_path_buf)
+            .unwrap_or_else(|| job.to_path_buf()),
+        _ => job.to_path_buf(),
+    }
+}
+
 /// Written to `<job>/job.json` when a build finishes; `flash` reads it.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct JobRecord {
@@ -141,6 +321,42 @@ pub struct JobRecord {
     pub bytes: u64,
     pub sha256: String,
     pub matches_reference: Option<bool>,
+    /// sha256 of every PAC entry with data, so the partitions unpacked for
+    /// flashing can be checked one by one before they're written (absent
+    /// in jobs from earlier engines).
+    #[serde(default)]
+    pub entries: Vec<EntryHash>,
+}
+
+/// One PAC entry of a finished image.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct EntryHash {
+    pub index: usize,
+    pub id: String,
+    pub size: u64,
+    pub sha256: String,
+}
+
+/// The image's sha256 and each data entry's, in one pass over the file.
+pub fn hash_image(
+    path: &Path,
+    progress: &mut dyn FnMut(u64, u64),
+) -> Result<(String, Vec<EntryHash>)> {
+    let p = pac::Pac::open(path)?;
+    let with_data: Vec<&pac::Entry> = p.entries.iter().filter(|e| e.size > 0).collect();
+    let ranges: Vec<(u64, u64)> = with_data.iter().map(|e| (e.offset, e.size)).collect();
+    let (whole, parts) = util::sha256_with_ranges(path, &ranges, progress)?;
+    let entries = with_data
+        .iter()
+        .zip(parts)
+        .map(|(e, sha256)| EntryHash {
+            index: e.index,
+            id: e.id.clone(),
+            size: e.size,
+            sha256,
+        })
+        .collect();
+    Ok((whole, entries))
 }
 
 #[derive(Debug, Default, Serialize, Deserialize)]
@@ -212,6 +428,11 @@ fn check_picked_files(cat: &Catalog, d: &Device, profile: &str, imports: &[PathB
     let picked: Vec<&PathBuf> = imports.iter().filter(|p| !p.is_dir()).collect();
     if picked.is_empty() {
         return Ok(());
+    }
+    // Some parts of a split device pack picked but not all: say which are
+    // missing (picked parts never mix with downloads).
+    if let Some(b) = d.bundles.get(profile) {
+        crate::fetch::local_bundle(imports, b)?;
     }
     let wanted = wanted_files(cat, d, profile);
     let useful = picked.iter().any(|p| {
@@ -285,7 +506,7 @@ pub fn prepare_source(
         src.password.as_deref(),
         &src.contains,
         &tmp,
-        &mut |d, t| rep.progress("Unpacking", d, t),
+        &mut |d, t| rep.progress_for("Unpacking {file}", &src.contains, d, t),
     )?;
     if util::sha256_file(&tmp, |_, _| {})? != src.container.sha256 {
         bail!(
@@ -318,6 +539,8 @@ pub fn output_name(d: &Device, profile: &str) -> String {
 
 pub fn build(cat: &Catalog, opts: &BuildOptions, rep: &Reporter) -> Result<JobRecord> {
     rep.stage("plan", "Checking the plan");
+    // One run at a time per workspace, for the whole build.
+    let _lock = lock_workspace(&opts.workspace)?;
     if !opts.overrides.is_empty() {
         // `resolve` shows them, but no build step applies them yet.
         return Err(EngineError::new(
@@ -358,12 +581,13 @@ pub fn build(cat: &Catalog, opts: &BuildOptions, rep: &Reporter) -> Result<JobRe
     // The unpacked official firmware in an import folder saves downloading
     // and unpacking it (checked by size now, by sha256 once copied).
     let mut cache = Cache::new(opts.workspace.join("cache"), imports)?;
-    let unpacked = cache.find_import(&src.contains, src.container.size);
+    let unpacked = crate::fetch::find_unpacked(&cache.imports, &src.contains, src.container.size);
     let sc = check_space(
         cat,
         &d.id,
         &opts.profile,
         &opts.workspace,
+        &opts.imports,
         opts.delete_downloads,
     )?;
     rep.info(format!(
@@ -373,7 +597,7 @@ pub fn build(cat: &Catalog, opts: &BuildOptions, rep: &Reporter) -> Result<JobRe
         util::human_bytes(sc.free)
     ));
     if !sc.ok {
-        return Err(not_enough(&opts.workspace, sc.need, sc.free));
+        return Err(space_error(&opts.workspace, &sc));
     }
 
     rep.stage("fetch", "Downloading");
@@ -423,7 +647,7 @@ pub fn build(cat: &Catalog, opts: &BuildOptions, rep: &Reporter) -> Result<JobRe
                 let mut o = File::create(&tmp)?;
                 let n = src.container.size;
                 util::copy_exact(&mut i, &mut o, n, &mut |d| {
-                    rep.progress("Copying firmware", d, n)
+                    rep.progress("Copying the firmware", d, n)
                 })?;
             }
             "archive7z" => {
@@ -432,7 +656,7 @@ pub fn build(cat: &Catalog, opts: &BuildOptions, rep: &Reporter) -> Result<JobRe
                     src.password.as_deref(),
                     &src.contains,
                     &tmp,
-                    &mut |d, t| rep.progress(&format!("Unpacking {}", src.contains), d, t),
+                    &mut |d, t| rep.progress_for("Unpacking {file}", &src.contains, d, t),
                 )?;
             }
             "file" => {
@@ -440,7 +664,7 @@ pub fn build(cat: &Catalog, opts: &BuildOptions, rep: &Reporter) -> Result<JobRe
                 let mut o = File::create(&tmp)?;
                 let n = i.metadata()?.len();
                 util::copy_exact(&mut i, &mut o, n, &mut |d| {
-                    rep.progress("Copying firmware", d, n)
+                    rep.progress("Copying the firmware", d, n)
                 })?;
             }
             k => bail!("unknown source kind {k}"),
@@ -540,7 +764,7 @@ pub fn build(cat: &Catalog, opts: &BuildOptions, rep: &Reporter) -> Result<JobRe
         }
     }
     let bytes = fs::metadata(&working)?.len();
-    let sha = util::sha256_file(&working, |d, t| {
+    let (sha, entries) = hash_image(&working, &mut |d, t| {
         rep.progress("Checksumming the image", d, t)
     })?;
     let matches = d.expect.get(&opts.profile).map(|want| want == &sha);
@@ -577,6 +801,7 @@ pub fn build(cat: &Catalog, opts: &BuildOptions, rep: &Reporter) -> Result<JobRe
         bytes,
         sha256: sha,
         matches_reference: matches,
+        entries,
     };
     util::write_atomic(&dir.join("job.json"), &serde_json::to_vec_pretty(&rec)?)?;
     fs::write(dir.join("plan.json"), serde_json::to_vec_pretty(&plan)?)?;
@@ -601,83 +826,222 @@ pub struct CleanItem {
     pub kind: &'static str, // downloads | image | backup | scratch
     pub path: PathBuf,
     pub bytes: u64,
+    /// For one run's backups: its `device.json` (which device and partition
+    /// table they came from, and when), when it has one.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub info: Option<serde_json::Value>,
 }
 
 fn dir_size(p: &Path) -> u64 {
-    if p.is_file() {
-        return fs::metadata(p).map(|m| m.len()).unwrap_or(0);
+    let Ok(meta) = fs::symlink_metadata(p) else {
+        return 0;
+    };
+    if !meta.is_dir() {
+        return meta.len();
     }
     fs::read_dir(p)
         .map(|rd| rd.flatten().map(|e| dir_size(&e.path())).sum())
         .unwrap_or(0)
 }
 
-/// What `clean` could remove from a workspace.
-pub fn cleanable(workspace: &Path) -> Vec<CleanItem> {
-    let mut items = Vec::new();
-    let cache = workspace.join("cache");
-    if let Ok(rd) = fs::read_dir(&cache) {
-        for e in rd.flatten() {
-            let p = e.path();
-            let name = p
-                .file_name()
-                .unwrap_or_default()
-                .to_string_lossy()
-                .to_string();
-            let kind = if name.ends_with(".partial") || name.ends_with(".import") {
-                "scratch"
-            } else {
-                "downloads"
-            };
-            if name.ends_with(".ok") {
-                continue;
-            }
-            items.push(CleanItem {
-                kind,
-                bytes: dir_size(&p),
-                path: p,
-            });
+/// Every file name the catalog can put in a cache.
+fn known_files(cat: &Catalog) -> std::collections::HashSet<String> {
+    let mut names = std::collections::HashSet::new();
+    let mut add = |a: &Artifact| {
+        names.insert(a.file.clone());
+        for p in &a.parts {
+            names.insert(p.file.clone());
+        }
+    };
+    cat.root.artifacts.iter().for_each(&mut add);
+    for d in &cat.devices {
+        d.artifacts.iter().for_each(&mut add);
+        d.bundles.values().for_each(&mut add);
+        if let Some(src) = &d.source {
+            src.parts.iter().for_each(&mut add);
         }
     }
-    if let Ok(rd) = fs::read_dir(workspace.join("jobs")) {
-        for job in rd.flatten() {
-            let j = job.path();
-            for (sub, kind) in [
-                ("work", "scratch"),
-                ("flash", "scratch"),
-                ("out", "image"),
-                ("backup", "backup"),
-                // Backups an earlier engine version left in the scratch
-                // folder: never scratch (`clean` moves them to backup/).
-                ("flash/backup", "backup"),
-            ] {
-                let p = j.join(sub);
-                if p.exists() {
-                    let mut bytes = dir_size(&p);
-                    if sub == "flash" {
-                        bytes -= dir_size(&p.join("backup")).min(bytes);
-                    }
-                    if bytes > 0 {
-                        items.push(CleanItem {
-                            kind,
-                            path: p,
-                            bytes,
-                        });
-                    }
-                }
+    names
+}
+
+/// What a cache entry called `name` is, if the engine put it there: a
+/// download (`downloads`), a marker (`ok`, removed with its download) or
+/// leftovers of an unfinished one (`scratch`). `None`: not ours, never
+/// touched.
+fn cache_kind(name: &str, known: &std::collections::HashSet<String>) -> Option<&'static str> {
+    if known.contains(name) {
+        return Some("downloads");
+    }
+    let base = name.strip_suffix(".tmp").unwrap_or(name);
+    for (suffix, kind) in [
+        (".partial.json", "scratch"),
+        (".partial", "scratch"),
+        (".import", "scratch"),
+        (".ok", "ok"),
+    ] {
+        if let Some(stem) = base.strip_suffix(suffix) {
+            if known.contains(stem) {
+                return Some(if base != name { "scratch" } else { kind });
             }
+        }
+    }
+    if base != name && known.contains(base) {
+        return Some("scratch");
+    }
+    // Earlier engines named some scratch files `<stem>.import` / `.tmp`.
+    let legacy = known.iter().any(|k| {
+        let p = Path::new(k);
+        p.with_extension("import").as_os_str() == name
+            || p.with_extension("tmp").as_os_str() == name
+    });
+    legacy.then_some("scratch")
+}
+
+/// What `clean` could remove from a workspace: files in `cache/` the
+/// catalog names (and their leftovers), and the folders of jobs named
+/// `<device>-<profile>` for catalog devices and profiles. Nothing else in
+/// the workspace is ever listed or removed.
+pub fn cleanable(cat: &Catalog, workspace: &Path) -> Vec<CleanItem> {
+    let mut items = Vec::new();
+    let known = known_files(cat);
+    let mut cache: Vec<PathBuf> = fs::read_dir(workspace.join("cache"))
+        .into_iter()
+        .flatten()
+        .flatten()
+        .map(|e| e.path())
+        .collect();
+    cache.sort();
+    for p in cache {
+        let name = p
+            .file_name()
+            .unwrap_or_default()
+            .to_string_lossy()
+            .to_string();
+        let kind = match cache_kind(&name, &known) {
+            Some("ok") | None => continue,
+            Some(k) => k,
+        };
+        if fs::symlink_metadata(&p).is_ok_and(|m| m.is_dir()) {
+            continue;
+        }
+        items.push(CleanItem {
+            kind,
+            bytes: dir_size(&p),
+            path: p,
+            info: None,
+        });
+    }
+    let mut jobs = Vec::new();
+    for d in &cat.devices {
+        for p in &cat.profiles {
+            let j = job_dir(workspace, &d.id, &p.id);
+            if fs::symlink_metadata(&j).is_ok_and(|m| m.is_dir()) {
+                jobs.push(j);
+            }
+        }
+    }
+    jobs.sort();
+    for j in jobs {
+        for (sub, kind) in [("work", "scratch"), ("flash", "scratch"), ("out", "image")] {
+            let p = j.join(sub);
+            if !p.exists() {
+                continue;
+            }
+            let mut bytes = dir_size(&p);
+            if sub == "flash" {
+                bytes -= dir_size(&p.join("backup")).min(bytes);
+            }
+            if bytes > 0 {
+                items.push(CleanItem {
+                    kind,
+                    path: p,
+                    bytes,
+                    info: None,
+                });
+            }
+        }
+        // Each run's backups on their own, so the app can keep some.
+        let mut runs: Vec<PathBuf> = fs::read_dir(j.join("backup"))
+            .into_iter()
+            .flatten()
+            .flatten()
+            .map(|e| e.path())
+            .collect();
+        runs.sort();
+        // Backups an earlier engine version left in the scratch folder:
+        // never scratch (`clean --scratch` moves them to backup/).
+        let legacy = j.join("flash").join("backup");
+        if legacy.is_dir() {
+            runs.push(legacy);
+        }
+        for p in runs {
+            let bytes = dir_size(&p);
+            if bytes == 0 {
+                continue;
+            }
+            let info = fs::read(p.join(crate::flash::DEVICE_INFO))
+                .ok()
+                .and_then(|b| serde_json::from_slice(&b).ok());
+            items.push(CleanItem {
+                kind: "backup",
+                path: p,
+                bytes,
+                info,
+            });
         }
     }
     items
 }
 
-/// Removes the chosen kinds; returns bytes freed. Backups are removed only
-/// when `backup` is asked for: removing a job's scratch folder first moves
-/// any backup left in it to the job's backup folder.
-pub fn clean(workspace: &Path, kinds: &[&str]) -> Result<u64> {
+/// Lexically the same path (`.`/`..` and separators normalised).
+fn same_path(a: &Path, b: &Path) -> bool {
+    fn norm(p: &Path) -> PathBuf {
+        let p = fs::canonicalize(p).unwrap_or_else(|_| p.to_path_buf());
+        let mut out = PathBuf::new();
+        for c in p.components() {
+            match c {
+                std::path::Component::CurDir => {}
+                std::path::Component::ParentDir => {
+                    out.pop();
+                }
+                c => out.push(c),
+            }
+        }
+        out
+    }
+    norm(a) == norm(b)
+}
+
+/// Removes the chosen kinds, and the items listed in `paths` (each must be
+/// an item [`cleanable`] lists; otherwise nothing is removed and the
+/// command fails with `bad_input`). Returns bytes freed. Backups are
+/// removed only when `backup` is asked for or their path is listed:
+/// removing a job's scratch folder first moves any backup left in it to
+/// the job's backup folder. Holds the workspace lock throughout.
+pub fn clean(cat: &Catalog, workspace: &Path, kinds: &[&str], paths: &[PathBuf]) -> Result<u64> {
+    // Nothing to clean (and no lock file to create) in a missing workspace.
+    let _lock = if workspace.is_dir() || !paths.is_empty() {
+        Some(lock_workspace(workspace)?)
+    } else {
+        None
+    };
+    let items = cleanable(cat, workspace);
+    for p in paths {
+        if !items.iter().any(|it| same_path(&it.path, p)) {
+            return Err(EngineError::new(
+                Code::BadInput,
+                format!(
+                    "{} isn't something clean can remove (see clean --dry-run); nothing was removed",
+                    p.display()
+                ),
+            )
+            .into());
+        }
+    }
     let mut freed = 0;
-    for it in cleanable(workspace) {
-        if !kinds.contains(&it.kind) || !it.path.exists() {
+    for it in items {
+        let listed = paths.iter().any(|p| same_path(&it.path, p));
+        if !(kinds.contains(&it.kind) || listed) || !it.path.exists() {
             continue;
         }
         if it.kind == "scratch" && it.path.file_name().is_some_and(|n| n == "flash") {
@@ -685,7 +1049,7 @@ pub fn clean(workspace: &Path, kinds: &[&str]) -> Result<u64> {
                 crate::flash::rescue_old_backups(job)?;
             }
         }
-        if it.path.is_dir() {
+        if fs::symlink_metadata(&it.path)?.is_dir() {
             fs::remove_dir_all(&it.path)?
         } else {
             fs::remove_file(&it.path)?
@@ -694,9 +1058,21 @@ pub fn clean(workspace: &Path, kinds: &[&str]) -> Result<u64> {
             let marker = PathBuf::from(format!("{}.ok", it.path.display()));
             let _ = fs::remove_file(marker);
         }
+        if it.kind == "scratch" {
+            // A partial download goes with what's recorded about it.
+            let side = PathBuf::from(format!("{}.json", it.path.display()));
+            if it.path.extension().is_some_and(|x| x == "partial") {
+                let _ = fs::remove_file(side);
+            }
+        }
         if it.kind == "image" {
             // The job can no longer be flashed.
             let _ = fs::remove_file(it.path.parent().unwrap().join("job.json"));
+        }
+        if it.kind == "backup" {
+            if let Some(parent) = it.path.parent() {
+                let _ = fs::remove_dir(parent); // only if now empty
+            }
         }
         freed += it.bytes;
     }
@@ -801,7 +1177,7 @@ fn run_op(
                     ),
                 };
             sup.replace(partition, &mut reader, size, &mut |d, t| {
-                rep.progress(&format!("Writing {partition}"), d, t)
+                rep.progress_for("Writing {partition}", partition, d, t)
             })?;
             let got = hex::encode(reader.hasher.finalize());
             if reader.count != size || got != want {

@@ -12,3 +12,6 @@ repository = "https://github.com/KristopherTadlock/thimsy-os"
 lto = "thin"
 codegen-units = 4
 strip = true
+# Offsets come from untrusted firmware and archives: overflow is a bug to
+# stop at, never to wrap.
+overflow-checks = true

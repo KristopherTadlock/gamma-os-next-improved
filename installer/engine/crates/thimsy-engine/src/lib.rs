@@ -8,8 +8,10 @@
 pub mod archive;
 pub mod bundle;
 pub mod catalog;
+pub mod cli;
 pub mod delta;
 pub mod detect;
+pub mod disk;
 pub mod drivers;
 pub mod error;
 pub mod events;

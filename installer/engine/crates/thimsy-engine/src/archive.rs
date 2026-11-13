@@ -31,9 +31,9 @@ impl Span {
 /// The ranges of `spans` (laid end to end) covering `[start, start + len)`.
 pub fn sub_spans(spans: &[Span], start: u64, len: u64) -> Vec<Span> {
     let mut out = Vec::new();
-    let (mut at, end) = (0u64, start + len);
+    let (mut at, end) = (0u64, start.saturating_add(len));
     for s in spans {
-        let (a, b) = (at.max(start), (at + s.len).min(end));
+        let (a, b) = (at.max(start), at.saturating_add(s.len).min(end));
         if a < b {
             out.push(Span {
                 path: s.path.clone(),
@@ -41,7 +41,7 @@ pub fn sub_spans(spans: &[Span], start: u64, len: u64) -> Vec<Span> {
                 len: b - a,
             });
         }
-        at += s.len;
+        at = at.saturating_add(s.len);
     }
     out
 }
@@ -69,7 +69,7 @@ impl MultiVolume {
         for s in spans {
             let f = File::open(&s.path).with_context(|| format!("opening {}", s.path.display()))?;
             starts.push(len);
-            len += s.len;
+            len = crate::util::add(len, s.len)?;
             parts.push((f, s.offset, s.len));
         }
         if parts.is_empty() {

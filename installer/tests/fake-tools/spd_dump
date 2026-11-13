@@ -10,6 +10,8 @@ The partition table is the one in the PAC config of the job being flashed
 format; FAKE_SPD_PARTS=FILE hands out FILE instead (a different device).
 FAKE_SPD_HASH=1 also logs "sha256 PARTITION HEX" for each written file.
 FAKE_SPD_WAIT=SECONDS waits that long for the "device" before connecting.
+read_part returns what a device running the job's firmware holds: the
+partition's PAC entry (zeros past its end, or zeros when it has none).
 
 Faults, like the real tool's:
 FAKE_SPD_SHORT_WRITE=PART: the device stops answering halfway through
@@ -18,7 +20,11 @@ FAKE_SPD_SHORT_WRITE=PART: the device stops answering halfway through
 FAKE_SPD_SHORT_READ=PART: reading PART stops halfway (a short packet ends
   dump_partition() without an error line); the backup file is half size.
 FAKE_SPD_NO_PROMPT=1: an old or forked spd_dump that never asks before
-  writing or erasing."""
+  writing or erasing.
+FAKE_SPD_UPDATE_MISMATCH=PART: the device runs another base: reading PART
+  returns different bytes.
+FAKE_SPD_NO_DEVICE=1: the device never shows up: like the real tool when
+  its wait runs out, "libusb_open_device failed" and exit 1."""
 import hashlib, json, os, re, struct, sys, time
 
 def follow_launcher():
@@ -57,24 +63,51 @@ def confirm(what):
     if line.strip().lower() != "yes":
         sys.stderr.write("operation is not confirmed\n"); sys.exit(1)
 
-def pac_partitions():
-    """The <Partitions> table of the job's PAC, as (name, size) pairs."""
+def pac_entries():
+    """The job's PAC: its path, [(id, file, offset, size)] and the XML config."""
     image = json.load(open(os.path.join("..", "job.json")))["image"]
+    entries, xml = [], None
     with open(image, "rb") as f:
         h = f.read(2124)
         count, start = struct.unpack_from("<II", h, 1076)
         f.seek(start)
         table = f.read(count * 2580)
-        xml = None
         for i in range(count):
             e = table[i * 2580:(i + 1) * 2580]
+            pid = e[4:516].decode("utf-16-le").split("\0")[0]
             name = e[516:1028].decode("utf-16-le").split("\0")[0]
             size = struct.unpack_from("<I", e, 1540)[0] | (struct.unpack_from("<I", e, 1532)[0] << 32)
             off = struct.unpack_from("<I", e, 1552)[0] | (struct.unpack_from("<I", e, 1536)[0] << 32)
+            entries.append((pid, name, off, size))
             if size and name.lower().endswith(".xml"):
                 f.seek(off); xml = f.read(size).decode("utf-8", "replace")
+    return image, entries, xml
+
+def pac_partitions():
+    """The <Partitions> table of the job's PAC, as (name, size) pairs."""
+    xml = pac_entries()[2]
     body = xml.split("<Partitions>", 1)[1].split("</Partitions>", 1)[0]
     return re.findall(r'<Partition id="([^"]+)" size="([^"]+)"', body)
+
+def read_device(name, size, out):
+    """Writes `size` bytes of partition `name` as this firmware left it."""
+    image, entries, xml = pac_entries()
+    ids = []
+    for f in re.findall(r"<File[^>]*>(.*?)</File>", xml, re.S):
+        i, b = re.search(r"<ID>([^<]*)</ID>", f), re.search(r'<Block id="([^"]+)"', f)
+        if i and b and b.group(1).lower() == name.lower():
+            ids.append(i.group(1))
+    data = b""
+    for pid, _, off, esize in entries:
+        if esize and pid in ids:
+            with open(image, "rb") as f:
+                f.seek(off); data = f.read(min(esize, size))
+            break
+    if data and os.environ.get("FAKE_SPD_UPDATE_MISMATCH", "").lower() == name.lower():
+        data = bytes([data[0] ^ 0xFF]) + data[1:]
+    with open(out, "wb") as o:
+        o.write(data)
+        o.truncate(size)  # sparse past the image
 
 def partition_list(out):
     if os.environ.get("FAKE_SPD_PARTS"):
@@ -102,6 +135,10 @@ while i < len(args):
         if not connected:
             log_line("Waiting for connection (300s)")
             time.sleep(float(os.environ.get("FAKE_SPD_WAIT", "0")))
+            if os.environ.get("FAKE_SPD_NO_DEVICE"):
+                log.write("no device\n")
+                log_line("libusb_open_device failed")
+                sys.exit(1)
             log_line('BSL_REP_VER: "Spreadtrum Boot Block version 1.1"')
             connected = True
         log.write(f"fdl {f} {addr}\n"); log_line(f"FDL loaded from {f} at {addr}"); i += 3
@@ -114,7 +151,7 @@ while i < len(args):
         if not os.path.isdir(os.path.dirname(out) or "."): sys.exit("fopen(dump) failed")
         got = int(size, 0)
         if os.environ.get("FAKE_SPD_SHORT_READ") == name: got //= 2
-        with open(out, "wb") as o: o.truncate(got)  # sparse
+        read_device(name, got, out)
         log_line(f"dump_partition: {name}+0x0, target: {size}, read: 0x{got:x}")
         log.write(f"read_part {name} {size} {out}\n"); i += 5
     elif a == "write_part":

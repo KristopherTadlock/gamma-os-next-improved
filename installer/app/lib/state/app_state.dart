@@ -98,9 +98,24 @@ class SpaceProblem {
   final int need;
   final int free;
 
-  /// The engine's own message (flash), when given.
+  /// What to tell the user (flash): the engine's hint (translated), else
+  /// its message.
   final String? message;
-  const SpaceProblem(this.kind, {this.need = 0, this.free = 0, this.message});
+
+  /// The engine's own (English) message, shown under "Details".
+  final String? details;
+
+  /// The space check's `reason` (`not_enough_space`, `fat32`,
+  /// `probe_failed`), when it gave one.
+  final String? reason;
+  const SpaceProblem(
+    this.kind, {
+    this.need = 0,
+    this.free = 0,
+    this.message,
+    this.details,
+    this.reason,
+  });
 }
 
 /// The drive part of [path] for messages: `C:` on Windows, else the path.
@@ -236,7 +251,14 @@ class AppState extends ChangeNotifier {
   String? journeyId;
   Journey? get journey => journeyId == null ? null : plan?.journeys[journeyId];
 
-  /// Modes Review offers for the chosen journey, default first.
+  /// The mode Review starts with: a full install whenever the journey
+  /// allows one. An update only works on a device that already runs a
+  /// matching base, which the app can't see, so it's never the default.
+  FlashMode get defaultMode => allowedModes.contains(FlashMode.full)
+      ? FlashMode.full
+      : allowedModes.first;
+
+  /// Modes Review offers for the chosen journey, in the journey's order.
   List<FlashMode> get allowedModes {
     final modes = journey?.modes ?? const ['full'];
     final out = [
@@ -310,6 +332,14 @@ class AppState extends ChangeNotifier {
   String? driverDetail;
   bool driverBusy = false;
 
+  /// Why the last driver (or Linux device rule) install failed; the notice
+  /// stays up with its hint. Cleared by the next check.
+  ErrorEvent? driverError;
+
+  /// Whether this computer needs a USB driver (Windows) or device rule
+  /// (Linux) check; macOS never does.
+  bool get checksDriver => host == 'windows' || host == 'linux';
+
   /// Bumped by each [checkDriver] and device change: only the latest check
   /// for the device chosen now writes the driver status.
   int _driverGen = 0;
@@ -347,15 +377,45 @@ class AppState extends ChangeNotifier {
       flashRun.stage != 'check';
 
   // ----------------------------------------------------------------- clean
+  /// What `clean --dry-run` listed for the workspace.
   List<CleanItem>? cleanItems;
+
+  /// Kinds Done's "Free up space" removes (backups are never among them:
+  /// they're deleted one by one after their own confirmation).
   final Map<String, bool> cleanChoice = {
     'scratch': true,
     'downloads': true,
     'image': false,
-    'backup': false,
   };
   bool cleanBusy = false;
+
+  /// Bytes the last clean freed; null until one worked.
   int? freedBytes;
+
+  /// Why the last clean failed; null when it worked.
+  ErrorEvent? cleanError;
+
+  /// The job folder name a build for the current selection uses.
+  String? get _selectedJobName =>
+      deviceId == null || profileId == null ? null : '$deviceId-$profileId';
+
+  /// What "Free up space…" may offer: scratch, downloads and images, never
+  /// backups. With [keepCurrentImage] (freeing room to build or flash),
+  /// the image of the current selection is kept: only other jobs' images.
+  List<CleanItem> freeableItems({bool keepCurrentImage = true}) => [
+    for (final i in cleanItems ?? const <CleanItem>[])
+      if (i.kind == 'scratch' ||
+          i.kind == 'downloads' ||
+          (i.kind == 'image' &&
+              !(keepCurrentImage && i.jobName == _selectedJobName)))
+        i,
+  ];
+
+  /// The workspace's backup run folders (from the dry run).
+  List<CleanItem> get backupItems => [
+    for (final i in cleanItems ?? const <CleanItem>[])
+      if (i.kind == 'backup') i,
+  ];
 
   // ------------------------------------------------------------ first boot
   final Set<int> firstBootChecks = {};
@@ -393,6 +453,7 @@ class AppState extends ChangeNotifier {
     exportOnly = false;
     detected = const [];
     driverStatus = driverDetail = null;
+    driverError = null;
     driverBusy = false;
     _driverGen++;
     final done = _resetFrom(WizardStep.profile);
@@ -480,7 +541,7 @@ class AppState extends ChangeNotifier {
     if (busy || plan?.journeys[id] == null) return;
     if (journeyId != id) {
       journeyId = id;
-      flashMode = allowedModes.first;
+      flashMode = defaultMode;
       unlockConfirmed = false;
       // The unlock step may now be needed, and the confirmed install no
       // longer matches: go through the steps after the journey again.
@@ -515,13 +576,18 @@ class AppState extends ChangeNotifier {
     spaceError = null;
     notifyListeners();
     try {
+      final picked = imports;
       final info = await engine.space(
         device: d,
         profile: p,
         workspace: w,
+        imports: picked,
         deleteDownloads: deleteDownloads,
       );
-      if (workspace.trim() == w && deviceId == d && profileId == p) {
+      if (workspace.trim() == w &&
+          deviceId == d &&
+          profileId == p &&
+          identical(imports, picked)) {
         space = info;
       }
       return info;
@@ -560,8 +626,19 @@ class AppState extends ChangeNotifier {
   /// Switches back to downloading. (Choosing files goes through
   /// [setImportFiles].)
   void useDownload() {
+    if (imageSource == ImageSource.download) return;
     imageSource = ImageSource.download;
     notifyListeners();
+    _recheckSpaceSoon();
+  }
+
+  /// The picked files changed what the build downloads: check again.
+  void _recheckSpaceSoon() {
+    if (workspace.trim().isEmpty || deviceId == null || profileId == null) {
+      return;
+    }
+    space = null;
+    checkSpace();
   }
 
   /// Uses [files] (one `.tar`, or its numbered parts) instead of
@@ -571,6 +648,7 @@ class AppState extends ChangeNotifier {
     importFiles = List.unmodifiable([...files]..sort());
     imageSource = ImageSource.files;
     notifyListeners();
+    _recheckSpaceSoon();
   }
 
   /// Checks free space first; never starts the build without room.
@@ -589,6 +667,7 @@ class AppState extends ChangeNotifier {
         SpaceProblemKind.build,
         need: info.need,
         free: info.free,
+        reason: info.reason,
       );
       notifyListeners();
       return;
@@ -684,7 +763,7 @@ class AppState extends ChangeNotifier {
         const ErrorEvent(code: 'detect_stopped', message: '', local: true),
       ),
     );
-    if (host == 'windows' && deviceId != null) checkDriver();
+    if (checksDriver && deviceId != null) checkDriver();
   }
 
   /// "Try again" after the watch ended by itself.
@@ -714,19 +793,25 @@ class AppState extends ChangeNotifier {
     final gen = ++_driverGen;
     bool current() => gen == _driverGen && deviceId == d;
     driverBusy = true;
+    driverError = null;
     notifyListeners();
     String? status, detail;
+    ErrorEvent? error;
     try {
       final r = await engine.drivers(device: d, install: install);
       status = r.str('status');
       detail = r.str('detail');
     } on EngineException catch (e) {
+      // A failed check or install (declined UAC or password, no pkexec):
+      // the notice stays, with the engine's hint.
       status = 'missing';
       detail = e.event.hint ?? e.event.message;
+      error = e.event;
     } finally {
       if (current()) {
         driverStatus = status;
         driverDetail = detail;
+        driverError = error;
         driverBusy = false;
         notifyListeners();
       }
@@ -803,6 +888,17 @@ class AppState extends ChangeNotifier {
     );
   }
 
+  /// "Switch to full install" after the engine refused an update
+  /// (`full_install_needed`): Review again, in full mode, with a new
+  /// confirmation. Nothing is started here.
+  void switchToFullInstall() {
+    if (busy || !allowedModes.contains(FlashMode.full)) return;
+    flashMode = FlashMode.full;
+    _invalidateFlash();
+    goTo(WizardStep.review);
+    notifyListeners();
+  }
+
   /// The build, journey or mode changed: the confirmed install and its
   /// result no longer apply, and Review must be passed again.
   void _invalidateFlash([WizardStep back = WizardStep.review]) {
@@ -829,43 +925,88 @@ class AppState extends ChangeNotifier {
     ]);
   }
 
-  Future<void> loadCleanItems() async {
+  /// Lists what can be removed (`clean --dry-run`). Clears the last
+  /// clean's result unless [keepResult].
+  Future<void> loadCleanItems({bool keepResult = false}) async {
     if (workspace.trim().isEmpty) return;
+    if (!keepResult) {
+      freedBytes = null;
+      cleanError = null;
+    }
     try {
       final r = await engine.clean(workspace: workspace.trim(), dryRun: true);
       cleanItems = CleanItem.listFrom(r);
-    } on EngineException {
+    } on EngineException catch (e) {
       cleanItems = const [];
+      cleanError ??= e.event;
     }
     notifyListeners();
   }
 
   void setCleanChoice(String kind, bool v) {
+    if (!cleanChoice.containsKey(kind)) return;
     cleanChoice[kind] = v;
     notifyListeners();
   }
 
-  Future<void> runClean() async {
-    if (cleanBusy || workspace.trim().isEmpty) return;
+  /// Removes exactly [paths] (items from the dry run, `clean --path`), then
+  /// lists again. True when the engine removed them; otherwise
+  /// [cleanError] says why and [freedBytes] is null.
+  Future<bool> cleanPaths(List<String> paths) async {
+    if (cleanBusy || workspace.trim().isEmpty || paths.isEmpty) return false;
     cleanBusy = true;
+    cleanError = null;
+    freedBytes = null;
     notifyListeners();
+    var ok = false;
     try {
-      final r = await engine.clean(
-        workspace: workspace.trim(),
-        downloads: cleanChoice['downloads'] ?? false,
-        image: cleanChoice['image'] ?? false,
-        scratch: cleanChoice['scratch'] ?? false,
-        backup: cleanChoice['backup'] ?? false,
-      );
+      final r = await engine.clean(workspace: workspace.trim(), paths: paths);
       final freed = r.data['freed'];
       freedBytes = freed is num ? freed.toInt() : 0;
-    } on EngineException {
-      freedBytes = 0;
+      ok = true;
+    } on EngineException catch (e) {
+      cleanError = e.event;
     } finally {
       cleanBusy = false;
       notifyListeners();
     }
-    await loadCleanItems();
+    await loadCleanItems(keepResult: true);
+    return ok;
+  }
+
+  /// Done's "Free up": the items of the chosen kinds (never backups).
+  Future<bool> runClean() => cleanPaths([
+    for (final i in freeableItems(keepCurrentImage: false))
+      if (cleanChoice[i.kind] ?? false) i.path,
+  ]);
+
+  /// Deletes the backup run folders the user picked and confirmed; any
+  /// other path is ignored.
+  Future<bool> deleteBackups(Iterable<String> paths) {
+    final backups = {for (final b in backupItems) b.path};
+    return cleanPaths([
+      for (final p in paths)
+        if (backups.contains(p)) p,
+    ]);
+  }
+
+  /// "Copy details": the engine's stderr log and [run]'s log.
+  String diagnostics([RunState? run]) {
+    final b = StringBuffer()
+      ..writeln('Thimsy Installer diagnostics')
+      ..writeln('device: ${deviceId ?? '-'}  profile: ${profileId ?? '-'}')
+      ..writeln('host: $host  language: ${engine.language}');
+    if (run != null) {
+      b.writeln('\n== run log');
+      for (final line in run.log) {
+        b.writeln(line);
+      }
+    }
+    b.writeln('\n== engine log (stderr)');
+    for (final line in engine.stderrLog) {
+      b.writeln(line);
+    }
+    return b.toString();
   }
 
   void toggleFirstBoot(int i) {
@@ -895,7 +1036,8 @@ class AppState extends ChangeNotifier {
             identical(state, flashRun)
                 ? SpaceProblemKind.flash
                 : SpaceProblemKind.build,
-            message: e.message,
+            message: e.hint ?? e.message,
+            details: e.message,
           );
         }
         notifyListeners();

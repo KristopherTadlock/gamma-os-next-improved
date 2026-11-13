@@ -126,14 +126,14 @@ impl<'f> Super<'f> {
     }
 
     fn read(&mut self, off: u64, n: usize) -> Result<Vec<u8>> {
-        if off + n as u64 > self.len {
+        if util::add(off, n as u64)? > self.len {
             bail!("read past the end of the super image");
         }
         util::read_at(self.file, self.base + off, n)
     }
 
     fn write(&mut self, off: u64, data: &[u8]) -> Result<()> {
-        if off + data.len() as u64 > self.len {
+        if util::add(off, data.len() as u64)? > self.len {
             bail!("write past the end of the super image");
         }
         util::write_at(self.file, self.base + off, data)
@@ -160,7 +160,10 @@ impl<'f> Super<'f> {
         }
         let header = raw[..header_size].to_vec();
         let tables_size = util::u32_at(&header, 44) as usize;
-        if header_size + tables_size > raw.len() {
+        if header_size
+            .checked_add(tables_size)
+            .is_none_or(|end| end > raw.len())
+        {
             bail!("super metadata tables overflow their slot");
         }
         let tables = &raw[header_size..header_size + tables_size];
@@ -339,20 +342,23 @@ impl<'f> Super<'f> {
         for p in &meta.partitions {
             let first = p.first_extent as usize;
             let count = p.extent_count as usize;
-            let rows = meta
-                .extents
-                .get(first..first + count)
+            let rows = first
+                .checked_add(count)
+                .and_then(|end| meta.extents.get(first..end))
                 .with_context(|| format!("{} points past the extent table", name_str(&p.name)))?;
             let mut exts = Vec::new();
             for e in rows {
                 if e.target_type != 0 {
                     bail!("{} has non-linear extents", name_str(&p.name));
                 }
-                let ext = Extent {
-                    offset: e.target_data * SECTOR,
-                    len: e.sectors * SECTOR,
+                let (Some(offset), Some(len)) = (
+                    e.target_data.checked_mul(SECTOR),
+                    e.sectors.checked_mul(SECTOR),
+                ) else {
+                    bail!("{} has an extent out of range", name_str(&p.name));
                 };
-                if ext.offset + ext.len > self.len {
+                let ext = Extent { offset, len };
+                if util::add(ext.offset, ext.len)? > self.len {
                     bail!(
                         "{} extends past the end of the super image",
                         name_str(&p.name)
@@ -467,14 +473,20 @@ impl<'f> Super<'f> {
         if alignment == 0 {
             bail!("super device alignment is zero");
         }
-        let end = meta
-            .extents
-            .iter()
-            .map(|e| (e.target_data + e.sectors) * SECTOR)
-            .chain([d.first_logical_sector * SECTOR])
-            .max()
-            .unwrap();
-        let start = (end - align_offset).div_ceil(alignment) * alignment + align_offset;
+        let sector_end = |s: u64, n: u64| {
+            s.checked_add(n)
+                .and_then(|x| x.checked_mul(SECTOR))
+                .context("super extent out of range")
+        };
+        let mut end = sector_end(d.first_logical_sector, 0)?;
+        for e in &meta.extents {
+            end = end.max(sector_end(e.target_data, e.sectors)?);
+        }
+        let start = end
+            .checked_sub(align_offset)
+            .and_then(|x| x.div_ceil(alignment).checked_mul(alignment))
+            .and_then(|x| x.checked_add(align_offset))
+            .context("super alignment out of range")?;
         let mut size = d.size.saturating_sub(start);
         let max_group = meta
             .groups
@@ -482,13 +494,22 @@ impl<'f> Super<'f> {
             .context("bad group index")?
             .maximum_size;
         if max_group > 0 {
-            let in_group: u64 = meta
-                .partitions
-                .iter()
-                .filter(|p| p.group == group)
-                .flat_map(|p| (p.first_extent..p.first_extent + p.extent_count).map(|i| i as usize))
-                .map(|i| meta.extents[i].sectors * SECTOR)
-                .sum();
+            let mut in_group = 0u64;
+            for p in meta.partitions.iter().filter(|p| p.group == group) {
+                let end = p
+                    .first_extent
+                    .checked_add(p.extent_count)
+                    .context("super extent table out of range")?;
+                for i in p.first_extent..end {
+                    let e = meta
+                        .extents
+                        .get(i as usize)
+                        .context("super partition points past the extent table")?;
+                    in_group = sector_end(0, e.sectors)?
+                        .checked_add(in_group)
+                        .context("super group size out of range")?;
+                }
+            }
             size = size.min(max_group.saturating_sub(in_group));
         }
         if let Some(l) = limit {
@@ -498,7 +519,10 @@ impl<'f> Super<'f> {
         if size == 0 {
             bail!("no free space to grow {name}");
         }
-        let at = (first + count) as usize;
+        let at = first
+            .checked_add(count)
+            .filter(|&a| a as usize <= meta.extents.len())
+            .context("super partition points past the extent table")? as usize;
         meta.extents.insert(
             at,
             ExtentRow {
@@ -510,7 +534,7 @@ impl<'f> Super<'f> {
         );
         meta.partitions[index].extent_count = count + 1;
         for (i, p) in meta.partitions.iter_mut().enumerate() {
-            if i != index && p.first_extent >= first + count {
+            if i != index && p.first_extent as usize >= at {
                 p.first_extent += 1;
             }
         }

@@ -9,6 +9,7 @@ import '../l10n/app_localizations.dart';
 import '../l10n/languages.dart';
 import '../state/app_state.dart';
 import '../widgets/common.dart';
+import '../widgets/free_up_space.dart';
 import 'backup_screen.dart';
 import 'build_screen.dart';
 import 'connect_screen.dart';
@@ -120,22 +121,37 @@ class _HomeShellState extends State<HomeShell> {
     if (_dialogOpen) return;
     _dialogOpen = true;
     final l = AppLocalizations.of(context);
-    final message = p.kind == SpaceProblemKind.flash || p.need == 0
-        ? l.spaceFlashBody(p.message ?? l.spaceTitle)
-        : l.spaceBody(
-            formatBytes(p.need),
-            formatBytes(p.free),
-            driveOf(s.workspace),
-          );
-    final choice = await showSpaceDialog(
+    // FAT32 or an unreadable drive: freeing space doesn't help there.
+    final driveProblem = p.reason == 'fat32' || p.reason == 'probe_failed';
+    final message =
+        p.kind == SpaceProblemKind.build && (p.need > 0 || driveProblem)
+        ? spaceProblemText(
+            l,
+            reason: p.reason,
+            need: p.need,
+            free: p.free,
+            drive: driveOf(s.workspace),
+          )
+        : l.spaceFlashBody(p.message ?? l.spaceTitle);
+    var choice = await showSpaceDialog(
       context,
       message: message,
+      details: p.details,
       offerFolder: p.kind == SpaceProblemKind.build,
+      offerFreeUp: !driveProblem,
     );
+    if (choice == SpaceChoice.freeUp && mounted) {
+      // Still "open": the problem stays until the user chooses.
+      choice = await showFreeUpDialog(context)
+          ? SpaceChoice.checkAgain
+          : SpaceChoice.cancel;
+    }
     _dialogOpen = false;
     switch (choice) {
       case SpaceChoice.checkAgain:
         await s.recheckSpace();
+      case SpaceChoice.freeUp:
+        s.clearSpaceProblem();
       case SpaceChoice.chooseFolder:
         final dir = await pickDirectory();
         s.clearSpaceProblem();
@@ -202,7 +218,8 @@ class _HomeShellState extends State<HomeShell> {
       WidgetsBinding.instance.addPostFrameCallback((_) {
         if (!mounted) return;
         s.clearHostError();
-        _needsWindows(s, err.message);
+        // The catalog's (translated) text; the engine's message is English.
+        _needsWindows(s, needsWindowsText(l, s.device));
       });
     }
     final space = s.spaceProblem;

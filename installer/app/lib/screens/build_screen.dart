@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 import '../l10n/app_localizations.dart';
 import '../state/app_state.dart';
 import '../widgets/common.dart';
+import '../widgets/free_up_space.dart';
 
 class BuildScreen extends StatefulWidget {
   const BuildScreen({super.key});
@@ -46,6 +47,12 @@ class _BuildScreenState extends State<BuildScreen> {
       _workspace.text = dir;
       s.setWorkspace(dir);
     }
+  }
+
+  /// "Free up space…" on the not-enough-space notice; "Check again" there
+  /// checks the space again (the build starts only from Start build).
+  Future<void> _freeUp(AppState s) async {
+    if (await showFreeUpDialog(context)) await s.checkSpace();
   }
 
   /// Opens the file picker; nothing chosen keeps the current source.
@@ -96,7 +103,7 @@ class _BuildScreenState extends State<BuildScreen> {
         const SizedBox(height: 8),
         if (s.spaceChecking)
           Text(l.spaceChecking, key: const ValueKey('space-checking'))
-        else if (space != null)
+        else if (space != null && space.ok)
           Text(
             l.spaceSummary(
               formatBytes(space.need),
@@ -104,15 +111,32 @@ class _BuildScreenState extends State<BuildScreen> {
               driveOf(s.workspace),
             ),
             key: const ValueKey('space-summary'),
-            style: TextStyle(
-              color: space.ok ? null : Theme.of(context).colorScheme.error,
+          )
+        else if (space != null)
+          Notice(
+            key: const ValueKey('space-notice'),
+            icon: Icons.sd_storage,
+            title: l.spaceTitle,
+            body: spaceProblemText(
+              l,
+              reason: space.reason,
+              need: space.need,
+              free: space.free,
+              drive: driveOf(s.workspace),
             ),
+            color: Theme.of(context).colorScheme.error,
+            action: space.reason == 'fat32' || space.reason == 'probe_failed'
+                ? null
+                : OutlinedButton(
+                    key: const ValueKey('space-notice-free-up'),
+                    onPressed: run.running ? null : () => _freeUp(s),
+                    child: Text(l.freeUpSpaceButton),
+                  ),
           ),
         if (s.spaceError != null)
-          Text(
-            describeError(l, s.spaceError!),
+          ErrorNotice(
             key: const ValueKey('space-error'),
-            style: TextStyle(color: Theme.of(context).colorScheme.error),
+            error: errorEventOf(s.spaceError!),
           ),
         const SizedBox(height: 12),
         Text(l.imageSourceTitle, style: Theme.of(context).textTheme.titleSmall),

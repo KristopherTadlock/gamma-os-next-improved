@@ -2,6 +2,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:thimsy_installer/engine/engine.dart';
 import 'package:thimsy_installer/engine/fake_engine.dart';
+import 'package:thimsy_installer/l10n/app_localizations.dart';
 import 'package:thimsy_installer/main.dart';
 import 'package:thimsy_installer/state/app_state.dart';
 import 'package:thimsy_installer/widgets/common.dart';
@@ -253,21 +254,22 @@ void main() {
     await tap(tester, key('backed-up'));
     await next(tester);
     await next(tester); // connected (unlock skipped)
-    expect(find.text('All data on the device will be erased'), findsNothing);
     await tap(tester, key('install-button'));
     await tap(tester, key('confirm-install-yes'));
 
-    expect(engine.calls, contains('flash update'));
+    expect(engine.calls, contains('flash full'));
     expect(key('needs-windows-dialog'), findsOneWidget);
+    // The catalog's translated text, not the engine's English message.
     expect(
-      find.text('This computer can\'t write this device.'),
+      find.textContaining('can only be installed from a Windows PC'),
       findsOneWidget,
     );
+    expect(find.text('This computer can\'t write this device.'), findsNothing);
     await tap(tester, find.text('Build and export anyway'));
     expect(key('finish-on-windows'), findsOneWidget);
   });
 
-  testWidgets('returning journey skips unlock and updates by default', (
+  testWidgets('returning journey skips unlock and installs full by default', (
     tester,
   ) async {
     final engine = FakeEngine(step: Duration.zero);
@@ -282,31 +284,46 @@ void main() {
     expect(key('device-connected'), findsOneWidget);
     await next(tester);
 
+    // Update is offered with what it needs, but full is chosen: the app
+    // can't see whether the device runs a matching base.
     expect(find.text('Update (keep my data)'), findsOneWidget);
     expect(find.text('Reinstall (erase everything)'), findsOneWidget);
     expect(
       find.textContaining('GammaOS Next 1.2-based firmware'),
       findsOneWidget,
     );
-    expect(find.text('All data on the device will be erased'), findsNothing);
+    expect(find.text('All data on the device will be erased'), findsOneWidget);
+    expect(key('update-requirement'), findsNothing);
+    // Full is listed first.
+    expect(
+      tester.getTopLeft(key('mode-full')).dy,
+      lessThan(tester.getTopLeft(key('mode-update')).dy),
+    );
     await tap(tester, key('install-button'));
     await tap(tester, key('confirm-install-yes'));
-    expect(engine.calls, contains('flash update'));
+    expect(engine.calls, contains('flash full'));
+    expect(engine.calls, isNot(contains('flash update')));
     expect(key('install-complete'), findsOneWidget);
   });
 
-  testWidgets('returning journey can still reinstall (full)', (tester) async {
+  testWidgets('returning journey can still choose update', (tester) async {
     final engine = FakeEngine(step: Duration.zero);
     await start(tester, engine);
     await pickAndBuild(tester, 'anbernic-rg-cube', journey: 'returning');
     await tap(tester, key('backed-up'));
     await next(tester);
     await next(tester);
-    await tap(tester, key('mode-full'));
-    expect(find.text('All data on the device will be erased'), findsOneWidget);
+    await tap(tester, key('mode-update'));
+    expect(find.text('All data on the device will be erased'), findsNothing);
+    // What an update needs, and what happens otherwise, is spelled out.
+    expect(key('update-requirement'), findsOneWidget);
+    expect(
+      find.textContaining('nothing is written and you can switch'),
+      findsOneWidget,
+    );
     await tap(tester, key('install-button'));
     await tap(tester, key('confirm-install-yes'));
-    expect(engine.calls, contains('flash full'));
+    expect(engine.calls, contains('flash update'));
   });
 
   testWidgets('first-time journey shows the unlock step', (tester) async {
@@ -406,14 +423,26 @@ void main() {
       await tester.enterText(key('workspace-field'), 'D:\\thimsy');
       await tester.pumpAndSettle();
       // The check runs when the workspace changes and shows need / free.
-      expect(find.text('Needs 19.0 GB · 5.0 GB free on D:'), findsOneWidget);
+      expect(key('space-notice'), findsOneWidget);
+      expect(
+        find.descendant(
+          of: key('space-notice'),
+          matching: find.textContaining(
+            'needs 19.0 GB, 5.0 GB available on D:',
+          ),
+        ),
+        findsOneWidget,
+      );
 
       await tap(tester, key('start-build'));
       expect(key('space-dialog'), findsOneWidget);
       expect(
-        find.text(
-          'Not enough free space: needs 19.0 GB, 5.0 GB available on D:. '
-          'Choose another folder or free up space.',
+        find.descendant(
+          of: key('space-dialog'),
+          matching: find.text(
+            'Not enough free space: needs 19.0 GB, 5.0 GB available on D:. '
+            'Choose another folder or free up space.',
+          ),
         ),
         findsOneWidget,
       );
@@ -489,6 +518,13 @@ void main() {
       await tap(tester, key('install-button'));
       await tap(tester, key('confirm-install-yes'));
       expect(key('space-dialog'), findsOneWidget);
+      // The engine's (translated) hint; its English message under Details.
+      expect(
+        find.textContaining('Free up space on the workspace drive'),
+        findsOneWidget,
+      );
+      expect(find.textContaining('prepare the partitions'), findsNothing);
+      await tap(tester, key('error-details'));
       expect(find.textContaining('prepare the partitions'), findsOneWidget);
       expect(key('space-choose-folder'), findsNothing);
       await tap(tester, key('space-check-again'));
@@ -516,11 +552,21 @@ void main() {
       expect(checked('scratch'), isTrue);
       expect(checked('downloads'), isTrue);
       expect(checked('image'), isFalse);
-      expect(checked('backup'), isFalse);
+      // Backups are never a checkbox here: only "Delete backups…".
+      expect(key('clean-backup'), findsNothing);
+      expect(key('delete-backups'), findsOneWidget);
       expect(find.textContaining('calibration data'), findsWidgets);
       expect(find.text('Free up 8.6 GB'), findsOneWidget);
       await tap(tester, key('run-clean'));
-      expect(engine.calls, contains('clean downloads,scratch'));
+      // Only the listed items, by path.
+      expect(
+        engine.calls,
+        contains(
+          'clean --path /tmp/thimsy-ws/cache/RG_Cube_GammaOS_Next_Full_v1.2.7z.001'
+          ' --path /tmp/thimsy-ws/jobs/anbernic-rg-cube-medium/work',
+        ),
+      );
+      expect(engine.calls.where((c) => c.contains('backup')), isEmpty);
       expect(find.text('Freed 8.6 GB.'), findsOneWidget);
     });
   });
@@ -620,8 +666,15 @@ void main() {
       ),
       findsOneWidget,
     );
+    // The hint names the Copy details button next to it.
+    final fr = lookupAppLocalizations(const Locale('fr'));
+    expect(find.text(fr.errEngineCrashedHint), findsOneWidget);
+    expect(fr.errEngineCrashedHint, contains(fr.copyDetails));
     expect(
-      find.text('Enregistrez le journal de diagnostic et signalez-le.'),
+      find.descendant(
+        of: key('run-error'),
+        matching: find.text(fr.copyDetails),
+      ),
       findsOneWidget,
     );
   });

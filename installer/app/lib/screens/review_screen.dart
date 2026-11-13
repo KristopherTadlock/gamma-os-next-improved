@@ -6,6 +6,19 @@ import '../l10n/app_localizations.dart';
 import '../state/app_state.dart';
 import '../widgets/common.dart';
 
+/// Review's Partitions row for [mode]: what `flash --mode full` writes
+/// plus what it erases, or what `--mode update` writes. Engines without the
+/// per-mode fields send only `partitions`.
+String partitionsText(AppLocalizations l, Plan plan, FlashMode mode) {
+  final written = mode == FlashMode.full
+      ? plan.writtenByFull
+      : plan.writtenByUpdate;
+  final text = written.isEmpty ? '—' : written.join(', ');
+  final erases = mode == FlashMode.full ? plan.erasesFull : null;
+  if (erases == null || erases.isEmpty) return text;
+  return '$text\n${l.partitionsErases(erases.join(', '))}';
+}
+
 class ReviewScreen extends StatelessWidget {
   const ReviewScreen({super.key});
 
@@ -46,7 +59,8 @@ class ReviewScreen extends StatelessWidget {
     final s = context.watch<AppState>();
     final scheme = Theme.of(context).colorScheme;
     final plan = s.plan;
-    Widget row(String k, String v) => Padding(
+    Widget row(String k, String v, {Key? key}) => Padding(
+      key: key,
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -72,7 +86,11 @@ class ReviewScreen extends StatelessWidget {
         ),
         row(l.rowProfile, profileName),
         row(l.rowImage, s.image ?? '—'),
-        row(l.rowPartitions, plan?.partitions.join(', ') ?? '—'),
+        row(
+          l.rowPartitions,
+          plan == null ? '—' : partitionsText(l, plan, s.flashMode),
+          key: const ValueKey('row-partitions'),
+        ),
         if (s.detectError != null) ...[
           const SizedBox(height: 12),
           DetectErrorNotice(s),
@@ -84,7 +102,13 @@ class ReviewScreen extends StatelessWidget {
           onChanged: (m) => s.setFlashMode(m ?? s.allowedModes.first),
           child: Column(
             children: [
-              for (final m in s.allowedModes)
+              // The default (full) first; update is still offered, with
+              // what it needs.
+              for (final m in [
+                if (s.allowedModes.contains(FlashMode.full)) FlashMode.full,
+                for (final m in s.allowedModes)
+                  if (m != FlashMode.full) m,
+              ])
                 if (m == FlashMode.update)
                   RadioListTile<FlashMode>(
                     key: const ValueKey('mode-update'),
@@ -109,6 +133,16 @@ class ReviewScreen extends StatelessWidget {
             ],
           ),
         ),
+        if (s.flashMode == FlashMode.update)
+          Notice(
+            key: const ValueKey('update-requirement'),
+            icon: Icons.info_outline,
+            title: (s.journey?.updateNote?.isNotEmpty ?? false)
+                ? s.journey!.updateNote!
+                : l.journeyUpdateNote,
+            body: l.updateCheckBody,
+            color: scheme.tertiary,
+          ),
         if (s.flashMode == FlashMode.full && (plan?.wipesData ?? true))
           Notice(
             icon: Icons.warning_amber,

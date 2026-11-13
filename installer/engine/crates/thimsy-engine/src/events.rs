@@ -147,7 +147,27 @@ impl Reporter {
         });
     }
     /// Progress, rate-limited to ~5 events a second except the final one.
+    /// `label` is English source text, translated here.
     pub fn progress(&self, label: &str, done: u64, total: u64) {
+        self.progress_inner(|| crate::i18n::tr(label), done, total);
+    }
+
+    /// Progress for one file or partition: `label` (English source text with
+    /// a `{file}` or `{partition}` placeholder) is translated, then `name` is
+    /// filled in, so a few translated labels cover every file.
+    pub fn progress_for(&self, label: &str, name: &str, done: u64, total: u64) {
+        self.progress_inner(
+            || {
+                crate::i18n::tr(label)
+                    .replace("{file}", name)
+                    .replace("{partition}", name)
+            },
+            done,
+            total,
+        );
+    }
+
+    fn progress_inner(&self, label: impl FnOnce() -> String, done: u64, total: u64) {
         let now = Instant::now();
         {
             let mut last = self.last_progress.lock().unwrap();
@@ -162,7 +182,7 @@ impl Reporter {
         let stage = self.stage.lock().unwrap().clone();
         self.emit(Event::Progress {
             stage,
-            label: label.into(),
+            label: label(),
             done,
             total,
         });

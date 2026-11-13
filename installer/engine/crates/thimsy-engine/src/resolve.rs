@@ -130,7 +130,17 @@ pub struct Plan {
     pub excluded: Vec<Excluded>,
     pub settings: Vec<Setting>,
     pub download_bytes: u64,
+    /// Peak disk use of building and then flashing on an empty workspace,
+    /// keeping the downloads: the same figure `space` reports as `need`.
     pub disk_bytes: u64,
+    /// Device partitions a full install writes (recipe `writes_full`;
+    /// flashing refuses to start if the firmware would write others).
+    pub partitions_full: Vec<String>,
+    /// Device partitions an update writes (recipe `writes_update`).
+    pub partitions_update: Vec<String>,
+    /// Device partitions a full install erases.
+    pub erases_full: Vec<String>,
+    /// Same as `partitions_update` (older apps read this).
     pub partitions: Vec<String>,
     pub wipes_data: bool,
     pub journeys: Journeys,
@@ -171,14 +181,14 @@ fn items(list: &[ProfileItem], d: &Device, excluded: &mut Vec<Excluded>) -> Vec<
             if let Some(r) = &why {
                 excluded.push(Excluded {
                     id: it.id.clone(),
-                    name: it.name.clone(),
+                    name: tr(&it.name),
                     reason: r.clone(),
                 });
             }
             Item {
                 id: it.id.clone(),
-                name: it.name.clone(),
-                systems: it.systems.clone(),
+                name: tr(&it.name),
+                systems: it.systems.as_deref().map(tr),
                 included: why.is_none(),
                 reason: why,
             }
@@ -198,13 +208,30 @@ fn editable(p: &Profile, key: &str) -> bool {
 pub struct Space {
     /// Everything that gets downloaded.
     pub downloads: u64,
-    /// Peak during the build: downloads + the working image (the system
-    /// image is streamed into it, never unpacked to disk), + 5% headroom.
-    pub build_peak: u64,
     /// Extra space flashing needs (partitions unpacked from the image).
     pub flash_extra: u64,
     /// The finished image.
     pub image: u64,
+}
+
+impl Space {
+    /// (build need, flash need) in new bytes. `cached`: downloads already
+    /// in the cache; `in_place`: downloads the user's picked files stand in
+    /// for without being copied (a device pack used where it is, or the
+    /// official firmware's parts when its unpacked file was picked). The
+    /// build writes what's still missing into the cache plus the working
+    /// image (the system image is streamed into it), with 5% headroom;
+    /// flashing later unpacks partitions next to the finished image, and
+    /// the new cache files stay unless `delete_downloads`.
+    pub fn need(&self, cached: u64, in_place: u64, delete_downloads: bool) -> (u64, u64) {
+        let fresh = self
+            .downloads
+            .saturating_sub(cached.saturating_add(in_place));
+        let build = fresh + self.image;
+        let build_need = build + build / 20;
+        let kept = if delete_downloads { 0 } else { fresh };
+        (build_need, self.image + self.flash_extra + kept)
+    }
 }
 
 pub fn space(cat: &Catalog, d: &Device, profile: &str) -> Space {
@@ -222,19 +249,19 @@ pub fn space(cat: &Catalog, d: &Device, profile: &str) -> Space {
         }
         downloads += d.artifacts.iter().map(|a| a.size).sum::<u64>();
     }
-    let build_peak = downloads + image;
     Space {
         downloads,
-        build_peak: build_peak + build_peak / 20,
         flash_extra: image + image / 20,
         image,
     }
 }
 
-/// Kept for the plan summary: (download bytes, peak disk bytes).
+/// For the plan: (download bytes, peak disk bytes), the peak being exactly
+/// what `space` reports as `need` for an empty workspace keeping downloads.
 pub fn disk_estimate(cat: &Catalog, d: &Device, profile: &str) -> (u64, u64) {
     let s = space(cat, d, profile);
-    (s.downloads, s.build_peak.max(s.image + s.flash_extra))
+    let (build, flash) = s.need(0, 0, false);
+    (s.downloads, build.max(flash))
 }
 
 pub fn resolve(
@@ -331,11 +358,14 @@ pub fn resolve(
     let host_message = (install == InstallSupport::None).then(|| host_text(d, host));
 
     let (download_bytes, disk_bytes) = disk_estimate(cat, d, profile);
-    let partitions = d
-        .flash
-        .as_ref()
-        .map(|f| f.update.clone())
-        .unwrap_or_default();
+    let (partitions_full, partitions_update, erases_full) = match &d.flash {
+        Some(f) => (
+            f.writes_full.clone(),
+            f.writes_update.clone(),
+            f.erase_full.clone(),
+        ),
+        None => Default::default(),
+    };
     Ok(Plan {
         kind: "plan",
         device: d.id.clone(),
@@ -354,7 +384,7 @@ pub fn resolve(
             .iter()
             .map(|c| CoreOut {
                 id: c.id.clone(),
-                system: c.system.clone(),
+                system: tr(&c.system),
                 default: c.default,
             })
             .collect(),
@@ -362,7 +392,10 @@ pub fn resolve(
         settings: eff.into_values().collect(),
         download_bytes,
         disk_bytes,
-        partitions,
+        partitions: partitions_update.clone(),
+        partitions_full,
+        partitions_update,
+        erases_full,
         wipes_data: true,
         journeys: journeys(d),
         connect_first: d.flash.as_ref().is_none_or(|f| f.method != "spd"),

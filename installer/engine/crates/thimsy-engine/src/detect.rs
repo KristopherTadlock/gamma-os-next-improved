@@ -70,20 +70,63 @@ pub fn classify(cat: &Catalog, vid: u16, pid: u16, product: Option<&str>) -> Opt
         })
 }
 
+/// (vendor ID, product ID, product string) of a connected USB device.
+pub type UsbDevice = (u16, u16, Option<String>);
+
+/// Every USB device connected.
+fn list() -> Result<Vec<UsbDevice>> {
+    if let Some(fake) = test_devices() {
+        return Ok(fake);
+    }
+    Ok(nusb::list_devices()
+        .wait()?
+        .map(|i| {
+            (
+                i.vendor_id(),
+                i.product_id(),
+                i.product_string().map(str::to_string),
+            )
+        })
+        .collect())
+}
+
+/// (vendor ID, product ID) of every USB device connected, whether or not
+/// this user may open it.
+pub fn scan_ids() -> Result<Vec<(u16, u16)>> {
+    Ok(list()?.into_iter().map(|(v, p, _)| (v, p)).collect())
+}
+
 pub fn scan(cat: &Catalog) -> Result<Vec<Seen>> {
     let mut out = Vec::new();
-    for info in nusb::list_devices().wait()? {
-        if let Some(s) = classify(
-            cat,
-            info.vendor_id(),
-            info.product_id(),
-            info.product_string(),
-        ) {
+    for (vid, pid, product) in list()? {
+        if let Some(s) = classify(cat, vid, pid, product.as_deref()) {
             out.push(s);
         }
     }
     out.sort_by(|a, b| a.vidpid.cmp(&b.vidpid));
     Ok(out)
+}
+
+#[cfg(not(test))]
+fn test_devices() -> Option<Vec<UsbDevice>> {
+    None
+}
+
+// Kept last: `dev i18n-strings` stops reading a file at its first test-only
+// item.
+
+#[cfg(test)]
+fn test_devices() -> Option<Vec<UsbDevice>> {
+    test::DEVICES.with(|d| d.borrow().clone())
+}
+
+/// Test hook: the USB devices [`scan`] sees, per thread.
+#[cfg(test)]
+pub(crate) mod test {
+    use std::cell::RefCell;
+    thread_local! {
+        pub static DEVICES: RefCell<Option<Vec<super::UsbDevice>>> = const { RefCell::new(None) };
+    }
 }
 
 #[cfg(test)]

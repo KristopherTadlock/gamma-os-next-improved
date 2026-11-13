@@ -1214,13 +1214,15 @@ Code lives in `installer/` (see `installer/README.md`).
   parts. Once releases are public, the installer downloads the newest public
   release's archive itself; picking a downloaded archive is the second option.
 - **Tests:**
-  - 69 unit and CLI tests on synthetic firmware, including a full synthetic
+  - 118 engine unit and CLI tests and 217 app tests; `installer/tests/e2e.sh` runs 59 checks on real RG Cube firmware through a fake `spd_dump` (device check, partial writes, backups, cancel, update gate). `installer/docs/protocol-samples/` holds real engine output that both sides test against, including a full synthetic
     device build.
   - `installer/tests/e2e.sh` on real firmware with a fake `spd_dump`.
   - Flutter widget tests.
+- **Three review rounds** (engine, app, scripts and CI; then end-to-end contracts and security) found and fixed about 80 issues. The installer now checks the connected device's partition table before the first write, confirms each write on demand (a cancelled installer can't write), refuses updates over a non-matching base, keeps NV backups complete and untouchable, and never flashes a stale or tampered image.
 - **Not yet:**
-  - No real-device flash yet: the first one must be done on the RG Cube by a
-    tester.
+  - One tester flash on an RG Cube (test 1) succeeded. Whether a device still on
+    stock Anbernic firmware passes the partition check is unconfirmed; if not, the
+    installer refuses safely (repartitioning isn't supported yet).
   - Light and Medium system images aren't built.
   - No code signing or notarization.
   - Flatpak and AppImage are not packaged yet; Linux ships a tar.gz.

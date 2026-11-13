@@ -14,6 +14,11 @@ class ConnectScreen extends StatelessWidget {
     final s = context.watch<AppState>();
     final scheme = Theme.of(context).colorScheme;
     final match = s.matchedDevice;
+    // A failed install's English message, under "Details".
+    final driverError = s.driverError;
+    final driverDetails = driverError == null
+        ? null
+        : errorDetails(driverError);
     return StepPage(
       title: l.connectTitle,
       subtitle: l.connectSubtitle,
@@ -24,18 +29,29 @@ class ConnectScreen extends StatelessWidget {
           DetectErrorNotice(s),
           const SizedBox(height: 12),
         ],
-        if (s.host == 'windows' && s.driverStatus == 'missing')
+        // Windows: the WinUSB driver; Linux: a udev rule for USB access.
+        // macOS needs neither and never shows this.
+        if (s.checksDriver && s.driverStatus == 'missing')
           Notice(
+            key: const ValueKey('driver-notice'),
             icon: Icons.usb,
-            title: l.driverNeeded,
-            body: s.driverDetail,
-            color: scheme.tertiary,
+            title: s.host == 'linux' ? l.driverNeededLinux : l.driverNeeded,
+            body: [
+              if (s.host == 'linux') l.driverLinuxBody,
+              ?s.driverDetail,
+            ].where((t) => t.isNotEmpty).join('\n'),
+            color: s.driverError == null ? scheme.tertiary : scheme.error,
+            footer: driverDetails == null || driverDetails == s.driverDetail
+                ? null
+                : ErrorDetails(driverDetails),
             action: FilledButton(
               key: const ValueKey('install-driver'),
               onPressed: s.driverBusy
                   ? null
                   : () => s.checkDriver(install: true),
-              child: Text(l.installDriver),
+              child: Text(
+                s.host == 'linux' ? l.installButton : l.installDriver,
+              ),
             ),
           ),
         if (match == null && s.plan?.connectFirst == false)

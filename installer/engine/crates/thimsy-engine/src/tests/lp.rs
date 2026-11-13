@@ -158,3 +158,31 @@ fn rejects_corrupt_or_hostile_metadata() {
     let mut f = file_with(&bad, 0);
     assert!(Super::new(&mut f, 0, bad.len() as u64).metadata().is_err());
 }
+
+/// Extents and group tables from a crafted image: errors, never an
+/// overflow (which panics with overflow checks on, as release builds have).
+#[test]
+fn crafted_extents_are_errors_not_overflows() {
+    let img = build_super(16 << 20, 8 * MIB, &[("system_a", 1, 4), ("odm_a", 5, 1)]);
+    for (sectors, target) in [(8, u64::MAX / 256), (u64::MAX / 2, 8), (u64::MAX, u64::MAX)] {
+        let mut f = file_with(&img, 0);
+        let mut s = Super::new(&mut f, 0, img.len() as u64);
+        let mut m = s.metadata().unwrap();
+        m.extents[0].sectors = sectors;
+        m.extents[0].target_data = target;
+        s.write_metadata_for_test(&m).unwrap();
+        let started = std::time::Instant::now();
+        assert!(s.partitions().is_err(), "{sectors} {target}");
+        assert!(s.grow("odm_a", None).is_err(), "{sectors} {target}");
+        assert!(started.elapsed() < std::time::Duration::from_secs(1));
+    }
+    // A partition whose extents run past the table (or wrap around).
+    let mut f = file_with(&img, 0);
+    let mut s = Super::new(&mut f, 0, img.len() as u64);
+    let mut m = s.metadata().unwrap();
+    m.partitions[0].first_extent = u32::MAX;
+    m.partitions[0].extent_count = 2;
+    s.write_metadata_for_test(&m).unwrap();
+    assert!(s.partitions().is_err());
+    assert!(s.grow("odm_a", None).is_err());
+}

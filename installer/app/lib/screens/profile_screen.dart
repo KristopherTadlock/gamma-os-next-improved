@@ -20,11 +20,9 @@ class ProfileScreen extends StatelessWidget {
       subtitle: l.profileSubtitle,
       children: [
         if (s.planError != null)
-          Notice(
-            icon: Icons.error_outline,
+          ErrorNotice(
             title: l.planError,
-            body: describeError(l, s.planError!),
-            color: Theme.of(context).colorScheme.error,
+            error: errorEventOf(s.planError!),
             action: OutlinedButton(
               onPressed: s.loadPlans,
               child: Text(l.tryAgain),

@@ -23,13 +23,71 @@ class FakeEngine extends Engine {
   /// How many times `flash` fails with `not_enough_space` before working.
   int flashSpaceFailures;
 
-  /// What `clean` would remove, by kind.
-  final Map<String, int> cleanable = {
-    'downloads': 2680000000,
-    'image': 7722216910,
-    'backup': 68157440,
-    'scratch': 5900000000,
-  };
+  /// Errors the next flashes fail with (after their check stage), in order;
+  /// e.g. `full_install_needed` or `device_not_found`.
+  final List<ErrorEvent> flashErrors = [];
+
+  /// When set, `space` answers `ok: false` with this `reason` (`fat32`,
+  /// `probe_failed`).
+  String? spaceReason;
+
+  /// When set, `clean` (not a dry run) fails with this error.
+  ErrorEvent? cleanFailure;
+
+  /// When set, `drivers --install` fails with this error.
+  ErrorEvent? driversFailure;
+
+  /// Linux: whether the udev rule is missing (`drivers` says `missing`).
+  bool linuxRuleMissing;
+
+  /// Windows: whether WinUSB is installed (after `drivers --install`).
+  bool _driverInstalled = false;
+
+  /// Stand-in stderr log.
+  @override
+  final List<String> stderrLog = [];
+
+  /// What `clean` could remove, relative to the workspace: `kind`, `path`,
+  /// `bytes` (and for backups the run's device and time).
+  final List<Map<String, Object>> cleanable = <Map<String, Object>>[
+    {
+      'kind': 'downloads',
+      'path': 'cache/RG_Cube_GammaOS_Next_Full_v1.2.7z.001',
+      'bytes': 2680000000,
+    },
+    {
+      'kind': 'image',
+      'path': 'jobs/anbernic-rg-cube-medium/out',
+      'bytes': 7722216910,
+    },
+    {
+      'kind': 'image',
+      'path': 'jobs/anbernic-rg406h-medium/out',
+      'bytes': 6100000000,
+    },
+    {
+      'kind': 'backup',
+      'path': 'jobs/anbernic-rg-cube-medium/backup/run-20261110-081500',
+      'bytes': 68157440,
+    },
+    {
+      'kind': 'backup',
+      'path': 'jobs/anbernic-rg406h-medium/backup/run-20261001-193000',
+      'bytes': 68157440,
+      // The run folder's device.json, as the engine passes it on.
+      'info': {
+        'device': 'anbernic-rg406h',
+        'device_name': 'Anbernic RG406H',
+        'time': '2026-10-01T19:30:00Z',
+        'mode': 'full',
+      },
+    },
+    {
+      'kind': 'scratch',
+      'path': 'jobs/anbernic-rg-cube-medium/work',
+      'bytes': 5900000000,
+    },
+  ];
 
   static const buildNeed = 19000000000;
   static const flashNeed = 7722216910;
@@ -42,6 +100,7 @@ class FakeEngine extends Engine {
     this.freeBytes = 120000000000,
     this.flashSpaceFailures = 0,
     this.connectFirst = true,
+    this.linuxRuleMissing = false,
   });
 
   /// Whether plans say the device must be connected before installing
@@ -343,6 +402,9 @@ class FakeEngine extends Engine {
       'download_bytes': 4800000000,
       'disk_bytes': 19000000000,
       'partitions': ['super', 'vendor_boot_a', 'vendor_boot_b', 'logo'],
+      'partitions_full': ['super', 'vendor_boot_a', 'vendor_boot_b', 'logo'],
+      'partitions_update': ['super', 'logo'],
+      'erases_full': ['userdata', 'metadata'],
       'wipes_data': true,
       'connect_first': connectFirst,
       'journeys': {
@@ -425,18 +487,29 @@ class FakeEngine extends Engine {
     required String device,
     required String profile,
     required String workspace,
+    List<String> imports = const [],
     bool deleteDownloads = false,
   }) async {
-    calls.add('space $workspace${deleteDownloads ? ' delete' : ''}');
+    calls.add(
+      'space $workspace${deleteDownloads ? ' delete' : ''}'
+      '${imports.isEmpty ? '' : ' import ${imports.join(' ')}'}',
+    );
     await _tick();
-    final need = buildNeed - (deleteDownloads ? downloadsBytes : 0);
+    // Picked files aren't downloaded, so they aren't counted.
+    final downloads = imports.isEmpty ? downloadsBytes : 0;
+    final need = buildNeed - (deleteDownloads ? downloads : 0);
+    final reason = spaceReason;
+    if (reason != null) {
+      return SpaceInfo(need: 0, free: 0, ok: false, reason: reason);
+    }
     return SpaceInfo(
       need: need,
       free: freeBytes,
       ok: freeBytes >= need,
       buildNeed: need,
       flashNeed: flashNeed,
-      downloads: downloadsBytes,
+      downloads: downloads,
+      reason: freeBytes >= need ? null : 'not_enough_space',
     );
   }
 
@@ -448,6 +521,7 @@ class FakeEngine extends Engine {
     bool image = false,
     bool scratch = false,
     bool backup = false,
+    List<String> paths = const [],
   }) async {
     final kinds = {
       if (downloads) 'downloads',
@@ -455,9 +529,12 @@ class FakeEngine extends Engine {
       if (scratch) 'scratch',
       if (backup) 'backup',
     };
+    String full(Map<String, Object> i) => '$workspace/${i['path']}';
     calls.add(
-      'clean${dryRun ? ' dry' : ''} ${(kinds.toList()..sort()).join(',')}'
-          .trim(),
+      paths.isNotEmpty
+          ? 'clean${dryRun ? ' dry' : ''} --path ${paths.join(' --path ')}'
+          : 'clean${dryRun ? ' dry' : ''} ${(kinds.toList()..sort()).join(',')}'
+                .trim(),
     );
     await _tick();
     if (dryRun) {
@@ -465,16 +542,25 @@ class FakeEngine extends Engine {
         'type': 'result',
         'ok': true,
         'items': [
-          for (final e in cleanable.entries)
-            {'kind': e.key, 'path': '$workspace/${e.key}', 'bytes': e.value},
+          for (final i in cleanable) {...i, 'path': full(i)},
         ],
         'freed': 0,
       });
     }
-    var freed = 0;
-    for (final k in kinds) {
-      freed += cleanable.remove(k) ?? 0;
+    final failure = cleanFailure;
+    if (failure != null) {
+      // What ProcessEngine does with an error and `ok: false`.
+      throw EngineException(failure);
     }
+    var freed = 0;
+    cleanable.removeWhere((i) {
+      final chosen = paths.isNotEmpty
+          ? paths.contains(full(i))
+          : kinds.contains(i['kind']);
+      if (chosen) freed += i['bytes']! as int;
+      return chosen;
+    });
+    freeBytes += freed;
     return ResultEvent(true, {
       'type': 'result',
       'ok': true,
@@ -565,6 +651,16 @@ class FakeEngine extends Engine {
         ],
       );
     }
+    if (flashErrors.isNotEmpty) {
+      final error = flashErrors.removeAt(0);
+      return _script(
+        () => [
+          const StageEvent('check', 'Checking the image'),
+          error,
+          ResultEvent(false, {'type': 'result', 'ok': false}),
+        ],
+      );
+    }
     final hostErr = _hostError(device);
     if (hostErr != null) {
       return _script(
@@ -631,16 +727,27 @@ class FakeEngine extends Engine {
   }) async {
     calls.add('drivers $device${install ? ' install' : ''}');
     await _tick();
-    final status = host != 'windows'
-        ? 'not_required'
-        : (install ? 'ok' : 'missing');
+    if (install && host != 'macos') {
+      final failure = driversFailure;
+      // What ProcessEngine does with an error and `ok: false`.
+      if (failure != null) throw EngineException(failure);
+      if (host == 'windows') _driverInstalled = true;
+      if (host == 'linux') linuxRuleMissing = false;
+    }
+    final status = switch (host) {
+      'windows' => _driverInstalled ? 'ok' : 'missing',
+      'linux' => linuxRuleMissing ? 'missing' : 'ok',
+      _ => 'not_required',
+    };
     return ResultEvent(true, {
       'type': 'result',
       'ok': true,
       'status': status,
-      'detail': status == 'missing'
+      'detail': status != 'missing'
+          ? ''
+          : host == 'windows'
           ? 'WinUSB is not installed for 1782:4d00'
-          : '',
+          : 'No udev rule gives access to 1782:4d00',
     });
   }
 }

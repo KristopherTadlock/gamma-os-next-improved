@@ -62,8 +62,12 @@ pub struct SpdPlan {
     pub erases: Vec<String>,
     /// Device partitions (name, MiB) that must match the firmware's
     /// partition table before the first write: everything backed up,
-    /// written or erased that the table lists.
+    /// written, erased or read for `base` that the table lists.
     pub checks: Vec<(String, u64)>,
+    /// Update mode: images the update relies on but doesn't write (recipe
+    /// `update_check`), read back from the device (the PAC entry's size)
+    /// and compared with the PAC before the first write.
+    pub base: Vec<Write>,
 }
 
 /// Device-unique data (NV, calibration, factory test results) that is never
@@ -74,8 +78,18 @@ const PROTECTED: &[&str] = &["prodnv", "miscdata", "nvram", "nvdata", "persist",
 /// "yes" to confirm the "write partition" command: `, no newline).
 pub const SPD_PROMPT: &str = "Answer \"yes\"";
 
-/// Where `spd_dump partition_list` writes the device's table (in `flash/`).
+/// Where `spd_dump partition_list` writes the device's table (in the run's
+/// backup folder).
 pub const DEVICE_PARTITIONS: &str = "device-partitions.xml";
+
+/// Written next to each run's backups: which device and partition table
+/// they came from, and when.
+pub const DEVICE_INFO: &str = "device.json";
+
+/// File (in the run's backup folder) an update-mode base check reads.
+fn base_file(partition: &str) -> String {
+    format!("check-{}.img", partition.to_ascii_lowercase())
+}
 
 /// Records which image the files in `flash/` were unpacked from.
 const STAMP: &str = ".image-sha256";
@@ -212,12 +226,74 @@ pub fn spd_plan(d: &Device, p: &Pac, mode: Mode) -> Result<SpdPlan> {
     if checks.is_empty() {
         bail!("nothing this flash touches is in the PAC's partition table, so the device can't be checked");
     }
+    // What the plan showed the user is what gets written.
+    let shown = match mode {
+        Mode::Full => &f.writes_full,
+        Mode::Update => &f.writes_update,
+    };
+    let lower = |v: &mut Vec<String>| {
+        v.iter_mut().for_each(|n| *n = n.to_ascii_lowercase());
+        v.sort();
+    };
+    let mut want: Vec<String> = shown.clone();
+    let mut got: Vec<String> = writes.iter().map(|w| w.partition.clone()).collect();
+    lower(&mut want);
+    lower(&mut got);
+    if want != got {
+        let extra: Vec<&String> = got.iter().filter(|g| !want.contains(g)).collect();
+        let absent: Vec<&String> = want.iter().filter(|w| !got.contains(w)).collect();
+        bail!(
+            "the recipe's list of partitions to write ({}) doesn't match this firmware: it would also write {:?} and not write {:?}",
+            if mode == Mode::Full { "writes_full" } else { "writes_update" },
+            extra,
+            absent
+        );
+    }
+    // Update mode relies on what it doesn't write: read it back first.
+    let mut base = Vec::new();
+    if mode == Mode::Update {
+        for id in &f.update_check {
+            let mut found = false;
+            for (e, c) in pairs.iter().filter(|(e, _)| &e.id == id && e.size > 0) {
+                let block = c
+                    .block
+                    .as_ref()
+                    .with_context(|| format!("update_check entry {id} has no partition"))?;
+                let t = cfg.partition(block).with_context(|| {
+                    format!("update_check partition {block} isn't in the PAC's partition table")
+                })?;
+                if writes
+                    .iter()
+                    .any(|w| w.partition.eq_ignore_ascii_case(block))
+                {
+                    bail!("update_check names {id}, which the update writes");
+                }
+                if !checks.iter().any(|(n, _)| n.eq_ignore_ascii_case(block)) {
+                    checks.push((block.clone(), t.mib));
+                }
+                base.push(Write {
+                    entry: e.id.clone(),
+                    index: e.index,
+                    partition: block.clone(),
+                    bytes: e.size,
+                });
+                found = true;
+            }
+            if !found {
+                bail!("update_check names {id}, which isn't a PAC entry with data");
+            }
+        }
+        if base.is_empty() {
+            bail!("update mode has nothing to check the device's base with (update_check)");
+        }
+    }
     Ok(SpdPlan {
         fdl,
         backups,
         writes,
         erases,
         checks,
+        base,
     })
 }
 
@@ -227,9 +303,10 @@ fn file_for(name: &str) -> String {
     format!("{}.img", name.to_ascii_lowercase())
 }
 
-/// The `spd_dump` command line; backups are read into `backup_dir`
-/// (relative to the flash folder it runs in).
-pub fn spd_invocation(d: &Device, plan: &SpdPlan, backup_dir: &str) -> Invocation {
+/// The `spd_dump` command line. The device's partition table, the backups
+/// and the update-mode base images are read into `run_dir` (the run's
+/// backup folder, relative to the flash folder it runs in).
+pub fn spd_invocation(d: &Device, plan: &SpdPlan, run_dir: &str) -> Invocation {
     let f = d.flash.as_ref().unwrap();
     let mut args = vec!["--wait".to_string(), f.wait_seconds.to_string()];
     args.extend(["keep_charge".into(), "1".into()]);
@@ -237,14 +314,26 @@ pub fn spd_invocation(d: &Device, plan: &SpdPlan, backup_dir: &str) -> Invocatio
         args.extend(["fdl".into(), file_for(id), format!("0x{base:x}")]);
     }
     // Read before the first question, checked before it's answered.
-    args.extend(["partition_list".into(), DEVICE_PARTITIONS.into()]);
+    args.extend([
+        "partition_list".into(),
+        format!("{run_dir}/{DEVICE_PARTITIONS}"),
+    ]);
     for b in &plan.backups {
         args.extend([
             "read_part".into(),
             b.partition.clone(),
             "0".into(),
             format!("0x{:x}", b.bytes),
-            format!("{backup_dir}/{}.img", b.partition),
+            format!("{run_dir}/{}.img", b.partition),
+        ]);
+    }
+    for b in &plan.base {
+        args.extend([
+            "read_part".into(),
+            b.partition.clone(),
+            "0".into(),
+            format!("0x{:x}", b.bytes),
+            format!("{run_dir}/{}", base_file(&b.partition)),
         ]);
     }
     let mut confirms = 0;
@@ -317,9 +406,9 @@ fn wrong_layout(message: String) -> anyhow::Error {
         .into()
 }
 
-/// Reads and checks the table `spd_dump` saved in `flash_dir`.
-fn check_device_file(flash_dir: &Path, checks: &[(String, u64)]) -> Result<()> {
-    let path = flash_dir.join(DEVICE_PARTITIONS);
+/// Reads the table `spd_dump` saved in the run folder: (its text, parsed).
+fn read_device_table(run_dir: &Path) -> Result<(String, Vec<pac::Partition>)> {
+    let path = run_dir.join(DEVICE_PARTITIONS);
     let text = fs::read_to_string(&path).map_err(|e| {
         EngineError::new(
             Code::ToolFailed,
@@ -328,18 +417,117 @@ fn check_device_file(flash_dir: &Path, checks: &[(String, u64)]) -> Result<()> {
     })?;
     let table = pac::parse_partition_list(&text)
         .map_err(|e| wrong_layout(format!("{e:#}; nothing was written")))?;
-    check_device(checks, &table)
+    Ok((text, table))
 }
 
-/// The image must be exactly the one the build produced.
-fn verify_image(rec: &JobRecord, rep: &Reporter) -> Result<()> {
+/// Records next to the run's backups which device and partition table
+/// they came from, and when (so runs can be told apart).
+fn write_device_info(run_dir: &Path, d: &Device, mode: Mode, table: &str) -> Result<()> {
+    let info = serde_json::json!({
+        "device": d.id,
+        "device_name": d.name,
+        "partition_table_sha256": util::sha256_hex(table.as_bytes()),
+        "time": util::utc_iso(util::now_secs()),
+        "mode": if mode == Mode::Full { "full" } else { "update" },
+        "engine": crate::VERSION,
+    });
+    util::write_atomic(
+        &run_dir.join(DEVICE_INFO),
+        &serde_json::to_vec_pretty(&info)?,
+    )
+}
+
+/// Update mode: every image the update relies on must be on the device
+/// already, exactly as in the PAC; otherwise `full_install_needed`.
+fn check_base(plan: &SpdPlan, run_dir: &Path, entries: &[job::EntryHash]) -> Result<()> {
+    let mut differ = Vec::new();
+    for b in &plan.base {
+        let p = run_dir.join(base_file(&b.partition));
+        let len = fs::metadata(&p).map(|m| m.len()).unwrap_or(0);
+        if len != b.bytes {
+            return Err(EngineError::new(
+                Code::ToolFailed,
+                format!(
+                    "{} couldn't be read back from the device ({len} of {} bytes); nothing was written",
+                    b.partition, b.bytes
+                ),
+            )
+            .hint("Check the cable and that the device is still in its flashing mode, then try again.")
+            .into());
+        }
+        let want = entry_hash(entries, b.index)?;
+        if util::sha256_file(&p, |_, _| {})? != want {
+            differ.push(b.partition.clone());
+        }
+    }
+    if differ.is_empty() {
+        return Ok(());
+    }
+    Err(EngineError::new(
+        Code::FullInstallNeeded,
+        format!(
+            "the device's {} {} not match this firmware, so it doesn't run the base this update needs; nothing was written",
+            differ.join(", "),
+            if differ.len() == 1 { "does" } else { "do" }
+        ),
+    )
+    .hint("This device doesn't run a matching Thimsy or GammaOS build, so it can't be updated. Use a full install instead (it erases the device).")
+    .into())
+}
+
+fn entry_hash(entries: &[job::EntryHash], index: usize) -> Result<&str> {
+    entries
+        .iter()
+        .find(|e| e.index == index)
+        .map(|e| e.sha256.as_str())
+        .with_context(|| format!("no checksum for PAC entry {index}"))
+}
+
+/// spd_dump exited without the device ever answering.
+fn not_connected(d: &Device, host: Host, e: anyhow::Error) -> anyhow::Error {
+    let detail = format!("{e:#}");
+    let present = crate::detect::scan_ids()
+        .unwrap_or_default()
+        .iter()
+        .any(|(vid, pid)| {
+            d.identify
+                .usb
+                .iter()
+                .any(|u| u.vid == *vid && u.pid == *pid)
+        });
+    if host == Host::Linux && present {
+        return EngineError::new(
+            Code::DeviceNotFound,
+            format!("the device is connected in download mode, but this computer didn't let the installer open it ({detail}); nothing was written"),
+        )
+        .hint("Linux doesn't give the installer access to the device's USB connection yet. Set up USB access (it asks for your password once), then try again.")
+        .into();
+    }
+    let err = EngineError::new(
+        Code::DeviceNotFound,
+        format!("the device never answered in download mode ({detail}); nothing was written"),
+    );
+    if host == Host::Windows {
+        err.hint("Repeat the download-mode steps, then try again. If it still isn't found, check in Device Manager that Unisoc download mode uses the WinUSB driver.")
+            .into()
+    } else {
+        err.hint("Repeat the download-mode steps and keep holding the button until installing starts, then try again.")
+            .into()
+    }
+}
+
+/// The image must be exactly the one the build produced. Returns each data
+/// entry's sha256, read in the same pass.
+fn verify_image(rec: &JobRecord, rep: &Reporter) -> Result<Vec<job::EntryHash>> {
     let len = fs::metadata(&rec.image)
         .with_context(|| format!("{} is missing", rec.image.display()))?
         .len();
-    let sha = if len == rec.bytes {
-        util::sha256_file(&rec.image, |d, t| rep.progress("Checking the image", d, t))?
+    let (sha, entries) = if len == rec.bytes {
+        job::hash_image(&rec.image, &mut |d, t| {
+            rep.progress("Checking the image", d, t)
+        })?
     } else {
-        String::new()
+        (String::new(), Vec::new())
     };
     if len != rec.bytes || sha != rec.sha256 {
         return Err(EngineError::new(
@@ -354,7 +542,18 @@ fn verify_image(rec: &JobRecord, rep: &Reporter) -> Result<()> {
         .hint("Delete the workspace's jobs folder and build again; report it if it persists.")
         .into());
     }
-    Ok(())
+    if !rec.entries.is_empty() && rec.entries != entries {
+        return Err(EngineError::new(
+            Code::HashMismatch,
+            format!(
+                "the partition checksums in {}'s job.json don't match the image",
+                rec.image.display()
+            ),
+        )
+        .hint("Delete the workspace's jobs folder and build again; report it if it persists.")
+        .into());
+    }
+    Ok(entries)
 }
 
 /// Readies `flash/` for the image with this sha256: files unpacked from
@@ -657,11 +856,12 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
     let run_name = backup_run_name();
     let inv = spd_invocation(d, &plan, &format!("../backup/{run_name}"));
     rep.info(format!(
-        "{} partitions to write ({}), {} to back up, {} to erase",
+        "{} partitions to write ({}), {} to back up, {} to erase, {} to compare",
         plan.writes.len(),
         crate::util::human_bytes(plan.writes.iter().map(|w| w.bytes).sum()),
         plan.backups.len(),
-        plan.erases.len()
+        plan.erases.len(),
+        plan.base.len()
     ));
     if opts.dry_run {
         rep.info(format!("Dry run: {}", inv.display()));
@@ -670,11 +870,13 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
             commands: vec![inv.display()],
         });
     }
+    // One run at a time per workspace, for the whole flash.
+    let _lock = job::lock_workspace(&job::workspace_of(&opts.job))?;
     check_reference(cat, d, &rec)?;
-    verify_image(&rec, rep)?;
+    let entries = verify_image(&rec, rep)?;
 
     rep.stage("driver", "Checking the USB driver");
-    crate::drivers::ensure(d, opts.host, rep)?;
+    crate::drivers::ensure_for_flash(d, opts.host, rep)?;
 
     rep.stage("prepare", "Preparing the partitions");
     rescue_old_backups(&opts.job)?;
@@ -686,7 +888,7 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
         }
     }
     prepare_flash_dir(&flash_dir, &rec.sha256)?;
-    // Never mistake an earlier run's device table for this one's.
+    // An earlier engine read the device's table into the scratch folder.
     let _ = fs::remove_file(flash_dir.join(DEVICE_PARTITIONS));
     // (file name, PAC entry) for everything spd_dump reads.
     let mut files: Vec<(String, &pac::Entry)> = Vec::new();
@@ -701,31 +903,70 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
         .filter(|(n, e)| !fs::metadata(flash_dir.join(n)).is_ok_and(|m| m.len() == e.size))
         .map(|(_, e)| e.size)
         .sum();
-    let need = missing + missing / 20 + plan.backups.iter().map(|b| b.bytes).sum::<u64>();
-    let free = fs4::available_space(&opts.job).unwrap_or(u64::MAX);
+    let reads: u64 = plan.backups.iter().chain(&plan.base).map(|b| b.bytes).sum();
+    let need = missing + missing / 20 + reads;
+    let free = crate::disk::probe(&opts.job)
+        .map_err(|e| {
+            EngineError::new(
+                Code::BadInput,
+                format!("the free space in {} couldn't be checked ({e})", opts.job.display()),
+            )
+            .hint("The free space on this drive couldn't be checked. Choose another folder for the workspace.")
+        })?
+        .free;
     if free < need {
         return Err(job::not_enough_space(&opts.job, need, free));
     }
     let total: u64 = files.iter().map(|(_, e)| e.size).sum();
     let mut done = 0;
+    let unpack = |name: &str, e: &pac::Entry, done: u64| -> Result<()> {
+        // Complete-looking only once fully written.
+        let part = flash_dir.join(format!("{name}.part"));
+        p.extract(e, &part, &mut |n| {
+            rep.progress("Preparing partitions", done + n, total)
+        })?;
+        fs::rename(&part, flash_dir.join(name))?;
+        Ok(())
+    };
     for (name, e) in &files {
-        let out = flash_dir.join(name);
-        if !fs::metadata(&out).is_ok_and(|m| m.len() == e.size) {
-            // Complete-looking only once fully written.
-            let part = flash_dir.join(format!("{name}.part"));
-            p.extract(e, &part, &mut |n| {
-                rep.progress("Preparing partitions", done + n, total)
-            })?;
-            fs::rename(&part, &out)?;
+        if !fs::metadata(flash_dir.join(name)).is_ok_and(|m| m.len() == e.size) {
+            unpack(name, e, done)?;
         }
         done += e.size;
     }
+    // Every file spd_dump will write must be exactly its PAC entry, however
+    // it got there; one that isn't is unpacked again, once.
+    let mut checked_bytes = 0;
+    for (name, e) in &files {
+        let want = entry_hash(&entries, e.index)?;
+        let path = flash_dir.join(name);
+        let hash = |path: &Path, at: u64| {
+            util::sha256_file(path, |d, _| {
+                rep.progress("Checking the partitions", at + d, total)
+            })
+        };
+        if hash(&path, checked_bytes)? != want {
+            rep.warn(format!(
+                "{name} doesn't match the image; unpacking it again"
+            ));
+            unpack(name, e, 0)?;
+            if hash(&path, checked_bytes)? != want {
+                return Err(EngineError::new(
+                    Code::HashMismatch,
+                    format!("{name} still doesn't match the image after unpacking it again; nothing was written"),
+                )
+                .hint("The drive the workspace is on may be failing. Choose a workspace on another drive and build again.")
+                .into());
+            }
+        }
+        checked_bytes += e.size;
+    }
     let run_dir = new_backup_run(&backup_root, "")?;
-    let backup_arg = format!(
+    let run_arg = format!(
         "../backup/{}",
         run_dir.file_name().unwrap().to_string_lossy()
     );
-    let inv = spd_invocation(d, &plan, &backup_arg);
+    let inv = spd_invocation(d, &plan, &run_arg);
 
     rep.stage("wait_device", "Connect the device in download mode");
     // The device's own button steps, translated with its name filled in.
@@ -744,8 +985,9 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
     // stage starts when the device answers (its first BSL_REP_VER line).
     let mut connected = false;
     let mut watch = SpdWatch::new(&plan);
-    // Set once the first answer is approved: the device's table and the
-    // backups were checked. Any write before that is fatal.
+    // Set once the first answer is approved: the device's table, the
+    // backups and (update mode) its base were checked. Any write before
+    // that is fatal.
     let checked = std::cell::Cell::new(false);
     let on_line = |line: &str| -> Result<()> {
         if !connected && (line.starts_with("BSL_REP_VER") || line.starts_with("load_partition")) {
@@ -753,38 +995,58 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
             rep.stage("flash", "Installing Thimsy");
         }
         if let Some((name, written, total)) = watch.line(line, checked.get())? {
-            rep.progress(&format!("Wrote {name}"), written, total);
+            rep.progress_for("Wrote {partition}", &name, written, total);
         }
         Ok(())
     };
-    // Nothing is confirmed until the device's partition table matches and
-    // every backup was read in full.
+    // Nothing is confirmed until the device's partition table matches,
+    // every backup was read in full and (update mode) the device holds the
+    // base the update relies on.
     let approve = |n: usize| {
         if n == 0 {
-            check_device_file(&flash_dir, &plan.checks)?;
+            let (text, table) = read_device_table(&run_dir)?;
+            if let Err(e) = write_device_info(&run_dir, d, opts.mode, &text) {
+                rep.warn(format!(
+                    "couldn't record which device the backup is from: {e:#}"
+                ));
+            }
+            check_device(&plan.checks, &table)?;
             rep.info("The device's partition table matches this firmware");
             check_backups(&plan, &run_dir)?;
+            if !plan.base.is_empty() {
+                check_base(&plan, &run_dir, &entries)?;
+                rep.info("The device runs the base this update needs");
+            }
             checked.set(true);
         }
         Ok(())
     };
     let ran = tools::run_answering(&inv, &flash_dir, rep, on_line, approve);
     let ran = ran.and_then(|()| watch.finish()).map_err(|e| {
-        if crate::error::code_of(&e).0 != Code::ToolFailed {
-            return e;
+        let code = crate::error::code_of(&e).0;
+        if code == Code::ToolFailed && !connected {
+            // The device never answered: nothing happened on it.
+            return not_connected(d, opts.host, e);
         }
-        let msg = e.to_string();
-        if opts.host == Host::Windows && msg.contains("libusb_open_device failed") {
-            return EngineError::new(Code::ToolFailed, msg)
-                .hint("Download mode was never seen through WinUSB. Hold Back while you plug in the cable, and check in Device Manager or Zadig that Windows uses WinUSB for Unisoc download mode, not Unisoc's own driver.")
-                .into();
+        if code != Code::ToolFailed || !checked.get() {
+            // Refused or stopped before the first write was confirmed.
+            return e;
         }
         e.context("flashing stopped; the device is still recoverable from download mode")
     });
 
+    // The images read for the base check aren't backups.
+    for b in &plan.base {
+        let _ = fs::remove_file(run_dir.join(base_file(&b.partition)));
+    }
     // The NV/calibration backups stay where spd_dump read them, in the
     // job's backup folder, whether or not the rest worked.
     let problems = finish_backups(&plan, &run_dir);
+    if run_dir.join(DEVICE_PARTITIONS).exists() && !run_dir.join(DEVICE_INFO).exists() {
+        if let Ok(text) = fs::read_to_string(run_dir.join(DEVICE_PARTITIONS)) {
+            let _ = write_device_info(&run_dir, d, opts.mode, &text);
+        }
+    }
     // A run that never got to read anything leaves no empty folder.
     let _ = fs::remove_dir(&run_dir);
     ran?;
@@ -885,12 +1147,13 @@ mod tests {
             ],
             erases: vec!["userdata".into()],
             checks: vec![],
+            base: vec![],
         };
         let inv = spd_invocation(d, &plan, "backup");
         let s = inv.display();
         assert!(
             s.starts_with(
-                "spd_dump --wait 300 keep_charge 1 fdl fdl.img 0x65000800 fdl fdl2.img 0xb4fffe00 partition_list device-partitions.xml read_part"
+                "spd_dump --wait 300 keep_charge 1 fdl fdl.img 0x65000800 fdl fdl2.img 0xb4fffe00 partition_list backup/device-partitions.xml read_part"
             ),
             "{s}"
         );
@@ -986,6 +1249,7 @@ mod tests {
                 .collect(),
             erases: vec![],
             checks: vec![],
+            base: vec![],
         }
     }
 

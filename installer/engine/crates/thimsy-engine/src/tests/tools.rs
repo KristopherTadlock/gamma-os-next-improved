@@ -239,6 +239,39 @@ fn flashing_tools_never_come_from_path() {
     assert!(tools::search_dirs("fastboot", Some(path)).contains(&on_path));
 }
 
+#[test]
+fn tools_dir_variable_only_counts_in_test_hook_builds_and_never_for_wdi_simple() {
+    // Process-wide, but only ever adds a folder that doesn't exist.
+    std::env::set_var("THIMSY_TOOLS_DIR", "/thimsy-test-tools-dir");
+    let dir = std::path::PathBuf::from("/thimsy-test-tools-dir");
+    assert_eq!(
+        tools::search_dirs("spd_dump", None).contains(&dir),
+        cfg!(feature = "test-hooks")
+    );
+    assert!(!tools::search_dirs("wdi-simple", None).contains(&dir));
+}
+
+#[test]
+fn hashes_a_file_and_its_ranges_in_one_pass() {
+    let dir = tempfile::tempdir().unwrap();
+    let p = dir.path().join("f");
+    let data: Vec<u8> = (0..20_000_000u32).map(|i| (i % 253) as u8).collect();
+    std::fs::write(&p, &data).unwrap();
+    let ranges = [(0, 10), (8_388_000, 2_000), (100, 19_999_900), (5, 5)];
+    let (whole, parts) = crate::util::sha256_with_ranges(&p, &ranges, &mut |_, _| {}).unwrap();
+    assert_eq!(whole, crate::util::sha256_hex(&data));
+    for ((off, len), h) in ranges.iter().zip(parts) {
+        assert_eq!(
+            h,
+            crate::util::sha256_hex(&data[*off as usize..(*off + *len) as usize])
+        );
+    }
+    assert!(crate::util::sha256_with_ranges(&p, &[(19_999_999, 2)], &mut |_, _| {}).is_err());
+    assert_eq!(crate::util::base64(b"ab"), "YWI=");
+    assert_eq!(crate::util::base64(b"abc"), "YWJj");
+    assert_eq!(crate::util::base64(b"a"), "YQ==");
+}
+
 #[cfg(unix)]
 #[test]
 fn a_question_followed_by_a_newline_is_still_answered() {

@@ -1,0 +1,24 @@
+{"stage":"check","title":"Checking the build","type":"stage"}
+{"level":"info","message":"4 partitions to write (12.72 MB), 1 to back up, 2 to erase, 0 to compare","type":"log"}
+{"done":12774372,"label":"Checking the image","stage":"check","total":12774372,"type":"progress"}
+{"stage":"driver","title":"Checking the USB driver","type":"stage"}
+{"level":"warn","message":"No udev rule gives this user access to 1782:4d00; if the device isn't found, set up USB access and try again","type":"log"}
+{"stage":"prepare","title":"Preparing the partitions","type":"stage"}
+{"done":12728320,"label":"Preparing partitions","stage":"prepare","total":12728320,"type":"progress"}
+{"done":12728320,"label":"Checking the partitions","stage":"prepare","total":12728320,"type":"progress"}
+{"stage":"wait_device","title":"Connect the device in download mode","type":"stage"}
+{"body":"Turn the Test Device off, hold Back and plug in the cable.","id":"enter_download_mode","image":null,"title":"Hold Back","type":"prompt"}
+{"level":"info","message":"Running spd_dump --wait 300 keep_charge 1 fdl fdl.img 0x5500 fdl fdl2.img 0x9efffe00 partition_list ../backup/run-<time>/device-partitions.xml read_part prodnv 0 0x100000 ../backup/run-<time>/prodnv.img write_part vendor_boot_a vendor_boot_a.img write_part vendor_boot_b vendor_boot_b.img write_part boot_a boot_a.img write_part super super.img erase_part userdata erase_part metadata reset","type":"log"}
+{"level":"info","message":"Waiting for connection (300s)","type":"log"}
+{"level":"info","message":"BSL_REP_VER: \"Spreadtrum Boot Block version 1.1\"","type":"log"}
+{"stage":"flash","title":"Installing Thimsy","type":"stage"}
+{"level":"info","message":"FDL loaded from fdl.img at 0x5500","type":"log"}
+{"level":"info","message":"FDL loaded from fdl2.img at 0x9efffe00","type":"log"}
+{"level":"info","message":"[0] prodnv, 1","type":"log"}
+{"level":"info","message":"[1] super, 10","type":"log"}
+{"level":"info","message":"[2] userdata, 0xffffffff","type":"log"}
+{"level":"info","message":"dump_partition: prodnv+0x0, target: 0x100000, read: 0x100000","type":"log"}
+{"level":"info","message":"Answer \"yes\" to confirm the \"write partition\" command: ","type":"log"}
+{"level":"info","message":"operation is not confirmed","type":"log"}
+{"code":"wrong_device","hint":"This device's partition layout doesn't match this firmware: it's a different model, or it still runs stock firmware that needs repartitioning, which this version can't do yet.","message":"the device's partition table doesn't match this firmware (super is 10 MiB on the device, the firmware expects 12 MiB; vendor_boot_a is missing; vendor_boot_b is missing; and 2 more); nothing was written","type":"error"}
+{"ok":false,"type":"result"}

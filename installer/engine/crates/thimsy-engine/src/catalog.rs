@@ -211,6 +211,18 @@ pub struct Flash {
     /// Entries written in update mode (keeps data).
     #[serde(default)]
     pub update: Vec<String>,
+    /// PAC entries update mode doesn't write but relies on: the device must
+    /// already hold exactly these images (a matching base), checked before
+    /// the first write. Required when `update` is set.
+    #[serde(default)]
+    pub update_check: Vec<String>,
+    /// Device partitions a full install writes and an update writes, as the
+    /// plan shows them before anything is built. Flashing refuses to start
+    /// when the firmware would write anything else.
+    #[serde(default)]
+    pub writes_full: Vec<String>,
+    #[serde(default)]
+    pub writes_update: Vec<String>,
     /// Device partitions erased in full mode (fresh install).
     #[serde(default)]
     pub erase_full: Vec<String>,
@@ -464,6 +476,22 @@ impl Catalog {
                             "device {} can build the {p} profile but has no expect hash for it",
                             d.id
                         );
+                    }
+                }
+            }
+            if let Some(f) = &d.flash {
+                if !f.update.is_empty() && f.update_check.is_empty() {
+                    bail!(
+                        "device {}: update mode needs update_check (the entries an update relies on)",
+                        d.id
+                    );
+                }
+                if f.method == "spd" && !d.build.is_empty() {
+                    if f.writes_full.is_empty() {
+                        bail!("device {}: flash recipe has no writes_full", d.id);
+                    }
+                    if !f.update.is_empty() && f.writes_update.is_empty() {
+                        bail!("device {}: flash recipe has no writes_update", d.id);
                     }
                 }
             }

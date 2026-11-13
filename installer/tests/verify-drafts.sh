@@ -23,16 +23,32 @@ for TAG in "$@"; do
     echo -e "$TAG\tSKIP\tdownload failed" | tee -a "$RESULTS"; rm -rf "$D"; continue
   fi
   # SHA256SUMS lists the 7z volumes and, in some releases, the PAC inside
-  # them: check the volumes now and the PAC once extracted.
-  [ -f "$D/dl/SHA256SUMS" ] && mv "$D/dl/SHA256SUMS" "$D/SHA256SUMS"
-  if [ -f "$D/SHA256SUMS" ] && ! (cd "$D/dl" && sha256sum -c --quiet --ignore-missing ../SHA256SUMS); then
-    echo -e "$TAG\tFAIL\tpublished files don't match SHA256SUMS" | tee -a "$RESULTS"; rm -rf "$D"; continue
+  # them: check the volumes now and the PAC once extracted. A release
+  # without it can't be checked, so it fails.
+  if [ ! -f "$D/dl/SHA256SUMS" ]; then
+    echo -e "$TAG\tFAIL\tno SHA256SUMS published" | tee -a "$RESULTS"; rm -rf "$D"; continue
   fi
+  mv "$D/dl/SHA256SUMS" "$D/SHA256SUMS"
   first=$(ls "$D/dl"/*.7z.001 2>/dev/null | head -1)
   if [ -z "$first" ]; then echo -e "$TAG\tSKIP\tno 7z volumes" | tee -a "$RESULTS"; rm -rf "$D"; continue; fi
-  "$SEVENZ" x -y "$first" -o"$D/pac" >/dev/null || { echo -e "$TAG\tFAIL\textract" | tee -a "$RESULTS"; rm -rf "$D"; continue; }
+  # Every volume must be listed and match (not just the ones listed).
+  unlisted=""
+  for vol in "$D/dl"/*.7z.*; do
+    awk -v f="$(basename "$vol")" '{n=$2; sub(/^\*/, "", n)} n==f {found=1} END {exit !found}' "$D/SHA256SUMS" || unlisted="$unlisted $(basename "$vol")"
+  done
+  if [ -n "$unlisted" ] || ! (cd "$D/dl" && sha256sum -c --quiet --ignore-missing ../SHA256SUMS); then
+    echo -e "$TAG\tFAIL\tpublished files don't match SHA256SUMS${unlisted:+ (not listed:$unlisted)}" | tee -a "$RESULTS"; rm -rf "$D"; continue
+  fi
+  # Only the PAC, into a new empty folder (an archive's other files, or
+  # paths, never land anywhere else).
+  rm -rf "$D/pac"; mkdir "$D/pac"
+  "$SEVENZ" x -y -r "$first" -o"$D/pac" '*.pac' >/dev/null || { echo -e "$TAG\tFAIL\textract" | tee -a "$RESULTS"; rm -rf "$D"; continue; }
   rm -rf "$D/dl"
-  REF=$(ls "$D/pac"/*.pac | head -1)
+  mapfile -t pacs < <(find "$D/pac" -type f -name '*.pac')
+  if [ "${#pacs[@]}" -ne 1 ]; then
+    echo -e "$TAG\tFAIL\texpected one PAC in the archive, found ${#pacs[@]}" | tee -a "$RESULTS"; rm -rf "$D"; continue
+  fi
+  REF="${pacs[0]}"
   REF_SHA=$(sha256sum "$REF" | cut -d' ' -f1)
   # Names may carry sha256sum's binary-mode marker: "HASH *file".
   LISTED=$(awk -v f="$(basename "$REF")" '{n=$2; sub(/^\*/, "", n)} n==f {print $1}' "$D/SHA256SUMS" 2>/dev/null)
@@ -69,7 +85,7 @@ PY
   fi
   OUT=$(ls "$WS"/jobs/*/out/*.pac)
   OUT_SHA=$(sha256sum "$OUT" | cut -d' ' -f1)
-  SYS=$(python3 -c "import json;print(json.load(open('$D/pack/pack.json'))['system']['size'])")
+  SYS=$(python3 -I -c 'import json, sys; print(json.load(open(sys.argv[1], encoding="utf-8"))["system"]["size"])' "$D/pack/pack.json")
   DELTAS=$(du -cb "$D"/pack/*.bsdiff | tail -1 | cut -f1)
   if [ "$OUT_SHA" = "$REF_SHA" ]; then
     echo -e "$TAG\tPASS\t$REF_SHA\tsystem=$SYS deltas=$DELTAS" | tee -a "$RESULTS"

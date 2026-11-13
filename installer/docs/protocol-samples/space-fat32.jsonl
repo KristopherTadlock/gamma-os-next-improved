@@ -1,0 +1,1 @@
+{"build_need":12970303164,"cached":0,"downloads":4630452770,"flash_need":20460997435,"free":500000000000,"hint":"This drive is formatted as FAT32, which can't hold files over 4 GB. Choose a workspace on another drive (NTFS, exFAT, APFS or ext4).","imported":0,"need":20460997435,"ok":false,"reason":"fat32","type":"space"}

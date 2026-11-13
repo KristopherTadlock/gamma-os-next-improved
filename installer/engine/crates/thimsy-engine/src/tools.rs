@@ -16,9 +16,15 @@ use std::sync::mpsc::Sender;
 /// every write, and `wdi-simple` runs with admin rights.
 const FROM_PATH: &[&str] = &["fastboot"];
 
-/// Looks for `name` in THIMSY_TOOLS_DIR, next to the engine (`tools/`), one
-/// level up (`../tools/`, the app bundle layout), and then PATH only for
-/// the tools in [`FROM_PATH`].
+/// Tools that only ever come from the installer's own folders: never from
+/// THIMSY_TOOLS_DIR, even in test builds (it runs with admin rights).
+const BUNDLED_ONLY: &[&str] = &["wdi-simple"];
+
+/// Looks for `name` next to the engine (`tools/`), one level up
+/// (`../tools/`, the app bundle layout), and then PATH only for the tools
+/// in [`FROM_PATH`]. Builds with the `test-hooks` feature (tests and
+/// `installer/tests/e2e.sh`, never release artifacts) look in
+/// THIMSY_TOOLS_DIR first, except for [`BUNDLED_ONLY`] tools.
 pub fn locate(name: &str) -> Result<PathBuf> {
     let exe = format!("{name}{}", Host::current().exe_suffix());
     for d in search_dirs(name, std::env::var_os("PATH")) {
@@ -31,16 +37,19 @@ pub fn locate(name: &str) -> Result<PathBuf> {
         Code::ToolMissing,
         format!("{exe} isn't bundled with this installer"),
     )
-    .hint("Reinstall Thimsy Installer, or set THIMSY_TOOLS_DIR to a folder containing it.")
+    .hint("Reinstall Thimsy Installer: one of its tools is missing.")
     .into())
 }
 
 /// Where [`locate`] looks for `name`, in order.
 pub(crate) fn search_dirs(name: &str, path: Option<std::ffi::OsString>) -> Vec<PathBuf> {
     let mut dirs = Vec::new();
-    dirs.extend(test_tools_dir());
-    if let Ok(d) = std::env::var("THIMSY_TOOLS_DIR") {
-        dirs.push(PathBuf::from(d));
+    if !BUNDLED_ONLY.contains(&name) {
+        dirs.extend(test_tools_dir());
+        #[cfg(feature = "test-hooks")]
+        if let Ok(d) = std::env::var("THIMSY_TOOLS_DIR") {
+            dirs.push(PathBuf::from(d));
+        }
     }
     if let Ok(me) = std::env::current_exe() {
         if let Some(dir) = me.parent() {
@@ -131,14 +140,6 @@ enum Out {
     },
     /// The tool is waiting for an answer.
     Prompt,
-}
-
-/// Keeps a console window from opening for a child process on Windows.
-#[cfg(windows)]
-pub(crate) fn hide_window(cmd: &mut Command) {
-    use std::os::windows::process::CommandExt;
-    use windows_sys::Win32::System::Threading::CREATE_NO_WINDOW;
-    cmd.creation_flags(CREATE_NO_WINDOW);
 }
 
 /// Makes the child die with the engine (Linux: the kernel sends it SIGKILL

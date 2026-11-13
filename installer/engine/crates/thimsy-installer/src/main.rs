@@ -5,14 +5,10 @@
 //! `thimsy-installer`: the engine the Thimsy Installer app runs in the
 //! background (see installer/docs/engine-protocol.md). Also usable directly.
 
-use anyhow::{Context, Result};
+use anyhow::Result;
 use clap::{Parser, Subcommand};
-use serde_json::json;
 use std::path::PathBuf;
-use thimsy_engine::catalog::{Catalog, InstallSupport};
-use thimsy_engine::host::Host;
-use thimsy_engine::i18n::tr;
-use thimsy_engine::{detect, drivers, flash, job, pac, pack, resolve, Reporter};
+use thimsy_engine::{cli, job, pac, pack, Reporter};
 
 #[derive(Parser)]
 #[command(
@@ -74,6 +70,9 @@ enum Cmd {
         profile: String,
         #[arg(long)]
         workspace: PathBuf,
+        /// Files or folders the build will use instead of downloading.
+        #[arg(long = "import")]
+        import: Vec<PathBuf>,
         #[arg(long)]
         delete_downloads: bool,
     },
@@ -89,6 +88,9 @@ enum Cmd {
         scratch: bool,
         #[arg(long)]
         backup: bool,
+        /// Remove only these items (paths `clean --dry-run` listed).
+        #[arg(long)]
+        path: Vec<PathBuf>,
         #[arg(long)]
         dry_run: bool,
     },
@@ -113,7 +115,7 @@ enum Cmd {
         #[arg(long)]
         device: String,
     },
-    /// Windows USB driver status / install.
+    /// USB driver (Windows) or USB access (Linux) status / install.
     Drivers {
         #[arg(long)]
         device: String,
@@ -217,72 +219,32 @@ fn main() {
     } else {
         Reporter::text()
     };
-    let json_mode = cli.json;
-    let streaming = matches!(
-        cli.cmd,
-        Cmd::Build { .. }
-            | Cmd::Flash { .. }
-            | Cmd::Unlock { .. }
-            | Cmd::Drivers { .. }
-            | Cmd::Clean { .. }
-    );
-    match run(cli, &rep) {
-        Ok(()) => {}
-        Err(e) => {
-            rep.error(&e);
-            if json_mode && streaming {
-                println!("{}", json!({"type": "result", "ok": false}));
+    let g = cli::Global {
+        json: cli.json,
+        catalog: cli.catalog,
+        lang: cli.lang,
+        host: cli.host,
+    };
+    let json_mode = g.json;
+    let mut print = |v: serde_json::Value| out(json_mode, v);
+    let cmd = match cli.cmd {
+        Cmd::Dev(dev) => {
+            if let Err(e) = dev_command(&g, dev, &rep) {
+                rep.error(&e);
+                std::process::exit(1);
             }
-            std::process::exit(1);
+            return;
         }
-    }
-}
-
-fn run(cli: Cli, rep: &Reporter) -> Result<()> {
-    let cat = match &cli.catalog {
-        Some(d) => Catalog::from_dir(d)?,
-        None => Catalog::bundled()?,
-    };
-    thimsy_engine::i18n::set_language(&cli.lang, &cat.files)?;
-    let host = match &cli.host {
-        Some(h) => Host::parse(h).context("unknown host")?,
-        None => Host::current(),
-    };
-    let j = cli.json;
-    match cli.cmd {
-        Cmd::Catalog => {
-            let devices: Vec<_> = cat
-                .devices
-                .iter()
-                .map(|d| {
-                    json!({
-                        "id": d.id, "name": d.name, "maker": d.maker, "soc": d.soc, "display": d.display,
-                        "status": d.status, "support": d.support, "blocks": d.blocks.iter().map(|n| tr(n)).collect::<Vec<_>>(),
-                        "host_message": (d.install_on(host) == InstallSupport::None).then(|| resolve::host_text(d, host)),
-                        "notes": d.notes.iter().map(|n| tr(n)).collect::<Vec<_>>(),
-                        "buildable": d.source.is_some() && !d.build.is_empty(),
-                    })
-                })
-                .collect();
-            let profiles: Vec<_> = cat
-                .profiles
-                .iter()
-                .map(|p| json!({"id": p.id, "name": tr(&p.name), "summary": tr(&p.summary), "available": cat.system_for(&p.id).is_some()}))
-                .collect();
-            out(
-                j,
-                json!({"type": "catalog", "version": cat.root.version, "release": cat.root.release,
-                "engine": thimsy_engine::VERSION, "host": host, "devices": devices, "profiles": profiles}),
-            );
-        }
+        Cmd::Catalog => cli::Command::Catalog,
         Cmd::Resolve {
             device,
             profile,
             set,
-        } => {
-            let plan = resolve::resolve(&cat, &device, &profile, &set, host)?;
-            out(j, serde_json::to_value(plan)?);
-        }
+        } => cli::Command::Resolve {
+            device,
+            profile,
+            set,
+        },
         Cmd::Build {
             device,
             profile,
@@ -290,189 +252,137 @@ fn run(cli: Cli, rep: &Reporter) -> Result<()> {
             import,
             set,
             delete_downloads,
-        } => {
-            std::fs::create_dir_all(&workspace)?;
-            let opts = job::BuildOptions {
-                device,
-                profile,
-                workspace,
-                imports: import,
-                overrides: set,
-                host,
-                delete_downloads,
-            };
-            let rec = job::build(&cat, &opts, rep)?;
-            let dir = job::job_dir(&opts.workspace, &rec.device, &rec.profile);
-            out(
-                j,
-                json!({"type": "result", "ok": true, "job": dir, "image": rec.image, "bytes": rec.bytes,
-                "sha256": rec.sha256, "matches_reference": rec.matches_reference}),
-            );
-        }
+        } => cli::Command::Build {
+            device,
+            profile,
+            workspace,
+            import,
+            set,
+            delete_downloads,
+        },
         Cmd::Space {
             device,
             profile,
             workspace,
+            import,
             delete_downloads,
-        } => {
-            let sc = job::check_space(&cat, &device, &profile, &workspace, delete_downloads)?;
-            out(j, serde_json::to_value(sc)?);
-        }
+        } => cli::Command::Space {
+            device,
+            profile,
+            workspace,
+            import,
+            delete_downloads,
+        },
         Cmd::Clean {
             workspace,
             downloads,
             image,
             scratch,
             backup,
+            path,
             dry_run,
+        } => cli::Command::Clean {
+            workspace,
+            downloads,
+            image,
+            scratch,
+            backup,
+            paths: path,
+            dry_run,
+        },
+        Cmd::Detect { watch } => cli::Command::Detect { watch },
+        Cmd::Flash { job, mode, dry_run } => cli::Command::Flash { job, mode, dry_run },
+        Cmd::Unlock { device } => cli::Command::Unlock { device },
+        Cmd::Drivers { device, install } => cli::Command::Drivers { device, install },
+    };
+    let code = cli::run(&g, cmd, &rep, &mut print);
+    std::process::exit(code);
+}
+
+fn dev_command(g: &cli::Global, dev: Dev, rep: &Reporter) -> Result<()> {
+    let (cat, _) = cli::setup(g)?;
+    match dev {
+        Dev::PacList { pac: path } => {
+            let p = pac::Pac::open(&path)?;
+            println!("version: {}\nalias: {}", p.version(), p.alias());
+            for e in &p.entries {
+                println!("{:22} {:32} {:>12}", e.id, e.file, e.size);
+            }
+        }
+        Dev::LpList { pac: path, entry } => {
+            let p = pac::Pac::open(&path)?;
+            let e = p.find(&entry)?;
+            let mut f = std::fs::File::open(&path)?;
+            for (name, exts) in
+                thimsy_engine::lp::Super::new(&mut f, e.offset, e.size).partitions()?
+            {
+                let size: u64 = exts.iter().map(|x| x.len).sum();
+                println!("{name:24} {size:>12}  extents={}", exts.len());
+            }
+        }
+        Dev::Pack {
+            source,
+            reference,
+            out: o,
+            device,
+            system_name,
         } => {
-            let items = job::cleanable(&workspace);
-            let mut kinds = Vec::new();
-            for (on, k) in [
-                (downloads, "downloads"),
-                (image, "image"),
-                (scratch, "scratch"),
-                (backup, "backup"),
-            ] {
-                if on {
-                    kinds.push(k);
-                }
+            let r = pack::make(&source, &reference, &o, &device, &system_name, rep)?;
+            println!("{}", serde_json::to_string_pretty(&r)?);
+        }
+        Dev::Bundle {
+            out: o,
+            max_asset,
+            part_size,
+            files,
+        } => {
+            let refs: Vec<&std::path::Path> = files.iter().map(|p| p.as_path()).collect();
+            let e = thimsy_engine::bundle::make(
+                &o,
+                &refs,
+                max_asset.unwrap_or(thimsy_engine::bundle::MAX_ASSET),
+                part_size.unwrap_or(thimsy_engine::bundle::PART),
+                &mut |d, t| rep.progress("Writing the device pack", d, t),
+            )?;
+            println!("{}", serde_json::to_string_pretty(&e)?);
+        }
+        Dev::BundleList { files } => {
+            let spans = files
+                .iter()
+                .map(|p| thimsy_engine::archive::Span::whole(p))
+                .collect::<Result<Vec<_>>>()?;
+            let b = thimsy_engine::bundle::Bundle::index(&spans)?;
+            for (name, m) in &b.members {
+                println!("{:>12}  {name}", m.size);
             }
-            let freed = if dry_run {
-                0
-            } else {
-                job::clean(&workspace, &kinds)?
-            };
-            out(
-                j,
-                json!({"type": "result", "ok": true, "items": items, "freed": freed}),
+        }
+        Dev::I18nStrings { src, out: path } => {
+            let strings = thimsy_engine::i18n::source_strings(&cat, &src)?;
+            let mut body = String::from(
+                "# Source strings (English): thimsy-installer dev i18n-strings. Don't edit.\n",
             );
-        }
-        Cmd::Detect { watch } => {
-            let mut last = None;
-            loop {
-                let seen = detect::scan(&cat)?;
-                if last.as_ref() != Some(&seen) {
-                    out(j, json!({"type": "devices", "devices": seen}));
-                    last = Some(seen);
-                }
-                if !watch {
-                    break;
-                }
-                std::thread::sleep(std::time::Duration::from_millis(800));
+            for s in &strings {
+                let q = serde_json::to_string(s)?;
+                body.push_str(&format!("{q}: {q}\n"));
             }
+            std::fs::write(&path, body)?;
+            println!("{} strings -> {}", strings.len(), path.display());
         }
-        Cmd::Flash { job, mode, dry_run } => {
-            let opts = flash::FlashOptions {
-                job,
-                mode: flash::Mode::parse(&mode)?,
-                dry_run,
-                host,
-            };
-            let r = flash::flash(&cat, &opts, rep)?;
-            out(
-                j,
-                json!({"type": "result", "ok": true, "backup": r.backup, "commands": r.commands}),
+        Dev::Source {
+            device,
+            workspace,
+            import,
+        } => {
+            let p = job::prepare_source(&cat, &device, &workspace, &import, rep)?;
+            println!("{}", p.display());
+        }
+        Dev::CheckCatalog => {
+            println!(
+                "catalog {} ok: {} devices, {} profiles",
+                cat.root.version,
+                cat.devices.len(),
+                cat.profiles.len()
             );
-        }
-        Cmd::Unlock { device } => {
-            flash::unlock(&cat, &device, rep)?;
-            out(j, json!({"type": "result", "ok": true}));
-        }
-        Cmd::Drivers { device, install } => {
-            let d = cat.device(&device)?;
-            if install {
-                drivers::ensure(d, host, rep)?;
-            }
-            let st = drivers::status(d, host);
-            out(
-                j,
-                json!({"type": "result", "ok": true, "status": st.status, "detail": st.detail}),
-            );
-        }
-        Cmd::Dev(dev) => {
-            match dev {
-                Dev::PacList { pac: path } => {
-                    let p = pac::Pac::open(&path)?;
-                    println!("version: {}\nalias: {}", p.version(), p.alias());
-                    for e in &p.entries {
-                        println!("{:22} {:32} {:>12}", e.id, e.file, e.size);
-                    }
-                }
-                Dev::LpList { pac: path, entry } => {
-                    let p = pac::Pac::open(&path)?;
-                    let e = p.find(&entry)?;
-                    let mut f = std::fs::File::open(&path)?;
-                    for (name, exts) in
-                        thimsy_engine::lp::Super::new(&mut f, e.offset, e.size).partitions()?
-                    {
-                        let size: u64 = exts.iter().map(|x| x.len).sum();
-                        println!("{name:24} {size:>12}  extents={}", exts.len());
-                    }
-                }
-                Dev::Pack {
-                    source,
-                    reference,
-                    out: o,
-                    device,
-                    system_name,
-                } => {
-                    let r = pack::make(&source, &reference, &o, &device, &system_name, rep)?;
-                    println!("{}", serde_json::to_string_pretty(&r)?);
-                }
-                Dev::Bundle {
-                    out: o,
-                    max_asset,
-                    part_size,
-                    files,
-                } => {
-                    let refs: Vec<&std::path::Path> = files.iter().map(|p| p.as_path()).collect();
-                    let e = thimsy_engine::bundle::make(
-                        &o,
-                        &refs,
-                        max_asset.unwrap_or(thimsy_engine::bundle::MAX_ASSET),
-                        part_size.unwrap_or(thimsy_engine::bundle::PART),
-                        &mut |d, t| rep.progress("Writing the device pack", d, t),
-                    )?;
-                    println!("{}", serde_json::to_string_pretty(&e)?);
-                }
-                Dev::BundleList { files } => {
-                    let spans = files
-                        .iter()
-                        .map(|p| thimsy_engine::archive::Span::whole(p))
-                        .collect::<Result<Vec<_>>>()?;
-                    let b = thimsy_engine::bundle::Bundle::index(&spans)?;
-                    for (name, m) in &b.members {
-                        println!("{:>12}  {name}", m.size);
-                    }
-                }
-                Dev::I18nStrings { src, out: path } => {
-                    let strings = thimsy_engine::i18n::source_strings(&cat, &src)?;
-                    let mut body = String::from("# Source strings (English): thimsy-installer dev i18n-strings. Don't edit.\n");
-                    for s in &strings {
-                        let q = serde_json::to_string(s)?;
-                        body.push_str(&format!("{q}: {q}\n"));
-                    }
-                    std::fs::write(&path, body)?;
-                    println!("{} strings -> {}", strings.len(), path.display());
-                }
-                Dev::Source {
-                    device,
-                    workspace,
-                    import,
-                } => {
-                    let p = job::prepare_source(&cat, &device, &workspace, &import, rep)?;
-                    println!("{}", p.display());
-                }
-                Dev::CheckCatalog => {
-                    println!(
-                        "catalog {} ok: {} devices, {} profiles",
-                        cat.root.version,
-                        cat.devices.len(),
-                        cat.profiles.len()
-                    );
-                }
-            }
         }
     }
     Ok(())

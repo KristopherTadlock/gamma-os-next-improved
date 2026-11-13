@@ -109,6 +109,7 @@ class ControlledEngine extends FakeEngine {
     required String device,
     required String profile,
     required String workspace,
+    List<String> imports = const [],
     bool deleteDownloads = false,
   }) async {
     await spaceGate?.future;
@@ -116,6 +117,7 @@ class ControlledEngine extends FakeEngine {
       device: device,
       profile: profile,
       workspace: workspace,
+      imports: imports,
       deleteDownloads: deleteDownloads,
     );
   }
@@ -391,6 +393,7 @@ void main() {
       final engine = ControlledEngine()..failFlashes = 1;
       final s = await startApp(tester, engine);
       await toReview(tester);
+      await tap(tester, key('mode-update'));
       await tap(tester, key('install-button'));
       await tap(tester, key('confirm-install-yes'));
       expect(engine.calls.where((c) => c.startsWith('flash')), [
@@ -422,6 +425,7 @@ void main() {
       final engine = ControlledEngine()..failFlashes = 1;
       final s = await startApp(tester, engine);
       await toReview(tester);
+      await tap(tester, key('mode-update'));
       await tap(tester, key('install-button'));
       await tap(tester, key('confirm-install-yes'));
       expect(s.canRunAgain, isTrue);
@@ -572,7 +576,7 @@ void main() {
     testWidgets('a dry run stops without asking', (tester) async {
       final engine = ControlledEngine()..holdFlash = true;
       final run = await startInstall(tester, engine, dry: true);
-      expect(engine.calls, contains('flash update dry'));
+      expect(engine.calls, contains('flash full dry'));
       run.add(const StageEvent('check', 'Checking the image'));
       run.add(const StageEvent('flash', 'Writing Thimsy'));
       await pumpFor(tester);
@@ -718,7 +722,7 @@ void main() {
       await tap(tester, key('dry-run'));
       await tap(tester, key('install-button'));
       await tap(tester, key('confirm-install-yes'));
-      expect(engine.calls, contains('flash update dry'));
+      expect(engine.calls, contains('flash full dry'));
       expect(s.flashRun.ok, isTrue);
       expect(s.canProceed(WizardStep.install), isFalse);
       expect(tester.widget<FilledButton>(key('next')).onPressed, isNull);
