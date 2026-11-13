@@ -1,0 +1,15 @@
+id: mangmi-air-x
+name: MANGMI Air X
+maker: MANGMI
+soc: Qualcomm Snapdragon 662
+display: "1920×1080"
+status: candidate
+hardware: { android_api: 34, armv82: false, vulkan: true, ram_gb: 4, gpu: "Adreno 610" }
+support:
+  build: candidate
+  boot: candidate
+  install: { windows: untested, linux: untested, macos: untested, android: none }
+notes:
+  - "Planned: Qualcomm EDL install on every computer. Not buildable yet."
+guides:
+  unlock: { route: none, steps: [] }

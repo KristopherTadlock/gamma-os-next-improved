@@ -59,6 +59,9 @@ pub fn check_space(
     if let Some(sys) = cat.system_for(profile) {
         arts.push(sys);
     }
+    if let Some(b) = d.bundles.get(profile) {
+        arts.push(b);
+    }
     let cached: u64 = arts
         .iter()
         .flat_map(|a| {
@@ -259,11 +262,8 @@ pub fn build(cat: &Catalog, opts: &BuildOptions, rep: &Reporter) -> Result<JobRe
     imports.extend(bundled_build_dirs());
     // The unpacked official firmware in an import folder saves downloading
     // and unpacking it (checked by size now, by sha256 once copied).
-    let unpacked = imports
-        .iter()
-        .map(|d| d.join(&src.contains))
-        .find(|p| fs::metadata(p).is_ok_and(|m| m.len() == src.container.size));
-    let cache = Cache::new(opts.workspace.join("cache"), imports)?;
+    let mut cache = Cache::new(opts.workspace.join("cache"), imports)?;
+    let unpacked = cache.find_import(&src.contains, src.container.size);
     let sc = check_space(
         cat,
         &d.id,
@@ -282,6 +282,16 @@ pub fn build(cat: &Catalog, opts: &BuildOptions, rep: &Reporter) -> Result<JobRe
     }
 
     rep.stage("fetch", "Downloading");
+    // The device pack as one archive: the system image and patches are read
+    // from it in place.
+    let bundle_spans = match d.bundles.get(&opts.profile) {
+        Some(b) => {
+            let spans = cache.get_in_place(b, rep)?;
+            cache.bundles.push(crate::bundle::Bundle::index(&spans)?);
+            Some((b.clone(), spans))
+        }
+        None => None,
+    };
     let mut state = load_state(&dir);
     if state.assembling || !working.exists() {
         state.extracted = false;
@@ -392,17 +402,33 @@ pub fn build(cat: &Catalog, opts: &BuildOptions, rep: &Reporter) -> Result<JobRe
 
     if opts.delete_downloads {
         if let (Some(a), Some(ps)) = (&system, &system_paths) {
-            if a.parts.is_empty() {
-                remove_download(&cache, a, &ps[0], rep);
+            if cache.in_bundle(a) {
+                // Read from the device pack; removed with it below.
+            } else if a.parts.is_empty() {
+                remove_download(&cache, a, &ps[0].path, rep);
             } else {
                 for (part, p) in a.parts.iter().zip(ps) {
-                    remove_download(&cache, part, p, rep);
+                    remove_download(&cache, part, &p.path, rep);
                 }
                 let _ = fs::remove_file(cache.dir.join(format!("{}.ok", a.file)));
             }
         }
         for (a, p) in arts.values() {
             remove_download(&cache, a, p, rep);
+        }
+        // The device pack itself, if it was downloaded (never a picked file).
+        if let Some((b, spans)) = &bundle_spans {
+            let parts: Vec<&Artifact> = if b.parts.is_empty() {
+                vec![b]
+            } else {
+                b.parts.iter().collect()
+            };
+            for (a, sp) in parts.into_iter().zip(spans) {
+                if sp.path.starts_with(&cache.dir) {
+                    remove_download(&cache, a, &sp.path, rep);
+                }
+            }
+            let _ = fs::remove_file(cache.dir.join(format!("{}.ok", b.file)));
         }
     }
 
@@ -597,7 +623,7 @@ fn run_op(
     op: &Op,
     pac_path: &Path,
     system: Option<&Artifact>,
-    system_paths: Option<&[PathBuf]>,
+    system_paths: Option<&[crate::archive::Span]>,
     arts: &std::collections::HashMap<String, (Artifact, PathBuf)>,
     profile: &str,
     cat: &Catalog,
@@ -626,12 +652,12 @@ fn run_op(
                 )
             } else {
                 let (a, p) = art(artifact)?.clone();
-                (a, vec![p])
+                (a, vec![crate::archive::Span::whole(&p)?])
             };
             let e = pac::Pac::open(pac_path)?.find(entry)?.clone();
             let mut f = OpenOptions::new().read(true).write(true).open(pac_path)?;
             let mut sup = Super::new(&mut f, e.offset, e.size);
-            let file = crate::archive::MultiVolume::open(&paths)?;
+            let file = crate::archive::MultiVolume::open_spans(&paths)?;
             let (size, want, mut reader): (u64, String, HashingReader<Box<dyn Read>>) =
                 match &a.unpack {
                     Some(u) if u.format == "zstd" => {

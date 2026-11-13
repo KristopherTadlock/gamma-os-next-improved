@@ -1207,6 +1207,12 @@ Code lives in `installer/` (see `installer/README.md`).
   byte-identical. For now the build ships with the installer (the engine looks
   in `<app>/thimsy-build`, or downloads it from the installer release); later
   it becomes a separate GitHub release.
+- **One file per device pack:** the system image, the device's patches and
+  `pack.json` ship as one tar archive per device and profile (catalog
+  `bundles:`), read in place by byte range. Level-19 zstd keeps the RG Cube's
+  at 2.08 GB, under GitHub's 2 GiB asset limit; larger packs split into 1 GB
+  parts. Once releases are public, the installer downloads the newest public
+  release's archive itself; picking a downloaded archive is the second option.
 - **Tests:**
   - 69 unit and CLI tests on synthetic firmware, including a full synthetic
     device build.

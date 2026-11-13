@@ -6,9 +6,49 @@ use std::fs::File;
 use std::io::{self, Read, Seek, SeekFrom, Write};
 use std::path::{Path, PathBuf};
 
-/// Read + Seek over several files laid end to end.
+/// A byte range of a file.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Span {
+    pub path: PathBuf,
+    pub offset: u64,
+    pub len: u64,
+}
+
+impl Span {
+    /// The whole of `path`.
+    pub fn whole(path: &Path) -> Result<Span> {
+        let len = std::fs::metadata(path)
+            .with_context(|| format!("opening {}", path.display()))?
+            .len();
+        Ok(Span {
+            path: path.to_path_buf(),
+            offset: 0,
+            len,
+        })
+    }
+}
+
+/// The ranges of `spans` (laid end to end) covering `[start, start + len)`.
+pub fn sub_spans(spans: &[Span], start: u64, len: u64) -> Vec<Span> {
+    let mut out = Vec::new();
+    let (mut at, end) = (0u64, start + len);
+    for s in spans {
+        let (a, b) = (at.max(start), (at + s.len).min(end));
+        if a < b {
+            out.push(Span {
+                path: s.path.clone(),
+                offset: s.offset + (a - at),
+                len: b - a,
+            });
+        }
+        at += s.len;
+    }
+    out
+}
+
+/// Read + Seek over several files, or ranges of files, laid end to end.
 pub struct MultiVolume {
-    parts: Vec<(File, u64)>,
+    parts: Vec<(File, u64, u64)>, // file, offset in it, length
     starts: Vec<u64>,
     len: u64,
     pos: u64,
@@ -16,15 +56,21 @@ pub struct MultiVolume {
 
 impl MultiVolume {
     pub fn open(paths: &[PathBuf]) -> Result<Self> {
+        let spans = paths
+            .iter()
+            .map(|p| Span::whole(p))
+            .collect::<Result<Vec<_>>>()?;
+        Self::open_spans(&spans)
+    }
+    pub fn open_spans(spans: &[Span]) -> Result<Self> {
         let mut parts = Vec::new();
         let mut starts = Vec::new();
         let mut len = 0;
-        for p in paths {
-            let f = File::open(p).with_context(|| format!("opening {}", p.display()))?;
-            let l = f.metadata()?.len();
+        for s in spans {
+            let f = File::open(&s.path).with_context(|| format!("opening {}", s.path.display()))?;
             starts.push(len);
-            len += l;
-            parts.push((f, l));
+            len += s.len;
+            parts.push((f, s.offset, s.len));
         }
         if parts.is_empty() {
             bail!("no archive volumes given");
@@ -49,14 +95,12 @@ impl Read for MultiVolume {
         if self.pos >= self.len || buf.is_empty() {
             return Ok(0);
         }
-        let i = match self.starts.binary_search(&self.pos) {
-            Ok(i) => i,
-            Err(i) => i - 1,
-        };
-        let (f, l) = &mut self.parts[i];
+        // The last part starting at or before pos (skipping empty ones).
+        let i = self.starts.partition_point(|&s| s <= self.pos) - 1;
+        let (f, off, l) = &mut self.parts[i];
         let within = self.pos - self.starts[i];
         let n = ((*l - within) as usize).min(buf.len());
-        f.seek(SeekFrom::Start(within))?;
+        f.seek(SeekFrom::Start(*off + within))?;
         let got = f.read(&mut buf[..n])?;
         self.pos += got as u64;
         Ok(got)

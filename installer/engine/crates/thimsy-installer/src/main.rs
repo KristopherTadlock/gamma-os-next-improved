@@ -146,6 +146,20 @@ enum Dev {
         #[arg(long)]
         system_name: String,
     },
+    /// Write a device pack archive (tar) from FILES; split into 1 GB parts
+    /// if it's over GitHub's 2 GiB asset limit. Prints its catalog entry.
+    Bundle {
+        #[arg(long)]
+        out: PathBuf,
+        /// Split above this many bytes (default: just under 2 GiB).
+        #[arg(long)]
+        max_asset: Option<u64>,
+        #[arg(long)]
+        part_size: Option<u64>,
+        files: Vec<PathBuf>,
+    },
+    /// List the files in a device pack archive (or its parts, in order).
+    BundleList { files: Vec<PathBuf> },
     /// Download and unpack a device's official source firmware.
     Source {
         #[arg(long)]
@@ -401,6 +415,32 @@ fn run(cli: Cli, rep: &Reporter) -> Result<()> {
                 } => {
                     let r = pack::make(&source, &reference, &o, &device, &system_name, rep)?;
                     println!("{}", serde_json::to_string_pretty(&r)?);
+                }
+                Dev::Bundle {
+                    out: o,
+                    max_asset,
+                    part_size,
+                    files,
+                } => {
+                    let refs: Vec<&std::path::Path> = files.iter().map(|p| p.as_path()).collect();
+                    let e = thimsy_engine::bundle::make(
+                        &o,
+                        &refs,
+                        max_asset.unwrap_or(thimsy_engine::bundle::MAX_ASSET),
+                        part_size.unwrap_or(thimsy_engine::bundle::PART),
+                        &mut |d, t| rep.progress("Writing the device pack", d, t),
+                    )?;
+                    println!("{}", serde_json::to_string_pretty(&e)?);
+                }
+                Dev::BundleList { files } => {
+                    let spans = files
+                        .iter()
+                        .map(|p| thimsy_engine::archive::Span::whole(p))
+                        .collect::<Result<Vec<_>>>()?;
+                    let b = thimsy_engine::bundle::Bundle::index(&spans)?;
+                    for (name, m) in &b.members {
+                        println!("{:>12}  {name}", m.size);
+                    }
                 }
                 Dev::I18nStrings { src, out: path } => {
                     let strings = thimsy_engine::i18n::source_strings(&cat, &src)?;

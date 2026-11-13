@@ -1,0 +1,15 @@
+id: gkd-350h-ultra
+name: GKD 350H Ultra
+maker: GKD
+soc: Rockchip RK3576S
+display: "1600×1440"
+status: candidate
+hardware: { android_api: 34, armv82: false, vulkan: true, ram_gb: 2, gpu: "Mali-G52" }
+support:
+  build: candidate
+  boot: candidate
+  install: { windows: guided, linux: guided, macos: guided, android: none }
+notes:
+  - "Planned: microSD card install on every computer. Not buildable yet."
+guides:
+  unlock: { route: none, steps: [] }

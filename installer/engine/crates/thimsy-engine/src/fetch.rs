@@ -1,5 +1,7 @@
 //! Downloads with resume and sha256 checks, local imports, and the cache.
 
+use crate::archive::{MultiVolume, Span};
+use crate::bundle::Bundle;
 use crate::catalog::Artifact;
 use crate::error::{Code, EngineError};
 use crate::events::Reporter;
@@ -12,15 +14,115 @@ use std::time::Duration;
 
 /// Where verified files live: `<workspace>/cache/<file>`, with a
 /// `<file>.ok` marker recording the hash it was verified against.
+/// `imports` are folders to look in, or files the user picked.
 pub struct Cache {
     pub dir: PathBuf,
     pub imports: Vec<PathBuf>,
+    /// Opened device packs; their members are used in place.
+    pub bundles: Vec<Bundle>,
 }
 
 impl Cache {
     pub fn new(dir: PathBuf, imports: Vec<PathBuf>) -> Result<Self> {
         fs::create_dir_all(&dir).with_context(|| format!("creating {}", dir.display()))?;
-        Ok(Cache { dir, imports })
+        Ok(Cache {
+            dir,
+            imports,
+            bundles: Vec::new(),
+        })
+    }
+
+    /// A file called `name` of `size` bytes among the imports: picked
+    /// directly, or inside an import folder.
+    pub fn find_import(&self, name: &str, size: u64) -> Option<PathBuf> {
+        self.imports.iter().find_map(|imp| {
+            let cand = if imp.is_dir() {
+                imp.join(name)
+            } else if imp.file_name().is_some_and(|n| n == name) {
+                imp.clone()
+            } else {
+                return None;
+            };
+            fs::metadata(&cand)
+                .is_ok_and(|m| m.is_file() && m.len() == size)
+                .then_some(cand)
+        })
+    }
+
+    fn bundle_member(&self, a: &Artifact) -> Option<&crate::bundle::Member> {
+        self.bundles
+            .iter()
+            .find_map(|b| b.get(&a.file))
+            .filter(|m| m.size == a.size)
+    }
+
+    /// Whether `a` comes from an opened device pack (nothing to delete).
+    pub fn in_bundle(&self, a: &Artifact) -> bool {
+        self.bundle_member(a).is_some()
+    }
+
+    fn check_spans(&self, a: &Artifact, spans: &[Span], what: &str, rep: &Reporter) -> Result<()> {
+        let mut mv = MultiVolume::open_spans(spans)?;
+        let mut h = <sha2::Sha256 as sha2::Digest>::new();
+        let mut buf = vec![0u8; util::CHUNK];
+        let mut done = 0u64;
+        loop {
+            let n = mv.read(&mut buf)?;
+            if n == 0 {
+                break;
+            }
+            sha2::Digest::update(&mut h, &buf[..n]);
+            done += n as u64;
+            rep.progress(&format!("Checking {}", a.file), done, a.size);
+        }
+        let got = hex::encode(sha2::Digest::finalize(h));
+        if done != a.size || got != a.sha256 {
+            return Err(EngineError::new(
+                Code::HashMismatch,
+                format!(
+                    "{} ({what}) has sha256 {got}, expected {}",
+                    a.file, a.sha256
+                ),
+            )
+            .hint("The file is damaged or a different version. Delete it and download again.")
+            .into());
+        }
+        Ok(())
+    }
+
+    /// A verified copy of the device pack `a`, used where it is: a file the
+    /// user picked (any name, if the size matches), the file or its parts in
+    /// an import folder, or else downloaded into the cache.
+    pub fn get_in_place(&self, a: &Artifact, rep: &Reporter) -> Result<Vec<Span>> {
+        let picked = self
+            .imports
+            .iter()
+            .filter(|p| p.is_file())
+            .find(|p| fs::metadata(p).is_ok_and(|m| m.len() == a.size))
+            .cloned();
+        let whole = picked.or_else(|| self.find_import(&a.file, a.size));
+        let spans = if let Some(p) = whole {
+            Some(vec![Span::whole(&p)?])
+        } else if !a.parts.is_empty() {
+            a.parts
+                .iter()
+                .map(|p| self.find_import(&p.file, p.size))
+                .collect::<Option<Vec<_>>>()
+                .map(|ps| {
+                    ps.iter()
+                        .map(|p| Span::whole(p))
+                        .collect::<Result<Vec<_>>>()
+                })
+                .transpose()?
+        } else {
+            None
+        };
+        if let Some(spans) = spans {
+            rep.info(format!("Using {} from {}", a.file, spans[0].path.display()));
+            self.check_spans(a, &spans, "picked file", rep)?;
+            return Ok(spans);
+        }
+        self.get_all(a, rep)
     }
 
     fn marker(&self, a: &Artifact) -> PathBuf {
@@ -53,48 +155,34 @@ impl Cache {
         Ok(())
     }
 
-    /// Paths of a verified copy of `a`: one file, or its parts in order (the
-    /// whole is checked across the parts without joining them on disk).
-    pub fn get_all(&self, a: &Artifact, rep: &Reporter) -> Result<Vec<PathBuf>> {
+    /// Byte ranges of a verified copy of `a`: inside an opened device pack,
+    /// one file, or its parts in order (the whole is checked across the
+    /// parts without joining them on disk).
+    pub fn get_all(&self, a: &Artifact, rep: &Reporter) -> Result<Vec<Span>> {
+        if let Some(m) = self.bundle_member(a) {
+            let spans = m.spans.clone();
+            self.check_spans(a, &spans, "in the device pack", rep)?;
+            return Ok(spans);
+        }
         if a.parts.is_empty() {
-            return Ok(vec![self.get(a, rep)?]);
+            return Ok(vec![Span::whole(&self.get(a, rep)?)?]);
         }
         let mut paths = Vec::new();
         for p in &a.parts {
             paths.push(self.get(p, rep)?);
         }
+        let spans = paths
+            .iter()
+            .map(|p| Span::whole(p))
+            .collect::<Result<Vec<_>>>()?;
         let marker = self.marker(a);
         if fs::read_to_string(&marker).is_ok_and(|m| m.trim() == a.sha256) {
-            return Ok(paths);
+            return Ok(spans);
         }
-        let mut mv = crate::archive::MultiVolume::open(&paths)?;
-        let mut h = <sha2::Sha256 as sha2::Digest>::new();
-        let mut buf = vec![0u8; util::CHUNK];
-        let mut done = 0u64;
-        loop {
-            let n = mv.read(&mut buf)?;
-            if n == 0 {
-                break;
-            }
-            sha2::Digest::update(&mut h, &buf[..n]);
-            done += n as u64;
-            rep.progress(&format!("Checking {}", a.file), done, a.size);
-        }
-        let got = hex::encode(sha2::Digest::finalize(h));
-        if done != a.size || got != a.sha256 {
-            return Err(EngineError::new(
-                Code::HashMismatch,
-                format!(
-                    "{} (joined from {} parts) has sha256 {got}, expected {}",
-                    a.file,
-                    a.parts.len(),
-                    a.sha256
-                ),
-            )
-            .into());
-        }
+        let what = format!("joined from {} parts", a.parts.len());
+        self.check_spans(a, &spans, &what, rep)?;
         util::write_atomic(&marker, a.sha256.as_bytes())?;
-        Ok(paths)
+        Ok(spans)
     }
 
     /// Returns the path of a verified copy of `a`, fetching it if needed.
@@ -104,17 +192,29 @@ impl Cache {
             rep.info(format!("{} already downloaded", a.file));
             return Ok(dest);
         }
-        // A user-supplied folder (files downloaded by hand or from a draft release).
-        for dir in &self.imports {
-            let cand = dir.join(&a.file);
-            if fs::metadata(&cand).is_ok_and(|m| m.len() == a.size) {
-                rep.info(format!("Importing {} from {}", a.file, dir.display()));
-                let tmp = dest.with_extension("import");
-                copy_with_progress(&cand, &tmp, a, rep)?;
-                self.verify(a, &tmp, rep)?;
-                fs::rename(&tmp, &dest)?;
-                return Ok(dest);
+        // Inside an opened device pack.
+        if let Some(m) = self.bundle_member(a) {
+            let tmp = dest.with_extension("import");
+            {
+                let mut i = MultiVolume::open_spans(&m.spans)?;
+                let mut o = File::create(&tmp)?;
+                util::copy_exact(&mut i, &mut o, a.size, &mut |d| {
+                    rep.progress(&format!("Unpacking {}", a.file), d, a.size)
+                })?;
             }
+            self.verify(a, &tmp, rep)?;
+            fs::rename(&tmp, &dest)?;
+            return Ok(dest);
+        }
+        // A file the user picked or a folder of downloads (by hand or from a
+        // draft release).
+        if let Some(cand) = self.find_import(&a.file, a.size) {
+            rep.info(format!("Importing {} from {}", a.file, cand.display()));
+            let tmp = dest.with_extension("import");
+            copy_with_progress(&cand, &tmp, a, rep)?;
+            self.verify(a, &tmp, rep)?;
+            fs::rename(&tmp, &dest)?;
+            return Ok(dest);
         }
         if dest.exists() && fs::metadata(&dest)?.len() == a.size {
             // Present but never verified (e.g. copied in by hand).
@@ -152,8 +252,12 @@ impl Cache {
                         }
                     },
                     Err(e) => {
+                        let missing = e.downcast_ref::<NotPublished>().is_some();
                         rep.warn(format!("{url}: {e:#} (attempt {attempt}/3)"));
                         last_err = Some(e);
+                        if missing {
+                            break; // asking again won't help
+                        }
                         std::thread::sleep(Duration::from_secs(2 * attempt));
                     }
                 }
@@ -184,6 +288,22 @@ fn copy_with_progress(src: &Path, dst: &Path, a: &Artifact, rep: &Reporter) -> R
     Ok(())
 }
 
+/// The server has no file at the address (HTTP 404): typically a release
+/// that is still a draft. Not retried.
+#[derive(Debug)]
+struct NotPublished;
+
+impl std::fmt::Display for NotPublished {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "the file isn't public at this address (HTTP 404); its release may still be a draft"
+        )
+    }
+}
+
+impl std::error::Error for NotPublished {}
+
 /// Downloads `url` to `partial`, resuming from its current length.
 fn download(url: &str, partial: &Path, a: &Artifact, rep: &Reporter) -> Result<()> {
     if let Some(local) = url.strip_prefix("file://") {
@@ -209,6 +329,7 @@ fn download(url: &str, partial: &Path, a: &Artifact, rep: &Reporter) -> Result<(
         206 => (OpenOptions::new().append(true).open(partial)?, have),
         200 => (File::create(partial)?, 0),
         416 if have == a.size => return Ok(()),
+        404 | 410 => return Err(NotPublished.into()),
         _ => anyhow::bail!("server answered HTTP {status}"),
     };
     let mut body = resp.into_body().into_reader();
@@ -270,7 +391,7 @@ mod tests {
         let paths = cache.get_all(&whole, &rep).unwrap();
         assert_eq!(paths.len(), 3);
         let mut joined = Vec::new();
-        crate::archive::MultiVolume::open(&paths)
+        crate::archive::MultiVolume::open_spans(&paths)
             .unwrap()
             .read_to_end(&mut joined)
             .unwrap();

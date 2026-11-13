@@ -1,0 +1,18 @@
+id: anbernic-rg-slide
+name: Anbernic RG Slide
+maker: Anbernic
+soc: Unisoc T820
+display: "1280×960"
+status: candidate
+hardware: { android_api: 34, armv82: true, vulkan: true, ram_gb: 8, gpu: "Mali-G57" }
+support:
+  build: candidate
+  boot: candidate
+  install: { windows: untested, linux: untested, macos: untested, android: none }
+identify:
+  usb:
+    - { vid: 0x1782, pid: 0x4d00, mode: download, label: "Unisoc download mode" }
+notes:
+  - "Planned: same flashing route as the RG Cube. Not buildable yet."
+guides:
+  unlock: { route: guided, steps: [] }

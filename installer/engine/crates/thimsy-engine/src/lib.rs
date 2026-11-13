@@ -6,6 +6,7 @@
 //! detection and running the bundled flashing tools.
 
 pub mod archive;
+pub mod bundle;
 pub mod catalog;
 pub mod delta;
 pub mod detect;

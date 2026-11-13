@@ -1,4 +1,5 @@
 import 'package:material_ui/material_ui.dart';
+import 'package:path/path.dart' as p;
 import 'package:provider/provider.dart';
 
 import '../l10n/app_localizations.dart';
@@ -14,7 +15,6 @@ class BuildScreen extends StatefulWidget {
 
 class _BuildScreenState extends State<BuildScreen> {
   late final TextEditingController _workspace;
-  late final TextEditingController _import;
   late final AppState _state;
 
   @override
@@ -22,7 +22,6 @@ class _BuildScreenState extends State<BuildScreen> {
     super.initState();
     final s = _state = context.read<AppState>();
     _workspace = TextEditingController(text: s.workspace);
-    _import = TextEditingController(text: s.importDir);
     s.addListener(_syncWorkspace);
   }
 
@@ -38,16 +37,21 @@ class _BuildScreenState extends State<BuildScreen> {
   void dispose() {
     _state.removeListener(_syncWorkspace);
     _workspace.dispose();
-    _import.dispose();
     super.dispose();
   }
 
-  Future<void> _pick(TextEditingController c, ValueChanged<String> set) async {
+  Future<void> _changeFolder(AppState s) async {
     final dir = await pickDirectory();
     if (dir != null) {
-      c.text = dir;
-      set(dir);
+      _workspace.text = dir;
+      s.setWorkspace(dir);
     }
+  }
+
+  /// Opens the file picker; nothing chosen keeps the current source.
+  Future<void> _chooseFiles(AppState s) async {
+    final files = await pickPackFiles(AppLocalizations.of(context));
+    s.setImportFiles(files);
   }
 
   @override
@@ -83,10 +87,9 @@ class _BuildScreenState extends State<BuildScreen> {
             ),
             const SizedBox(width: 8),
             OutlinedButton(
-              onPressed: run.running
-                  ? null
-                  : () => _pick(_workspace, s.setWorkspace),
-              child: Text(l.browse),
+              key: const ValueKey('change-folder'),
+              onPressed: run.running ? null : () => _changeFolder(s),
+              child: Text(l.changeFolder),
             ),
           ],
         ),
@@ -112,29 +115,73 @@ class _BuildScreenState extends State<BuildScreen> {
             style: TextStyle(color: Theme.of(context).colorScheme.error),
           ),
         const SizedBox(height: 12),
-        Row(
-          children: [
-            Expanded(
-              child: TextField(
-                key: const ValueKey('import-field'),
-                controller: _import,
+        Text(l.imageSourceTitle, style: Theme.of(context).textTheme.titleSmall),
+        RadioGroup<ImageSource>(
+          groupValue: s.imageSource,
+          onChanged: (v) {
+            if (run.running) return;
+            if (v == ImageSource.download) {
+              s.useDownload();
+            } else if (s.importFiles.isNotEmpty) {
+              s.setImportFiles(s.importFiles);
+            } else {
+              _chooseFiles(s);
+            }
+          },
+          child: Column(
+            children: [
+              RadioListTile<ImageSource>(
+                key: const ValueKey('source-download'),
+                contentPadding: EdgeInsets.zero,
+                value: ImageSource.download,
                 enabled: !run.running,
-                decoration: InputDecoration(
-                  labelText: l.importLabel,
-                  helperText: l.importHelp,
-                ),
-                onChanged: s.setImportDir,
+                title: Text(l.imageSourceDownload),
               ),
-            ),
-            const SizedBox(width: 8),
-            OutlinedButton(
-              onPressed: run.running
-                  ? null
-                  : () => _pick(_import, s.setImportDir),
-              child: Text(l.browse),
-            ),
-          ],
+              RadioListTile<ImageSource>(
+                key: const ValueKey('source-files'),
+                contentPadding: EdgeInsets.zero,
+                value: ImageSource.files,
+                enabled: !run.running,
+                title: Text(l.imageSourceFiles),
+                subtitle: Text(l.imageSourceFilesHelp),
+              ),
+            ],
+          ),
         ),
+        if (s.imageSource == ImageSource.files)
+          Padding(
+            key: const ValueKey('chosen-files'),
+            padding: const EdgeInsetsDirectional.only(start: 48),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final f in s.importFiles)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 4),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.insert_drive_file_outlined, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Tooltip(
+                            message: f,
+                            child: Text(
+                              p.basename(f),
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                TextButton(
+                  key: const ValueKey('choose-files'),
+                  onPressed: run.running ? null : () => _chooseFiles(s),
+                  child: Text(l.chooseOtherFiles),
+                ),
+              ],
+            ),
+          ),
         const SizedBox(height: 8),
         CheckboxListTile(
           key: const ValueKey('delete-downloads'),
@@ -151,7 +198,10 @@ class _BuildScreenState extends State<BuildScreen> {
             FilledButton.icon(
               key: const ValueKey('start-build'),
               onPressed:
-                  run.running || s.spaceChecking || s.workspace.trim().isEmpty
+                  run.running ||
+                      s.spaceChecking ||
+                      s.workspace.trim().isEmpty ||
+                      !s.imageSourceReady
                   ? null
                   : s.startBuild,
               icon: const Icon(Icons.build),

@@ -150,15 +150,23 @@ fn retries_a_cut_connection_and_resumes() {
 #[test]
 fn http_errors_become_download_failed_with_a_hint() {
     let data = pattern(1000, 5);
-    let (url, _) = serve(data.clone(), Mode::NotFound);
+    let (url, hits) = serve(data.clone(), Mode::NotFound);
     let ws = tempfile::tempdir().unwrap();
     let cache = Cache::new(ws.path().join("c"), vec![]).unwrap();
     let mut a = art(&data, &url);
     a.note = Some("Get it from the release page.".into());
+    let started = std::time::Instant::now();
     let err = cache.get(&a, &rep()).unwrap_err();
     let (code, hint) = crate::error::code_of(&err);
     assert_eq!(code, Code::DownloadFailed);
     assert_eq!(hint.as_deref(), Some("Get it from the release page."));
+    // A missing file (a draft release) says so and isn't retried.
+    assert!(
+        format!("{err:#}").contains("may still be a draft"),
+        "{err:#}"
+    );
+    assert_eq!(hits.load(Ordering::SeqCst), 1);
+    assert!(started.elapsed() < std::time::Duration::from_secs(2));
 }
 
 #[test]

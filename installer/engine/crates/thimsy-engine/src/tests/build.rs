@@ -350,6 +350,86 @@ fn unpacked_official_firmware_in_an_import_folder_skips_the_download() {
 }
 
 #[test]
+fn device_pack_archive_supplies_the_system_image_and_patches() {
+    let mut fx = good_fixture();
+    let d = fx.dir.path().to_path_buf();
+    // One archive holding the system image and both patches, then nothing
+    // else: the individual files are gone and have no download address.
+    let files = ["thimsy-system.img.zst", "vb.bsdiff", "odm.bsdiff"].map(|f| d.join(f));
+    let refs: Vec<&Path> = files.iter().map(|p| p.as_path()).collect();
+    let entry =
+        crate::bundle::make(&d.join("pack.tar"), &refs, u64::MAX, 1, &mut |_, _| {}).unwrap();
+    for f in &files {
+        std::fs::remove_file(f).unwrap();
+    }
+    for a in fx.catalog.root.artifacts.iter_mut() {
+        a.urls.clear();
+    }
+    let dev = &mut fx.catalog.devices[0];
+    for a in dev.artifacts.iter_mut() {
+        a.urls.clear();
+    }
+    let mut bundle: crate::catalog::Artifact = serde_json::from_value(entry).unwrap();
+    bundle.urls = vec![file_url(&d.join("pack.tar"))];
+    dev.bundles.insert("heavy".into(), bundle.clone());
+
+    // Downloaded (file:// here), then deleted afterwards with the rest.
+    let ws = d.join("ws");
+    let (rep, _) = quiet();
+    let rec = job::build(&fx.catalog, &opts(&ws, true), &rep).unwrap();
+    assert_eq!(rec.sha256, fx.expected_sha);
+    assert!(!ws.join("cache/pack.tar").exists());
+    assert!(!ws.join("cache/thimsy-system.img.zst").exists());
+
+    // A picked file under any name is used in place and never deleted.
+    let picked = d.join("my download.tar");
+    std::fs::rename(d.join("pack.tar"), &picked).unwrap();
+    let mut o = opts(&d.join("ws2"), true);
+    o.imports = vec![picked.clone()];
+    let (rep, _) = quiet();
+    assert_eq!(
+        job::build(&fx.catalog, &o, &rep).unwrap().sha256,
+        fx.expected_sha
+    );
+    assert!(picked.exists());
+    assert!(!d.join("ws2/cache/my download.tar").exists());
+
+    // Split into parts in an import folder.
+    let bytes = std::fs::read(&picked).unwrap();
+    let parts_dir = d.join("parts");
+    std::fs::create_dir_all(&parts_dir).unwrap();
+    bundle.parts = bytes
+        .chunks(bytes.len() / 3 + 1)
+        .enumerate()
+        .map(|(i, c)| {
+            let p = parts_dir.join(format!("pack.tar.{:03}", i + 1));
+            std::fs::write(&p, c).unwrap();
+            serde_yaml::from_str(&artifact_yaml(&format!("pack.tar.{:03}", i + 1), &p)).unwrap()
+        })
+        .collect();
+    bundle.urls.clear();
+    fx.catalog.devices[0].bundles.insert("heavy".into(), bundle);
+    let mut o = opts(&d.join("ws3"), false);
+    o.imports = vec![parts_dir.clone()];
+    let (rep, _) = quiet();
+    assert_eq!(
+        job::build(&fx.catalog, &o, &rep).unwrap().sha256,
+        fx.expected_sha
+    );
+
+    // A damaged picked file is refused, not silently replaced.
+    let mut bad = bytes.clone();
+    let mid = bad.len() / 2;
+    bad[mid] ^= 0xFF;
+    std::fs::write(&picked, &bad).unwrap();
+    let mut o = opts(&d.join("ws4"), false);
+    o.imports = vec![picked];
+    let (rep, _) = quiet();
+    let err = job::build(&fx.catalog, &o, &rep).unwrap_err();
+    assert_eq!(crate::error::code_of(&err).0, Code::HashMismatch, "{err:#}");
+}
+
+#[test]
 fn tampered_inputs_are_rejected() {
     let fx = good_fixture();
     // Corrupt one archive volume: the download check catches it.

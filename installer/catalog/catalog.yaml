@@ -1,6 +1,6 @@
 # Thimsy installer catalog. Data only: devices, profiles, and the shared
 # (device-independent) system images each profile uses.
-version: "0.1.0-test1"
+version: "0.1.0-test2"
 release: "Thimsy 1.0a"
 
 # Profile → shared system image. A profile without an entry is shown as
@@ -11,11 +11,7 @@ systems:
 artifacts:
   - id: thimsy-system-1.0a-heavy
     file: thimsy-system-1.0a-heavy.img.zst
-    size: 2209026045
-    sha256: "dd4130e88c793bc508b2f9230c981e108d423dba0c3490ccf693167d1c3ecae3"
-    note: "Download the thimsy-system-1.0a-heavy.img.zst.0NN files from the installer's test release and choose their folder under Import downloaded files."
-    unpack: { format: zstd, size: 4630966272, sha256: "c10c373702df04b8ce65d7d23d3c2f8adf6ee9df7384f94e12598c08efda52f8" }
-    parts:
-      - { id: thimsy-system-1.0a-heavy.img.zst.001, file: thimsy-system-1.0a-heavy.img.zst.001, size: 1000000000, sha256: "5281a26b3258bd2ca7638771769f651f2f5349d7e79e1327ac00817c63f1f0ce", urls: ["https://github.com/KristopherTadlock/thimsy-os/releases/download/installer-v0.1.0-test1/thimsy-system-1.0a-heavy.img.zst.001"] }
-      - { id: thimsy-system-1.0a-heavy.img.zst.002, file: thimsy-system-1.0a-heavy.img.zst.002, size: 1000000000, sha256: "e13ae1fe49e97431323c0170a8d34f1a29dc8362a2b026d98b47ffea811f0adb", urls: ["https://github.com/KristopherTadlock/thimsy-os/releases/download/installer-v0.1.0-test1/thimsy-system-1.0a-heavy.img.zst.002"] }
-      - { id: thimsy-system-1.0a-heavy.img.zst.003, file: thimsy-system-1.0a-heavy.img.zst.003, size: 209026045, sha256: "af59a51cefe2e081baf9ef9adc72a8e8cdf87ae3099cb6c6afd2adf691bd6345", urls: ["https://github.com/KristopherTadlock/thimsy-os/releases/download/installer-v0.1.0-test1/thimsy-system-1.0a-heavy.img.zst.003"] }
+    size: 2071820524
+    sha256: "0934f560c4292d974c991854c4784895e0c1294b357e3b47df5fff04fa7b2ee0"
+    note: "Inside the device pack."
+    unpack: { format: zstd, size: 4630966272, sha256: "7e07ac29e2423be3d175df4911a290b381696a5f7c99f09cef129612951ad371" }

@@ -53,11 +53,23 @@ installer/tools/make-thimsy-build.sh [--apply] out/RG_Cube_Thimsy_OS_v1.0a.pac ~
 
 This downloads the official GammaOS firmware (or takes `--source PAC`), makes
 the device pack, rebuilds the PAC with the installer and stops unless the
-result is byte-identical. `~/thimsy-build-out/thimsy-build/` then holds the
-system image (split under 2 GiB) and the device's patches: ship it next to the
-app (the engine looks in `<app>/thimsy-build`, and `THIMSY_BUILD_DIR`) or
-upload it to the installer release. `--apply` writes the result into
+result is byte-identical. The device pack is **one archive**,
+`thimsy-build/Thimsy-<release>-<device>-<profile>.tar`: a plain tar of the
+system image (zstd level 19), the device's `.bsdiff` patches and `pack.json`,
+so 7-Zip or `tar` can open it. It's split into 1 GB `.tar.001`, `.002`, ...
+parts only when it's over GitHub's 2 GiB asset limit (the RG Cube's is
+2.08 GB, so it's one file). The engine reads the system image straight out of
+the archive (no unpacking to disk) and checks the archive's sha256 and each
+file's.
+
+Upload the archive to the installer release, or ship it next to the app (the
+engine looks in `<app>/thimsy-build` and `THIMSY_BUILD_DIR`). Users can also
+pick it with "Use a file I already downloaded" (`--import <file>`; any file
+name works if the size and sha256 match). `--apply` writes the result into
 `installer/catalog` so the next engine build embeds it.
+
+`thimsy-installer dev bundle --out X.tar FILES...` and `dev bundle-list X.tar`
+make and list device-pack archives by hand.
 
 The build also accepts the unpacked official firmware (for example
 `RG_Cube_GammaOS_Next_Full_v1.2.pac`) in an import folder instead of

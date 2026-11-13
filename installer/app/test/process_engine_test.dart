@@ -63,7 +63,7 @@ void main() {
           device: 'd',
           profile: 'medium',
           workspace: '/w',
-          importDir: '/dl',
+          imports: const ['/dl/p.tar.001', '/dl/p.tar.002'],
         )
         .events
         .toList();
@@ -72,8 +72,8 @@ void main() {
     expect((events[2] as ProgressEvent).fraction, 0.5);
     expect(
       (events[3] as LogEvent).message,
-      'build --device d --profile medium --workspace /w --import /dl '
-      '--lang en --json',
+      'build --device d --profile medium --workspace /w '
+      '--import /dl/p.tar.001 --import /dl/p.tar.002 --lang en --json',
     );
     expect((events.last as ResultEvent).str('image'), '/w/i.pac');
   });

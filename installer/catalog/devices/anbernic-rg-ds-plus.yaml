@@ -1,0 +1,15 @@
+id: anbernic-rg-ds-plus
+name: Anbernic RG DS Plus
+maker: Anbernic
+soc: Rockchip RK3568
+display: "1024×768"
+status: candidate
+hardware: { android_api: 34, armv82: true, vulkan: true, ram_gb: 1, gpu: "Mali-G52" }
+support:
+  build: candidate
+  boot: candidate
+  install: { windows: guided, linux: guided, macos: guided, android: none }
+notes:
+  - "Planned: microSD card install on every computer. Not buildable yet."
+guides:
+  unlock: { route: none, steps: [] }

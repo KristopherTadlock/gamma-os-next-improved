@@ -1,0 +1,15 @@
+id: anbernic-rg405m
+name: Anbernic RG405M
+maker: Anbernic
+soc: Unisoc T618
+display: "640×480"
+status: candidate
+hardware: { android_api: 34, armv82: true, vulkan: true, ram_gb: 4, gpu: "Mali-G52" }
+support:
+  build: candidate
+  boot: candidate
+  install: { windows: untested, linux: untested, macos: untested, android: none }
+notes:
+  - "Planned: fastboot install on every computer. Not buildable yet."
+guides:
+  unlock: { route: guided, steps: [] }

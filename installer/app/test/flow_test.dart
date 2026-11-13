@@ -108,7 +108,7 @@ class _CrashingEngine extends FakeEngine {
     required String device,
     required String profile,
     required String workspace,
-    String? importDir,
+    List<String> imports = const [],
     bool deleteDownloads = false,
     Map<String, String> overrides = const {},
   }) => _Run([

@@ -17,10 +17,13 @@
 #                     next engine build embeds it
 #
 # OUT_DIR gets:
-#   thimsy-build/   the system image (split under 2 GiB) and the device's
-#                   .bsdiff patches, and pack.json (what `dev pack` found).
-#                   Ship it next to the app (the engine looks
-#                   in <app>/thimsy-build) or upload it to the release TAG.
+#   thimsy-build/   the device pack as one archive,
+#                   Thimsy-<release>-<device>-<profile>.tar: the system image,
+#                   the device's .bsdiff patches and pack.json (what `dev pack`
+#                   found). Split into 1 GB .tar.001, .002, ... parts only if
+#                   it's over GitHub's 2 GiB asset limit. Upload it to the
+#                   release TAG, or ship it next to the app (the engine looks
+#                   in <app>/thimsy-build).
 #   catalog/        the catalog with this build written in
 #
 # Needs: the engine (cargo build --release in installer/engine, or ENGINE=...)
@@ -69,16 +72,26 @@ fi
 SOURCE="$(realpath "$SOURCE")"
 
 echo "== making the device pack (system image + patches)"
-"$ENGINE" dev pack --source "$SOURCE" --reference "$PAC" --out "$OUT/thimsy-build" \
+"$ENGINE" dev pack --source "$SOURCE" --reference "$PAC" --out "$WORK/pack" \
   --device "$short" --system-name "$SYSTEM_NAME"
+
+echo "== putting it in one archive"
+mkdir -p "$OUT/thimsy-build"
+BUNDLE="$OUT/thimsy-build/Thimsy-$release-$DEVICE-$PROFILE.tar"
+mapfile -t members < <(python3 -I -c "
+import json, sys
+p = json.load(open(sys.argv[1]))
+print('pack.json'); print(p['system']['file'])
+for a in p['artifacts']: print(a['file'])" "$WORK/pack/pack.json")
+(cd "$WORK/pack" && "$ENGINE" dev bundle --out "$BUNDLE" "${members[@]}") > "$WORK/bundle.json"
+cp "$WORK/pack/pack.json" "$WORK/pack.json"
+rm -rf "$WORK/pack"
+"$ENGINE" dev bundle-list "$OUT/thimsy-build"/Thimsy-*.tar*
 
 echo "== writing it into the catalog"
 cp -r "$INSTALLER/catalog" "$OUT/catalog"
-(cd "$OUT/thimsy-build" && python3 -I "$HERE/apply_pack.py" "$OUT/thimsy-build/pack.json" \
-  "$OUT/catalog/devices/$DEVICE.yaml" "$OUT/catalog/catalog.yaml" "$PROFILE" "$TAG")
-# apply_pack splits a system image over 1.9 GB into parts; ship the parts only.
-system_file=$(python3 -I -c "import json,sys;print(json.load(open(sys.argv[1]))['system']['file'])" "$OUT/thimsy-build/pack.json")
-ls "$OUT/thimsy-build/$system_file".0* >/dev/null 2>&1 && rm -f "$OUT/thimsy-build/$system_file"
+python3 -I "$HERE/apply_pack.py" --bundle "$WORK/bundle.json" "$WORK/pack.json" \
+  "$OUT/catalog/devices/$DEVICE.yaml" "$OUT/catalog/catalog.yaml" "$PROFILE" "$TAG"
 "$ENGINE" --catalog "$OUT/catalog" dev check-catalog
 
 echo "== rebuilding with the installer and comparing"

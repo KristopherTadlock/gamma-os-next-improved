@@ -293,6 +293,12 @@ pub struct Device {
     pub source: Option<Source>,
     #[serde(default)]
     pub artifacts: Vec<Artifact>,
+    /// Profile → the device pack as one archive (a tar of the system image,
+    /// the patches and pack.json; see `bundle`). When present the build takes
+    /// the system image and the artifacts from it instead of downloading
+    /// them one by one.
+    #[serde(default)]
+    pub bundles: BTreeMap<String, Artifact>,
     #[serde(default)]
     pub build: Vec<Op>,
     /// Profile → expected output sha256, when known.
@@ -441,6 +447,13 @@ impl Catalog {
             }
             if !d.build.is_empty() && d.source.is_none() {
                 bail!("device {} has build steps but no source firmware", d.id);
+            }
+            for (p, b) in &d.bundles {
+                self.profile(p)
+                    .with_context(|| format!("device {}: bundle for unknown profile {p}", d.id))?;
+                if b.unpack.is_some() {
+                    bail!("device {}: bundle {} can't be compressed", d.id, b.file);
+                }
             }
         }
         for (p, a) in &self.root.systems {

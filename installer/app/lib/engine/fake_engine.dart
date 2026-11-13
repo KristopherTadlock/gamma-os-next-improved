@@ -14,6 +14,9 @@ class FakeEngine extends Engine {
   /// Calls made, for assertions in tests.
   final List<String> calls = [];
 
+  /// The `--import` paths of the last build.
+  List<String> lastImports = const [];
+
   /// Free bytes the fake `space` reports (tests change it to "free up").
   int freeBytes;
 
@@ -128,11 +131,135 @@ class FakeEngine extends Engine {
     'blocks': <String>[],
   };
 
+  /// A not-yet-supported device that installs everywhere (fake catalog
+  /// filler for search, grouping and the dropdown).
+  static Map<String, dynamic> _candidate(
+    String id,
+    String name,
+    String maker,
+    String soc,
+    String display, {
+    List<String> notes = const ['Not buildable yet.'],
+    List<String> blocks = const [],
+  }) => {
+    'id': id,
+    'name': name,
+    'maker': maker,
+    'soc': soc,
+    'display': display,
+    'status': 'candidate',
+    'support': {
+      'build': 'none',
+      'boot': 'none',
+      'install': {
+        'windows': 'automated',
+        'linux': 'automated',
+        'macos': 'untested',
+        'android': 'none',
+      },
+    },
+    'notes': notes,
+    'blocks': blocks,
+  };
+
+  static const _rg406h = {
+    'id': 'anbernic-rg406h',
+    'name': 'Anbernic RG406H',
+    'maker': 'Anbernic',
+    'soc': 'Unisoc T820',
+    'display': '960×720',
+    'status': 'testing',
+    'support': {
+      'build': 'verified',
+      'boot': 'none',
+      'install': {
+        'windows': 'automated',
+        'linux': 'automated',
+        'macos': 'untested',
+        'android': 'none',
+      },
+    },
+    'notes': <String>[],
+    'blocks': <String>[],
+  };
+
+  /// Windows-only, with its own host message.
+  static const _rg405m = {
+    'id': 'anbernic-rg405m',
+    'name': 'Anbernic RG405M',
+    'maker': 'Anbernic',
+    'soc': 'Unisoc T618',
+    'display': '640×480',
+    'status': 'candidate',
+    'support': {
+      'build': 'none',
+      'boot': 'none',
+      'install': {
+        'windows': 'automated',
+        'linux': 'none',
+        'macos': 'none',
+        'android': 'none',
+      },
+    },
+    'notes': ['Not buildable yet.'],
+    'blocks': <String>[],
+    'host_message':
+        'The RG405M is flashed with a Windows-only tool. Run Thimsy '
+        'Installer on a Windows PC to continue.',
+  };
+
+  static final _more = [
+    _candidate(
+      'anbernic-rg505',
+      'Anbernic RG505',
+      'Anbernic',
+      'Unisoc T618',
+      '960×544',
+    ),
+    _candidate(
+      'retroid-pocket-5',
+      'Retroid Pocket 5',
+      'Retroid',
+      'Qualcomm Snapdragon 865',
+      '1920×1080',
+    ),
+    _candidate(
+      'retroid-pocket-mini',
+      'Retroid Pocket Mini',
+      'Retroid',
+      'Qualcomm Snapdragon 865',
+      '1280×960',
+    ),
+    _candidate(
+      'retroid-pocket-classic',
+      'Retroid Pocket Classic',
+      'Retroid',
+      'Qualcomm Snapdragon G1 Gen 2',
+      '1240×1080',
+      blocks: ['Firmware 1.0.0.5 cannot be unlocked yet.'],
+    ),
+    _candidate(
+      'ayaneo-pocket-micro',
+      'AYANEO Pocket Micro',
+      'AYANEO',
+      'MediaTek Helio G99',
+      '960×640',
+    ),
+    _candidate(
+      'mangmi-air-x',
+      'MANGMI Air X',
+      'MANGMI',
+      'Qualcomm Snapdragon 865',
+      '1920×1080',
+      notes: const [],
+    ),
+  ];
+
   Map<String, dynamic> get _catalogJson => {
     'type': 'catalog',
     'version': '0.1.0-fake',
     'host': host,
-    'devices': [_rgCube, _rp4, _rg557, _e6],
+    'devices': [_rgCube, _rp4, _rg557, _e6, _rg406h, _rg405m, ..._more],
     'profiles': [
       {
         'id': 'light',
@@ -355,11 +482,12 @@ class FakeEngine extends Engine {
     required String device,
     required String profile,
     required String workspace,
-    String? importDir,
+    List<String> imports = const [],
     bool deleteDownloads = false,
     Map<String, String> overrides = const {},
   }) {
     calls.add('build $device $profile${deleteDownloads ? ' delete' : ''}');
+    lastImports = imports;
     final job = '$workspace/jobs/$device-$profile';
     return _script(
       () => [

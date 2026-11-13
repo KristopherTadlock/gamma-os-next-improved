@@ -335,6 +335,32 @@ Future<String?> _pickWithFileSelector() async {
   }
 }
 
+/// Opens the native picker for the Thimsy device pack: one `.tar` file or
+/// several of its numbered parts (`.tar.001`, `.tar.002`, …). Returns the
+/// chosen paths, empty when cancelled. Replaceable in tests.
+Future<List<String>> Function(AppLocalizations l) pickPackFiles =
+    _pickPackWithFileSelector;
+
+Future<List<String>> _pickPackWithFileSelector(AppLocalizations l) async {
+  try {
+    final files = await openFiles(
+      acceptedTypeGroups: [
+        XTypeGroup(
+          label: l.packFileType,
+          extensions: [
+            'tar',
+            for (var i = 1; i < 100; i++) i.toString().padLeft(3, '0'),
+          ],
+        ),
+        XTypeGroup(label: l.allFiles),
+      ],
+    );
+    return [for (final f in files) f.path];
+  } catch (_) {
+    return const [];
+  }
+}
+
 /// The message to show for [e]: the engine's own (already translated) text,
 /// or the app's translation for errors it raised itself.
 String errorMessage(AppLocalizations l, ErrorEvent e) {

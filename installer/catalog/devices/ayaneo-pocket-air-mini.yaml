@@ -1,0 +1,16 @@
+id: ayaneo-pocket-air-mini
+name: AYANEO Pocket Air Mini
+maker: AYANEO
+soc: MediaTek Helio G90T
+display: "1280×960"
+status: candidate
+hardware: { android_api: 34, armv82: true, vulkan: true, ram_gb: 2, gpu: "Mali-G76" }
+support:
+  build: candidate
+  boot: candidate
+  install: { windows: untested, linux: untested, macos: none, android: none }
+host_message: "{device} is installed with MediaTek's SP Flash Tool, which doesn't run on {host}. Run Thimsy Installer on a Windows PC to install it."
+notes:
+  - "Planned: SP Flash Tool on Windows and Linux. Not buildable yet."
+guides:
+  unlock: { route: none, steps: [] }

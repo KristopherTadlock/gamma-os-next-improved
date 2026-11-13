@@ -104,6 +104,15 @@ String driveOf(String path) {
   return m != null ? m.group(1)!.toUpperCase() : path;
 }
 
+/// Where the build gets the Thimsy device pack.
+enum ImageSource {
+  /// The engine downloads it (the default).
+  download,
+
+  /// Files the user already downloaded: one `.tar`, or its numbered parts.
+  files,
+}
+
 /// What the device step's Next did.
 enum DeviceNext { proceeded, needsWindows, nothingSelected }
 
@@ -115,8 +124,14 @@ class AppState extends ChangeNotifier {
 
   final LanguageStore? languageStore;
 
-  AppState(this.engine, {bool? onAndroid, this.languageStore})
-    : onAndroid = onAndroid ?? (!kIsWeb && Platform.isAndroid) {
+  /// [workspace] is the starting workspace folder (see
+  /// `findDefaultWorkspace`); the user can change it on the build step.
+  AppState(
+    this.engine, {
+    bool? onAndroid,
+    this.languageStore,
+    this.workspace = '',
+  }) : onAndroid = onAndroid ?? (!kIsWeb && Platform.isAndroid) {
     languageCode = languageByCode(languageStore?.load())?.code;
   }
 
@@ -201,8 +216,20 @@ class AppState extends ChangeNotifier {
   }
 
   // ----------------------------------------------------------------- build
-  String workspace = '';
-  String importDir = '';
+  String workspace;
+  ImageSource imageSource = ImageSource.download;
+
+  /// The device pack files chosen for [ImageSource.files], sorted so
+  /// numbered parts are in order.
+  List<String> importFiles = const [];
+
+  /// What the build is given as `--import`: nothing when downloading.
+  List<String> get imports =>
+      imageSource == ImageSource.files ? importFiles : const [];
+
+  /// False while "Use a file I already downloaded" has no file yet.
+  bool get imageSourceReady =>
+      imageSource == ImageSource.download || importFiles.isNotEmpty;
   bool deleteDownloads = false;
   SpaceInfo? space;
   bool spaceChecking = false;
@@ -423,15 +450,26 @@ class AppState extends ChangeNotifier {
     }
   }
 
-  void setImportDir(String v) {
-    importDir = v;
+  /// Switches back to downloading. (Choosing files goes through
+  /// [setImportFiles].)
+  void useDownload() {
+    imageSource = ImageSource.download;
+    notifyListeners();
+  }
+
+  /// Uses [files] (one `.tar`, or its numbered parts) instead of
+  /// downloading. An empty list keeps the current choice.
+  void setImportFiles(List<String> files) {
+    if (files.isEmpty) return;
+    importFiles = List.unmodifiable([...files]..sort());
+    imageSource = ImageSource.files;
     notifyListeners();
   }
 
   /// Checks free space first; never starts the build without room.
   Future<void> startBuild() async {
     if (buildRun.running || deviceId == null || profileId == null) return;
-    if (workspace.trim().isEmpty) return;
+    if (workspace.trim().isEmpty || !imageSourceReady) return;
     _spaceDebounce?.cancel();
     final info = await checkSpace();
     if (info == null) return;
@@ -451,7 +489,7 @@ class AppState extends ChangeNotifier {
       device: deviceId!,
       profile: profileId!,
       workspace: workspace.trim(),
-      importDir: importDir.trim().isEmpty ? null : importDir.trim(),
+      imports: imports,
       deleteDownloads: deleteDownloads,
     );
     _buildHandle = run;

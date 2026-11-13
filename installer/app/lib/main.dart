@@ -9,6 +9,7 @@ import 'l10n/app_localizations.dart';
 import 'l10n/languages.dart';
 import 'screens/home_shell.dart';
 import 'state/app_state.dart';
+import 'state/default_workspace.dart';
 
 const _useFake = bool.fromEnvironment('FAKE_ENGINE');
 
@@ -35,7 +36,17 @@ Future<void> main() async {
     store = null; // no persistence available; follow the system language
   }
   final Engine engine = _useFake ? FakeEngine() : ProcessEngine();
-  runApp(ThimsyInstallerApp(state: AppState(engine, languageStore: store)));
+  runApp(
+    ThimsyInstallerApp(
+      state: AppState(
+        engine,
+        languageStore: store,
+        // Next to the app (or the app data folder when that's read-only),
+        // so nobody has to pick a folder; the build step can change it.
+        workspace: findDefaultWorkspace(),
+      ),
+    ),
+  );
 }
 
 class ThimsyInstallerApp extends StatelessWidget {

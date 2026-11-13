@@ -1,0 +1,17 @@
+id: retroid-pocket-classic
+name: Retroid Pocket Classic
+maker: Retroid
+soc: Qualcomm Snapdragon G1 Gen 2
+display: "1240×1080"
+status: candidate
+hardware: { android_api: 33, armv82: true, vulkan: true, ram_gb: 4, gpu: "Adreno A12" }
+support:
+  build: candidate
+  boot: candidate
+  install: { windows: untested, linux: untested, macos: untested, android: none }
+notes:
+  - "Planned: fastboot install on every computer. Not buildable yet."
+blocks:
+  - "Don't install on units made in March 2026 or later."
+guides:
+  unlock: { route: none, steps: [] }

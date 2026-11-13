@@ -1,0 +1,16 @@
+id: magicx-mini-zero-28
+name: MagicX Mini Zero 28
+maker: MagicX
+soc: Allwinner A133P
+display: "640×480"
+status: candidate
+hardware: { android_api: 34, armv82: false, vulkan: true, ram_gb: 2, gpu: "PowerVR GE8300" }
+support:
+  build: candidate
+  boot: candidate
+  install: { windows: guided, linux: none, macos: none, android: none }
+host_message: "{device} can't be installed from {host}. Run Thimsy Installer on a Windows PC to install it."
+notes:
+  - "Planned: Windows only. Not buildable yet."
+guides:
+  unlock: { route: none, steps: [] }

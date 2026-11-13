@@ -1,0 +1,15 @@
+id: anbernic-rg-vita-pro
+name: Anbernic RG Vita Pro
+maker: Anbernic
+soc: Rockchip RK3576
+display: "1920×1080"
+status: candidate
+hardware: { android_api: 34, armv82: false, vulkan: true, ram_gb: 4, gpu: "Mali-G52" }
+support:
+  build: candidate
+  boot: candidate
+  install: { windows: guided, linux: guided, macos: guided, android: none }
+notes:
+  - "Planned: microSD card install on every computer. Not buildable yet."
+guides:
+  unlock: { route: none, steps: [] }

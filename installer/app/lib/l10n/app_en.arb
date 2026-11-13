@@ -19,7 +19,6 @@
   "open": "Open",
   "details": "Details",
   "tryAgain": "Try again",
-  "browse": "Browse…",
   "catalogVersion": "Catalog {version}",
   "@catalogVersion": {
     "placeholders": {
@@ -71,6 +70,22 @@
   },
   "deviceListError": "The device list could not be loaded",
   "onlyInstallable": "Only devices this computer can install",
+  "deviceSearchHint": "Search by name, maker or chip",
+  "deviceSearchClear": "Clear search",
+  "devicePickerLabel": "Device",
+  "deviceMakerOther": "Other",
+  "deviceNoMatchTitle": "No devices match “{query}”",
+  "@deviceNoMatchTitle": {
+    "placeholders": {
+      "query": {
+        "type": "String"
+      }
+    }
+  },
+  "deviceNoMatchBody": "Check the spelling, or try the maker or chip name.",
+  "deviceNoneHereTitle": "This computer can't install any of these devices",
+  "deviceNoneHereBody": "Turn off the filter to see every device.",
+  "deviceShowAll": "Show all devices",
   "badgeNeedsWindows": "Needs Windows",
   "badgeAutomated": "Installs on {host}",
   "@badgeAutomated": {
@@ -131,8 +146,14 @@
   "exportOnlyBody": "This computer can build the image but not install it. Copy the result to a Windows PC and finish there.",
   "workspaceLabel": "Workspace folder",
   "workspaceHelp": "A folder on a local drive with enough space (not FAT32).",
-  "importLabel": "Already downloaded files (optional)",
-  "importHelp": "Files found here are used instead of downloading, if their checksums match.",
+  "changeFolder": "Change folder…",
+  "imageSourceTitle": "Where to get Thimsy",
+  "imageSourceDownload": "Download automatically",
+  "imageSourceFiles": "Use a file I already downloaded…",
+  "imageSourceFilesHelp": "The Thimsy device pack: one .tar file, or all of its numbered parts (.tar.001, .tar.002, …).",
+  "chooseOtherFiles": "Choose other files…",
+  "packFileType": "Thimsy device pack",
+  "allFiles": "All files",
   "startBuild": "Start build",
   "buildAgain": "Build again",
   "buildComplete": "Build complete",

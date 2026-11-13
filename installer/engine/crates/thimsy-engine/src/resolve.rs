@@ -207,10 +207,14 @@ pub fn space(cat: &Catalog, d: &Device, profile: &str) -> Space {
         downloads += src.parts.iter().map(|a| a.size).sum::<u64>();
         image = src.container.size;
     }
-    if let Some(sys) = cat.system_for(profile) {
-        downloads += sys.size;
+    if let Some(b) = d.bundles.get(profile) {
+        downloads += b.size;
+    } else {
+        if let Some(sys) = cat.system_for(profile) {
+            downloads += sys.size;
+        }
+        downloads += d.artifacts.iter().map(|a| a.size).sum::<u64>();
     }
-    downloads += d.artifacts.iter().map(|a| a.size).sum::<u64>();
     let build_peak = downloads + image;
     Space {
         downloads,

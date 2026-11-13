@@ -34,23 +34,26 @@ source:
     - { id: gos12-004, file: RG_Cube_GammaOS_Next_Full_v1.2.7z.004, size: 524288000, sha256: "eec844dab87e340f30a1e345af81cb4e35ac7036d02e534397460937462352a7", urls: ["https://github.com/TheGammaSqueeze/GammaOSNext/releases/download/v.1.2.0-ANBERNICRGCUBE/RG_Cube_GammaOS_Next_Full_v1.2.7z.004"] }
     - { id: gos12-005, file: RG_Cube_GammaOS_Next_Full_v1.2.7z.005, size: 461088802, sha256: "71666923d21b2c6e03dab6105c73fe3f71e20abae3054566b324ee0bcb9e66bf", urls: ["https://github.com/TheGammaSqueeze/GammaOSNext/releases/download/v.1.2.0-ANBERNICRGCUBE/RG_Cube_GammaOS_Next_Full_v1.2.7z.005"] }
 artifacts:
-  - { id: "rgcube-bootlogo-delta", file: "rgcube-bootlogo-delta.bsdiff", size: 42601, sha256: "e0c09ee2f61e20c5b0840917874fc1ba091433ab4b94e695e25257d5789abd8e", urls: ["https://github.com/KristopherTadlock/thimsy-os/releases/download/installer-v0.1.0-test1/rgcube-bootlogo-delta.bsdiff"] }
-  - { id: "rgcube-vendorboot-delta", file: "rgcube-vendorboot-delta.bsdiff", size: 3151, sha256: "4e8e67c1e5f8534d92c1a33ad179fae70443d49df83effaccf016d31086b3d0d", urls: ["https://github.com/KristopherTadlock/thimsy-os/releases/download/installer-v0.1.0-test1/rgcube-vendorboot-delta.bsdiff"] }
-  - { id: "rgcube-odm-a-delta", file: "rgcube-odm-a-delta.bsdiff", size: 343169, sha256: "2210e530562f7b62b310a84929f112c17fd792344a203e38affb3dd91c2e464d", urls: ["https://github.com/KristopherTadlock/thimsy-os/releases/download/installer-v0.1.0-test1/rgcube-odm-a-delta.bsdiff"] }
-  - { id: "rgcube-vendor-dlkm-a-delta", file: "rgcube-vendor-dlkm-a-delta.bsdiff", size: 5481, sha256: "ea53af39c933ad8eb4e6b73ed7aabd3a5aa666ca3c5882c6682a378e08e3d23f", urls: ["https://github.com/KristopherTadlock/thimsy-os/releases/download/installer-v0.1.0-test1/rgcube-vendor-dlkm-a-delta.bsdiff"] }
+  - { id: "rgcube-bootlogo-delta", file: "rgcube-bootlogo-delta.bsdiff", size: 30680, sha256: "2fb08fd10ca4c5254a6125c63462b1e9f33f4cc441f4c4c32d479eeb38575350" }
+  - { id: "rgcube-vendorboot-delta", file: "rgcube-vendorboot-delta.bsdiff", size: 3151, sha256: "4e8e67c1e5f8534d92c1a33ad179fae70443d49df83effaccf016d31086b3d0d" }
+  - { id: "rgcube-odm-a-delta", file: "rgcube-odm-a-delta.bsdiff", size: 343286, sha256: "11c7ca9d085103fd704d2739ee01052879a0d65d38ea6027190dceb86019f851" }
+  - { id: "rgcube-vendor-dlkm-a-delta", file: "rgcube-vendor-dlkm-a-delta.bsdiff", size: 5481, sha256: "ea53af39c933ad8eb4e6b73ed7aabd3a5aa666ca3c5882c6682a378e08e3d23f" }
 
+bundles:
+  heavy: { id: "Thimsy-1.0a-anbernic-rg-cube-heavy.tar", file: "Thimsy-1.0a-anbernic-rg-cube-heavy.tar", size: 2072211968, sha256: "5cfb14c06f061a29537b10f382445a9822694d6e8b14ad33d629448db2add6c6", note: "Download Thimsy-1.0a-anbernic-rg-cube-heavy.tar from the Thimsy Installer release page, then choose it with Use a file I already downloaded.", urls: ["https://github.com/KristopherTadlock/thimsy-os/releases/download/installer-v0.1.0-test2/Thimsy-1.0a-anbernic-rg-cube-heavy.tar"] }
 build:
-  - { artifact: "rgcube-bootlogo-delta", entry: "BootLogo", in_sha256: "cd992ab38d7e360eda8676035d0775a04c0001b13902b4036fb49ec8a3f80a95", op: "pac_delta", out_sha256: "c7f9ca777bb1f36cf22b6f17cc28b49cb28d1d42e3860b6f69762a8b1adfad91" }
+  - { artifact: "rgcube-bootlogo-delta", entry: "BootLogo", in_sha256: "cd992ab38d7e360eda8676035d0775a04c0001b13902b4036fb49ec8a3f80a95", op: "pac_delta", out_sha256: "4e757baa863b6962553b47043d3abf07ae0331f3676257f0583afdf9db1da283" }
+  - { artifact: "rgcube-bootlogo-delta", entry: "Fastboot_Logo", in_sha256: "cd992ab38d7e360eda8676035d0775a04c0001b13902b4036fb49ec8a3f80a95", op: "pac_delta", out_sha256: "4e757baa863b6962553b47043d3abf07ae0331f3676257f0583afdf9db1da283" }
   - { artifact: "rgcube-vendorboot-delta", entry: "VENDORBOOT", in_sha256: "a5c550c118e1eefa1624d0069d627260c312940cbec25e5ef8181e3691a59ef0", op: "pac_delta", out_sha256: "a3f5f71038d0b9b3a686027bf4d9793d24b3930e67a2da3aa93c531e804f99b4" }
   - { artifact: "rgcube-vendorboot-delta", entry: "VENDORBOOT_B", in_sha256: "a5c550c118e1eefa1624d0069d627260c312940cbec25e5ef8181e3691a59ef0", op: "pac_delta", out_sha256: "a3f5f71038d0b9b3a686027bf4d9793d24b3930e67a2da3aa93c531e804f99b4" }
   - { entry: "Super", op: "lp_grow", partition: "system_a" }
   - { artifact: "@system", entry: "Super", op: "lp_write", partition: "system_a" }
-  - { artifact: "rgcube-odm-a-delta", entry: "Super", in_sha256: "84137bb1351eb7f083c35f9d155d5905ad91bf06c68406f6de1f75dfd1627039", op: "lp_delta", out_sha256: "af00fbb463f71be60cfd121cd31690757be8c8da6dceddf4cc9f25c4cc61a9f7", partition: "odm_a" }
+  - { artifact: "rgcube-odm-a-delta", entry: "Super", in_sha256: "84137bb1351eb7f083c35f9d155d5905ad91bf06c68406f6de1f75dfd1627039", op: "lp_delta", out_sha256: "0fe7ddefa48dbe86564cc1fbd2ef9696c28038d95a4ea9e142fa65e0708906ad", partition: "odm_a" }
   - { artifact: "rgcube-vendor-dlkm-a-delta", entry: "Super", in_sha256: "ba9f98e18a34ae09c904c61cf147b57299cd973e30c7cf36b0a9e7420bab299a", op: "lp_delta", out_sha256: "a5418382212056c92be596f35b61849aef44ad3924acc2945ae1fdf442a5c019", partition: "vendor_dlkm_a" }
   - { alias: "RG_Cube_Thimsy_OS", op: "pac_set_info", version: "Thimsy_OS_v1.0a" }
   - { op: "pac_fix_crc" }
 
-expect: { heavy: "3c5c231e366b90acd2ec903bd0b12c82c1e88ac9a488204e25fb7c0922f773ac" }
+expect: { heavy: "7984ee5f1e9b11115599825d57daaf1eea5e052f6145408e4707071017a81e15" }
 flash:
   method: spd
   fdl: [FDL, FDL2]

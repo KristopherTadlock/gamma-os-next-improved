@@ -1,0 +1,15 @@
+id: ayaneo-pocket-micro
+name: AYANEO Pocket Micro
+maker: AYANEO
+soc: MediaTek Helio G99
+display: "960×640"
+status: candidate
+hardware: { android_api: 33, armv82: true, vulkan: true, ram_gb: 6, gpu: "Mali-G57" }
+support:
+  build: candidate
+  boot: candidate
+  install: { windows: untested, linux: untested, macos: untested, android: none }
+notes:
+  - "Planned: fastboot install on every computer. Not buildable yet."
+guides:
+  unlock: { route: automated, steps: [] }

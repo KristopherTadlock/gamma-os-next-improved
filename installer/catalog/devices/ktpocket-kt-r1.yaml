@@ -1,0 +1,15 @@
+id: ktpocket-kt-r1
+name: KTPocket KT-R1
+maker: KTPocket
+soc: MediaTek Helio G99
+display: "1620×1080"
+status: candidate
+hardware: { android_api: 33, armv82: true, vulkan: true, ram_gb: 4, gpu: "Mali-G57" }
+support:
+  build: candidate
+  boot: candidate
+  install: { windows: untested, linux: untested, macos: untested, android: none }
+notes:
+  - "Planned: fastboot install on every computer. Not buildable yet."
+guides:
+  unlock: { route: automated, steps: [] }
