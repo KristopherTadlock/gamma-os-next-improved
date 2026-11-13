@@ -89,7 +89,11 @@ pub fn trs(steps: &[Step], device: &str) -> Vec<Step> {
 fn journeys(d: &Device) -> Journeys {
     let needs_unlock = d.guides.unlock.route != "none";
     let can_update = d.flash.as_ref().is_some_and(|f| !f.update.is_empty());
-    let modes = if can_update { vec!["update".into(), "full".into()] } else { vec!["full".into()] };
+    let modes = if can_update {
+        vec!["update".into(), "full".into()]
+    } else {
+        vec!["full".into()]
+    };
     let update_note = can_update.then(|| {
         tr(d.update_requires.as_deref().unwrap_or("Keeps your data. Only when the device already runs a compatible Thimsy or GammaOS build."))
     });
@@ -460,7 +464,11 @@ mod tests {
         // RG Vita: download mode needs no unlock, and there's no update mode.
         let plan = resolve(&cat, "anbernic-rg-vita", "heavy", &[], Host::Windows).unwrap();
         assert!(!plan.journeys.first_time.unlock);
-        assert!(!plan.journeys.first_time.body.contains("unlock"), "{}", plan.journeys.first_time.body);
+        assert!(
+            !plan.journeys.first_time.body.contains("unlock"),
+            "{}",
+            plan.journeys.first_time.body
+        );
         assert!(plan.journeys.returning.is_none());
         let json = serde_json::to_value(&plan.journeys).unwrap();
         assert!(json.get("returning").is_none(), "{json}");

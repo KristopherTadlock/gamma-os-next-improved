@@ -484,9 +484,58 @@ fn entry_hash(entries: &[job::EntryHash], index: usize) -> Result<&str> {
         .with_context(|| format!("no checksum for PAC entry {index}"))
 }
 
+/// What `spd_dump` said while it waited for the device (Windows: it tries
+/// WinUSB, then the serial port of whichever other driver Windows gave the
+/// device, and says why each one couldn't be opened).
+#[derive(Debug, Default, Clone, PartialEq)]
+pub struct SpdConnect {
+    /// The serial port another program holds (`COM5`).
+    pub port_busy: Option<String>,
+    /// The device was there, but neither WinUSB nor a serial port could be
+    /// opened: what spd_dump said.
+    pub unusable: Option<String>,
+}
+
+impl SpdConnect {
+    pub fn line(&mut self, line: &str) {
+        let l = line.trim();
+        if l.starts_with("connected through ") {
+            // Opened after all: whatever failed before doesn't matter.
+            *self = SpdConnect::default();
+        } else if let Some(port) = l
+            .strip_prefix("serial port ")
+            .and_then(|r| r.strip_suffix(" is in use by another program"))
+        {
+            self.port_busy = Some(port.to_string());
+        } else if l.starts_with("download mode is connected, but libusb can't open it")
+            || (l.starts_with("serial port ") && l.contains("can't be opened"))
+        {
+            self.unusable = Some(l.to_string());
+        }
+    }
+}
+
 /// spd_dump exited without the device ever answering.
-fn not_connected(d: &Device, host: Host, e: anyhow::Error) -> anyhow::Error {
+fn not_connected(d: &Device, host: Host, seen: &SpdConnect, e: anyhow::Error) -> anyhow::Error {
     let detail = format!("{e:#}");
+    if host == Host::Windows {
+        if let Some(port) = &seen.port_busy {
+            return EngineError::new(
+                Code::DeviceNotFound,
+                format!("the device is connected in download mode, but another program is using its serial port ({port}); nothing was written"),
+            )
+            .hint("Close every other program that talks to the device (such as Unisoc's UnlockBootloader or ResearchDownload), then try again.")
+            .into();
+        }
+        if let Some(why) = &seen.unusable {
+            return EngineError::new(
+                Code::DeviceNotFound,
+                format!("the device is connected in download mode, but Windows gave it a driver the installer can't use ({why}); nothing was written"),
+            )
+            .hint("Unplug the device and try again. If it happens again, open Device Manager while the device is in download mode: it must use WinUSB or Unisoc's driver (a COM port).")
+            .into();
+        }
+    }
     let present = crate::detect::scan_ids()
         .unwrap_or_default()
         .iter()
@@ -509,7 +558,7 @@ fn not_connected(d: &Device, host: Host, e: anyhow::Error) -> anyhow::Error {
         format!("the device never answered in download mode ({detail}); nothing was written"),
     );
     if host == Host::Windows {
-        err.hint("Repeat the download-mode steps, then try again. If it still isn't found, check in Device Manager that Unisoc download mode uses the WinUSB driver.")
+        err.hint("Repeat the download-mode steps, then try again. If it still isn't found, unplug the cable, plug it into another USB port and try again.")
             .into()
     } else {
         err.hint("Repeat the download-mode steps and keep holding the button until installing starts, then try again.")
@@ -1141,12 +1190,16 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
     // The prompt stays up while spd_dump waits for the device; the install
     // stage starts when the device answers (its first BSL_REP_VER line).
     let mut connected = false;
+    let mut seen = SpdConnect::default();
     let mut watch = SpdWatch::new(&plan);
     // Set once the first answer is approved: the device's table, the
     // backups and (update mode) its base were checked. Any write before
     // that is fatal.
     let checked = std::cell::Cell::new(false);
     let on_line = |line: &str| -> Result<()> {
+        if !connected {
+            seen.line(line);
+        }
         if !connected && (line.starts_with("BSL_REP_VER") || line.starts_with("load_partition")) {
             connected = true;
             rep.stage("flash", "Installing Thimsy");
@@ -1183,7 +1236,7 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
         let code = crate::error::code_of(&e).0;
         if code == Code::ToolFailed && !connected {
             // The device never answered: nothing happened on it.
-            return not_connected(d, opts.host, e);
+            return not_connected(d, opts.host, &seen, e);
         }
         if code != Code::ToolFailed || !checked.get() {
             // Refused or stopped before the first write was confirmed.
@@ -1483,5 +1536,59 @@ mod tests {
             .unwrap_err();
         assert!(err.to_string().contains("without asking first"), "{err}");
         assert!(w.line("erase_partition: userdata", false).is_err());
+    }
+
+    #[test]
+    fn windows_says_why_the_device_couldnt_be_opened() {
+        let cat = crate::catalog::Catalog::bundled().unwrap();
+        let d = cat.device("anbernic-rg-cube").unwrap();
+        let failed = || anyhow::anyhow!("spd_dump failed: libusb_open_device failed");
+        let hint = |e: &anyhow::Error| {
+            e.downcast_ref::<EngineError>()
+                .and_then(|e| e.hint.clone())
+                .unwrap_or_default()
+        };
+        // What the Windows spd_dump prints while it waits.
+        let mut seen = SpdConnect::default();
+        seen.line("Waiting for connection (300s)");
+        seen.line("connected through serial port COM5");
+        assert_eq!(seen, SpdConnect::default());
+        seen.line("serial port COM5 is in use by another program");
+        assert_eq!(seen.port_busy.as_deref(), Some("COM5"));
+        let e = not_connected(d, Host::Windows, &seen, failed());
+        assert_eq!(crate::error::code_of(&e).0, Code::DeviceNotFound);
+        assert!(
+            e.to_string()
+                .contains("another program is using its serial port (COM5)"),
+            "{e}"
+        );
+        assert!(hint(&e).contains("UnlockBootloader"), "{}", hint(&e));
+
+        let mut seen = SpdConnect::default();
+        seen.line(
+            "download mode is connected, but libusb can't open it : LIBUSB_ERROR_NOT_SUPPORTED",
+        );
+        let e = not_connected(d, Host::Windows, &seen, failed());
+        assert!(e.to_string().contains("a driver the installer can't use (download mode is connected, but libusb can't open it : LIBUSB_ERROR_NOT_SUPPORTED)"), "{e}");
+        assert!(
+            hint(&e).contains("WinUSB or Unisoc's driver"),
+            "{}",
+            hint(&e)
+        );
+        let mut seen = SpdConnect::default();
+        seen.line("serial port COM7 can't be opened (error 31)");
+        assert!(seen.unusable.is_some() && seen.port_busy.is_none());
+        // Opened in the end (the port was free a moment later).
+        let mut opened = seen.clone();
+        opened.line("connected through serial port COM7");
+        assert_eq!(opened, SpdConnect::default());
+
+        // Never seen at all: repeat the steps; WinUSB isn't a requirement.
+        let e = not_connected(d, Host::Windows, &SpdConnect::default(), failed());
+        assert!(e.to_string().contains("never answered"), "{e}");
+        assert!(!hint(&e).contains("WinUSB"), "{}", hint(&e));
+        // Other hosts never get the Windows driver advice.
+        let e = not_connected(d, Host::Macos, &seen, failed());
+        assert!(e.to_string().contains("never answered"), "{e}");
     }
 }

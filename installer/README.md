@@ -15,12 +15,16 @@ USB. Design: [`../universal_installer.md`](../universal_installer.md).
 | `tests/` | End-to-end test on real RG Cube firmware (`e2e.sh`), the published-firmware check (`verify-drafts.sh`) and a fake `spd_dump` |
 | `tools/make-thimsy-build.sh` | Turns a firmware from `scripts/build.sh` into the Thimsy build the installer ships (system image + patches), checking the rebuild is byte-identical |
 | `tools/apply_pack.py` | Writes a device pack (`thimsy-installer dev pack`) into the catalog |
+| `tools/spd_dump-windows-serial.patch` | Applied to `spd_dump` for the Windows build: besides WinUSB, it opens the COM port of whichever serial driver Windows gave the device (Unisoc's "SPRD U2S Diag", usbser) |
 
 ## Status (0.1.0 test 1)
 
 - **RG Cube, Heavy profile**: builds on every desktop and matches the Thimsy
   1.0a reference PAC byte for byte; flashes with the bundled `spd_dump` on
-  Windows (WinUSB driver installed by the app) and Linux; macOS untested.
+  Windows and Linux; macOS untested. On Windows the app installs WinUSB, and
+  when Windows keeps Unisoc's own driver for the device instead, the
+  bundled `spd_dump` uses that driver's COM port
+  (`tools/spd_dump-windows-serial.patch`), so either driver works.
 - Light and Medium are defined but their system images aren't published yet.
 - Other devices are listed as candidates. Devices that need Windows-only
   vendor tools say so on other computers.

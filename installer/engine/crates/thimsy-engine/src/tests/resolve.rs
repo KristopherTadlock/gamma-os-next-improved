@@ -110,11 +110,7 @@ fn availability_host_and_journeys() {
     assert!(p.journeys.first_time.unlock);
     let returning = p.journeys.returning.as_ref().unwrap();
     assert!(!returning.unlock);
-    assert_eq!(
-        returning.modes,
-        ["full"],
-        "no update list → reinstall only"
-    );
+    assert_eq!(returning.modes, ["full"], "no update list → reinstall only");
     assert!(resolve::resolve(&c, "d", "nope", &[], Host::Linux).is_err());
 }
 
