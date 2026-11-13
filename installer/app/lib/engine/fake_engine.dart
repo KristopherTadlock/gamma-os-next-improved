@@ -628,6 +628,25 @@ class FakeEngine extends Engine {
   }
 
   @override
+  EngineRun prepare({required String job, FlashMode mode = FlashMode.full}) {
+    calls.add('prepare ${mode.name}');
+    return _script(
+      () => [
+        const StageEvent('check', 'Checking the build'),
+        const StageEvent('prepare', 'Preparing the partitions'),
+        for (var i = 1; i <= 4; i++)
+          ProgressEvent(
+            stage: 'prepare',
+            label: 'Preparing partitions',
+            done: i,
+            total: 4,
+          ),
+        ResultEvent(true, {'type': 'result', 'ok': true, 'files': 60}),
+      ],
+    );
+  }
+
+  @override
   EngineRun flash({
     required String job,
     bool dryRun = false,
@@ -676,13 +695,14 @@ class FakeEngine extends Engine {
         const StageEvent('driver', 'Checking the USB driver'),
         if (mode == FlashMode.full)
           const StageEvent('backup', 'Backing up calibration'),
-        const StageEvent('wait_device', 'Waiting for the device'),
+        const StageEvent('prepare', 'Preparing the partitions'),
+        const StageEvent('wait_device', 'Connect the device in download mode'),
         const PromptEvent(
           id: 'enter_download_mode',
-          title: 'Hold Vol− and plug in the cable now',
-          body: 'Keep holding until the progress bar moves.',
+          title: 'Hold Back and plug in the cable',
+          body: 'Keep holding until installation starts.',
         ),
-        const StageEvent('flash', 'Writing Thimsy'),
+        const StageEvent('flash', 'Installing Thimsy'),
         for (var i = 1; i <= 4; i++)
           ProgressEvent(stage: 'flash', label: 'super', done: i, total: 4),
         const StageEvent('reboot', 'Restarting'),

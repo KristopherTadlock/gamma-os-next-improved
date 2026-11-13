@@ -203,5 +203,16 @@
   "deleteBackupsBody": "Jeder Ordner enthält eine Sicherung der Kalibrierungsdaten Ihres Geräts (WLAN, Bluetooth, Sensoren). Wenn Sie sie löschen und die Kalibrierung jemals beschädigt wird, lässt sie sich nicht wiederherstellen. Wählen Sie nur Sicherungen aus, von denen Sie eine weitere Kopie haben.",
   "deleteSelected": "Auswahl löschen",
   "partitionsErases": "Löscht: {names}",
-  "cleanFailed": "Die Dateien konnten nicht entfernt werden"
+  "cleanFailed": "Die Dateien konnten nicht entfernt werden",
+  "connectSetupTitle": "Anschließen vorbereiten",
+  "connectSetupSubtitle": "Schließen Sie {device} noch nicht an. Der Download-Modus hält nur wenige Sekunden, deshalb schließen Sie es erst nach „Installieren“ an.",
+  "connectStepsLater": "Nach „Installieren“, wenn das Installationsprogramm Sie auffordert:",
+  "connectAfterInstall": "Nach „Installieren“",
+  "installThenConnect": "Nach „Installieren“ bereitet sich das Installationsprogramm vor und fordert Sie dann auf, {device} anzuschließen. Bis es verbunden ist, wird nichts geschrieben.",
+  "preparingImage": "Image wird für die Installation vorbereitet …",
+  "imageReady": "Das Image ist bereit zur Installation.",
+  "gettingReadyTitle": "Wird vorbereitet",
+  "gettingReadyBody": "Das Image wird geprüft und die Partitionen werden entpackt. Schließen Sie Ihr Gerät noch nicht an: Sie werden dazu aufgefordert.",
+  "connectNowTitle": "Jetzt {device} anschließen",
+  "waitingForDevice": "Das Installationsprogramm wartet bis zu 5 Minuten auf {device}. Bisher wurde nichts geschrieben."
 }

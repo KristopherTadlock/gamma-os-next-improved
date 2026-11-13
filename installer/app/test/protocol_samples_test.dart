@@ -22,6 +22,8 @@ const expected = [
   'resolve-rg-cube-heavy.jsonl',
   'space.jsonl',
   'flash-dry-run.jsonl',
+  'prepare.jsonl',
+  'flash-full.jsonl',
   'detect.jsonl',
   'error-wrong-device.jsonl',
   'error-device-not-found.jsonl',
@@ -227,6 +229,28 @@ void main() {
     }
     expect(s.of<ErrorEvent>(), isEmpty);
     expect(s.events.last, isA<ResultEvent>());
+    expect((s.events.last as ResultEvent).ok, isTrue);
+  });
+
+  test('prepare: check, then prepare, then a successful result', () {
+    final s = sample('prepare.jsonl');
+    expect(s.of<StageEvent>().map((e) => e.stage), ['check', 'prepare']);
+    expect(s.of<ErrorEvent>(), isEmpty);
+    // Nothing that would ask for the device.
+    expect(s.of<PromptEvent>(), isEmpty);
+    expect((s.events.last as ResultEvent).ok, isTrue);
+  });
+
+  test('flash after prepare: the device prompt comes before installing', () {
+    final s = sample('flash-full.jsonl');
+    final stages = s.of<StageEvent>().map((e) => e.stage).toList();
+    expect(stages.indexOf('wait_device'), lessThan(stages.indexOf('flash')));
+    expect(s.of<PromptEvent>().single.id, 'enter_download_mode');
+    // The image was checked by prepare: not read again.
+    expect(
+      s.of<ProgressEvent>().where((p) => p.label == 'Checking the image'),
+      isEmpty,
+    );
     expect((s.events.last as ResultEvent).ok, isTrue);
   });
 

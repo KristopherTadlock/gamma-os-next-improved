@@ -203,5 +203,16 @@
   "deleteBackupsBody": "Chaque dossier contient une sauvegarde des données de calibrage de l'appareil (Wi-Fi, Bluetooth, capteurs). Si vous la supprimez et que le calibrage est un jour endommagé, il ne pourra pas être restauré. Ne choisissez que les sauvegardes dont vous avez une autre copie.",
   "deleteSelected": "Supprimer la sélection",
   "partitionsErases": "Efface : {names}",
-  "cleanFailed": "Les fichiers n'ont pas pu être supprimés"
+  "cleanFailed": "Les fichiers n'ont pas pu être supprimés",
+  "connectSetupTitle": "Préparer la connexion",
+  "connectSetupSubtitle": "Ne branchez pas encore votre {device}. Son mode téléchargement ne dure que quelques secondes : vous le branchez donc après avoir appuyé sur « Installer ».",
+  "connectStepsLater": "Après avoir appuyé sur « Installer », quand le programme d'installation vous le demande :",
+  "connectAfterInstall": "Après avoir appuyé sur « Installer »",
+  "installThenConnect": "Après « Installer », le programme d'installation se prépare, puis vous demande de brancher votre {device}. Rien n'est écrit tant qu'il n'est pas connecté.",
+  "preparingImage": "Préparation de l'image pour l'installation…",
+  "imageReady": "L'image est prête à être installée.",
+  "gettingReadyTitle": "Préparation",
+  "gettingReadyBody": "Vérification de l'image et extraction des partitions. Ne branchez pas encore votre appareil : on vous le demandera.",
+  "connectNowTitle": "Branchez votre {device} maintenant",
+  "waitingForDevice": "Le programme d'installation attend votre {device} jusqu'à 5 minutes. Rien n'a encore été écrit."
 }

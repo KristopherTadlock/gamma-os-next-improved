@@ -158,6 +158,10 @@ class ProcessEngine extends Engine {
   EngineRun detect() => _start(['detect', '--watch']);
 
   @override
+  EngineRun prepare({required String job, FlashMode mode = FlashMode.full}) =>
+      _start(['prepare', '--job', job, '--mode', mode.name]);
+
+  @override
   EngineRun flash({
     required String job,
     bool dryRun = false,

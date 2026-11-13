@@ -36,7 +36,8 @@ the real catalog.
 | `space.jsonl`, `space-fat32.jsonl` | `space` (500 GB free; the same on a FAT32 drive) |
 | `build.jsonl` | `build` |
 | `flash-dry-run.jsonl` | `flash --mode full --dry-run` |
-| `flash-full.jsonl` | `flash --mode full` |
+| `prepare.jsonl` | `prepare --mode full` |
+| `flash-full.jsonl` | `flash --mode full`, after `prepare` |
 | `error-wrong-device.jsonl` | `flash`, another device's partition table |
 | `error-device-not-found.jsonl` | `flash`, the device never shows up in download mode |
 | `error-full-install-needed.jsonl` | `flash --mode update`, the device runs another base |
@@ -250,6 +251,22 @@ Final:
 and RG556 share Unisoc's). With `--watch`, a new line is printed whenever the
 list changes; runs until killed, or until an `error` line ends it.
 
+### `prepare --job DIR --mode full|update --json`
+Gets a finished build ready to install, with no device and no flash tool:
+the same image check and partition unpacking/checking `flash` does before
+asking for the device (below), under the workspace lock. The app runs it in
+the background as soon as `build` finishes, so Install goes straight to the
+device prompt. Streams stages `check` and `prepare`. Final:
+```json
+{"type":"result","ok":true,"files":62,"bytes":7654321234}
+```
+`files`: the files ready in `DIR/flash`; `bytes`: what the mode writes.
+What was checked is recorded in `DIR/flash/prepared.json` (the image and
+each unpacked file with its size and modification time). A later
+`prepare` or `flash` trusts a check only while that file is unchanged;
+anything changed, missing or from another image is read and checked again.
+`full` prepares everything `update` needs too.
+
 ### `flash --job DIR --mode full|update [--dry-run] --json`
 `--mode` is required. `full`: fresh install, every flashable partition
 (`partitions_full`), user data erased; NV/calibration partitions are backed up
@@ -270,11 +287,13 @@ Before anything is written:
   holding `jobs/`), and held until the command ends.
 - The image must be the one the current catalog expects for the profile
   (`expect`) and the one `build` recorded (size, sha256 and every PAC
-  entry's sha256; progress label `Checking the image`); otherwise
-  `hash_mismatch` (after an installer update: build again).
+  entry's sha256; progress label `Checking the image`, skipped with a
+  `log` when `prepare` checked it and the file is unchanged since);
+  otherwise `hash_mismatch` (after an installer update: build again).
 - Partitions are unpacked into `DIR/flash` (reused only if they came from
   this exact image), then every file `spd_dump` will write is checked
-  against its PAC entry's sha256 (`Checking the partitions`); one that
+  against its PAC entry's sha256 (`Checking the partitions`; files
+  `prepare` checked and unchanged since aren't read again); one that
   differs is unpacked again once, and if it still differs the command fails
   with `hash_mismatch`.
 - `spd_dump` reads the device's partition table into this run's backup

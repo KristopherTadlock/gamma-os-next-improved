@@ -354,5 +354,44 @@
         "type": "String"
       }
     }
+  },
+  "connectSetupTitle": "Get ready to connect",
+  "connectSetupSubtitle": "Don't plug in your {device} yet. Its download mode only lasts a few seconds, so you connect it after you press Install.",
+  "@connectSetupSubtitle": {
+    "placeholders": {
+      "device": {
+        "type": "String"
+      }
+    }
+  },
+  "connectStepsLater": "After you press Install, when the installer asks:",
+  "connectAfterInstall": "After you press Install",
+  "installThenConnect": "After you press Install, the installer gets ready, then asks you to plug in your {device}. Nothing is written until it's connected.",
+  "@installThenConnect": {
+    "placeholders": {
+      "device": {
+        "type": "String"
+      }
+    }
+  },
+  "preparingImage": "Getting the image ready to install…",
+  "imageReady": "The image is ready to install.",
+  "gettingReadyTitle": "Getting ready",
+  "gettingReadyBody": "Checking the image and unpacking the partitions. Don't plug in your device yet: you'll be asked.",
+  "connectNowTitle": "Connect your {device} now",
+  "@connectNowTitle": {
+    "placeholders": {
+      "device": {
+        "type": "String"
+      }
+    }
+  },
+  "waitingForDevice": "The installer is waiting for your {device}, up to 5 minutes. Nothing has been written yet.",
+  "@waitingForDevice": {
+    "placeholders": {
+      "device": {
+        "type": "String"
+      }
+    }
   }
 }

@@ -80,6 +80,11 @@ abstract class Engine {
   /// `detect --watch`: emits [DevicesEvent]s until cancelled.
   EngineRun detect();
 
+  /// `prepare`: checks a finished build and unpacks (and checks) the
+  /// partitions [mode] writes, with no device. A flash soon after skips
+  /// that work and goes straight to asking for the device.
+  EngineRun prepare({required String job, FlashMode mode = FlashMode.full});
+
   EngineRun flash({
     required String job,
     bool dryRun = false,

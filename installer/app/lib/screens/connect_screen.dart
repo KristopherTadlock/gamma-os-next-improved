@@ -19,10 +19,24 @@ class ConnectScreen extends StatelessWidget {
     final driverDetails = driverError == null
         ? null
         : errorDetails(driverError);
+    // Unisoc: the device is connected only once installing has started (the
+    // flash tool must already be waiting), so this step only sets up USB
+    // and shows what comes then.
+    final later = s.plan?.connectFirst == false;
     return StepPage(
-      title: l.connectTitle,
-      subtitle: l.connectSubtitle,
+      title: later ? l.connectSetupTitle : l.connectTitle,
+      subtitle: later
+          ? l.connectSetupSubtitle(s.device?.name ?? '')
+          : l.connectSubtitle,
       children: [
+        if (later) ...[
+          Text(
+            l.connectStepsLater,
+            key: const ValueKey('connect-steps-later'),
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          const SizedBox(height: 8),
+        ],
         GuideList(s.plan?.guides.downloadMode ?? const []),
         const SizedBox(height: 12),
         if (s.detectError != null) ...[
@@ -54,7 +68,7 @@ class ConnectScreen extends StatelessWidget {
               ),
             ),
           ),
-        if (match == null && s.plan?.connectFirst == false)
+        if (match == null && later)
           // Unisoc: the flash tool must already be waiting when the device
           // enters download mode, so it's connected after installing starts.
           Notice(
@@ -83,7 +97,7 @@ class ConnectScreen extends StatelessWidget {
                   ),
           ),
         const SizedBox(height: 12),
-        if (match == null)
+        if (match == null && !later)
           Align(
             alignment: AlignmentDirectional.centerStart,
             child: TextButton(

@@ -100,6 +100,15 @@ enum Cmd {
         watch: bool,
     },
     /// Install a finished build on the device.
+    /// Get a finished build ready to install (no device needed): checks the
+    /// image and unpacks the partitions, so installing starts sooner.
+    Prepare {
+        #[arg(long)]
+        job: PathBuf,
+        /// full or update: the partitions the install will write.
+        #[arg(long, value_parser = ["full", "update"])]
+        mode: String,
+    },
     Flash {
         #[arg(long)]
         job: PathBuf,
@@ -291,6 +300,7 @@ fn main() {
             dry_run,
         },
         Cmd::Detect { watch } => cli::Command::Detect { watch },
+        Cmd::Prepare { job, mode } => cli::Command::Prepare { job, mode },
         Cmd::Flash { job, mode, dry_run } => cli::Command::Flash { job, mode, dry_run },
         Cmd::Unlock { device } => cli::Command::Unlock { device },
         Cmd::Drivers { device, install } => cli::Command::Drivers { device, install },

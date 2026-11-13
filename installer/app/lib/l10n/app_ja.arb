@@ -203,5 +203,16 @@
   "deleteBackupsBody": "各フォルダーには、デバイスのキャリブレーションデータ（Wi-Fi、Bluetooth、センサー）のバックアップが入っています。削除した後でキャリブレーションが破損すると、復元できません。ほかにコピーがあるバックアップだけを選んでください。",
   "deleteSelected": "選択項目を削除",
   "partitionsErases": "消去: {names}",
-  "cleanFailed": "ファイルを削除できませんでした"
+  "cleanFailed": "ファイルを削除できませんでした",
+  "connectSetupTitle": "接続の準備",
+  "connectSetupSubtitle": "{device} はまだ接続しないでください。ダウンロードモードは数秒しか続かないため、「インストール」を押した後に接続します。",
+  "connectStepsLater": "「インストール」を押した後、インストーラーに求められたら：",
+  "connectAfterInstall": "「インストール」を押した後",
+  "installThenConnect": "「インストール」を押すと、インストーラーが準備をしてから {device} の接続を求めます。接続されるまで何も書き込まれません。",
+  "preparingImage": "インストール用にイメージを準備しています…",
+  "imageReady": "イメージのインストール準備ができました。",
+  "gettingReadyTitle": "準備中",
+  "gettingReadyBody": "イメージを確認し、パーティションを展開しています。デバイスはまだ接続しないでください。指示があります。",
+  "connectNowTitle": "今すぐ {device} を接続してください",
+  "waitingForDevice": "インストーラーは {device} を最大 5 分間待ちます。まだ何も書き込まれていません。"
 }

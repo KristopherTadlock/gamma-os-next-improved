@@ -361,9 +361,31 @@ class AppState extends ChangeNotifier {
   /// Set by [install]; cleared when the build, journey or mode changes.
   FlashConfirmation? _confirmed;
 
-  /// A build, unlock or install is running: the selection and the step
-  /// rail are locked until it ends.
-  bool get busy => buildRun.running || flashRun.running || unlockRun.running;
+  // --------------------------------------------------------------- prepare
+  /// Getting the build ready to install (`prepare`: the image checked, the
+  /// partitions unpacked), started in the background as soon as the build
+  /// finishes. Install then goes straight to asking for the device.
+  final RunState prepareRun = RunState();
+  EngineRun? _prepareHandle;
+
+  /// The build [prepareRun] is for.
+  String? _preparedJob;
+
+  /// Install was confirmed while [prepareRun] was still going: the install
+  /// starts as soon as it ends (whether or not it worked: the install then
+  /// does any preparation still needed itself, and reports any problem).
+  bool installPending = false;
+
+  /// [prepareRun] is for the current build.
+  bool get preparingCurrent => _preparedJob != null && _preparedJob == job;
+
+  /// A build, unlock or install is running (or waiting to start): the
+  /// selection and the step rail are locked until it ends.
+  bool get busy =>
+      buildRun.running ||
+      flashRun.running ||
+      unlockRun.running ||
+      installPending;
 
   /// Set by [shutdown]: the app is closing, nothing new starts.
   bool _shutDown = false;
@@ -373,8 +395,12 @@ class AppState extends ChangeNotifier {
   bool get stopNeedsConfirmation =>
       flashRun.running &&
       !flashRunDry &&
-      flashRun.stage != null &&
-      flashRun.stage != 'check';
+      _writingStages.contains(flashRun.stage);
+
+  /// Stages where the device is connected and being installed. Before them
+  /// (checks, preparing, waiting for the device) nothing has been written,
+  /// so stopping needs no confirmation.
+  static const _writingStages = {'flash', 'backup', 'reboot'};
 
   // ----------------------------------------------------------------- clean
   /// What `clean --dry-run` listed for the workspace.
@@ -673,6 +699,10 @@ class AppState extends ChangeNotifier {
       return;
     }
     _invalidateFlash();
+    // A new build replaces the image being prepared (and both need the
+    // workspace).
+    await _cancelPrepare();
+    if (sel != _selection || busy || _shutDown) return;
     buildRun.reset();
     buildRun.running = true;
     _builtDevice = d;
@@ -690,9 +720,49 @@ class AppState extends ChangeNotifier {
       run,
       buildRun,
       onDone: () {
-        if (identical(_buildHandle, run)) _buildHandle = null;
+        if (!identical(_buildHandle, run)) return;
+        _buildHandle = null;
+        if (buildCurrent) _startPrepare();
       },
     );
+  }
+
+  /// Starts [prepareRun] for the current build, unless this computer only
+  /// builds (export only, or it can't install this device).
+  void _startPrepare() {
+    final j = job;
+    if (j == null || _shutDown || exportOnly || onAndroid) return;
+    if (!(device?.worksOn(host) ?? false)) return;
+    if (prepareRun.running && _preparedJob == j) return;
+    prepareRun.reset();
+    prepareRun.running = true;
+    _preparedJob = j;
+    notifyListeners();
+    final run = engine.prepare(job: j, mode: flashMode);
+    _prepareHandle = run;
+    _follow(
+      run,
+      prepareRun,
+      onDone: () {
+        if (!identical(_prepareHandle, run)) return;
+        _prepareHandle = null;
+        if (installPending) {
+          installPending = false;
+          _startConfirmed();
+        }
+      },
+    );
+  }
+
+  /// Stops [prepareRun] (waiting for its engine to exit, so the workspace
+  /// is free) and drops a pending install.
+  Future<void> _cancelPrepare() async {
+    final h = _prepareHandle;
+    _prepareHandle = null;
+    installPending = false;
+    _preparedJob = null;
+    prepareRun.reset();
+    await h?.cancel();
   }
 
   Future<void> cancelBuild() async {
@@ -857,7 +927,7 @@ class AppState extends ChangeNotifier {
       goTo(WizardStep.review);
       return;
     }
-    _startConfirmed();
+    _startOrWait();
   }
 
   /// Review's Install button (after the confirmation dialog): records what
@@ -867,6 +937,22 @@ class AppState extends ChangeNotifier {
     if (busy || j == null || (!dryRun && !canInstallForReal)) return;
     _confirmed = FlashConfirmation(j, flashMode, dryRun);
     _advanceTo(WizardStep.install);
+    _startOrWait();
+  }
+
+  /// Starts the confirmed install, or, while the build is still being got
+  /// ready, has it start when that ends (the install screen shows the
+  /// preparation meanwhile). A dry run needs none of it.
+  void _startOrWait() {
+    final c = _confirmed;
+    if (busy || _shutDown || c == null || c.job != job) return;
+    if (!c.dry && prepareRun.running && preparingCurrent) {
+      flashRun.reset();
+      flashRunDry = false;
+      installPending = true;
+      notifyListeners();
+      return;
+    }
     _startConfirmed();
   }
 
@@ -907,7 +993,15 @@ class AppState extends ChangeNotifier {
     if (furthest.index > back.index) furthest = back;
   }
 
+  /// Stop on the install screen: stops the install, or (while it waits for
+  /// the preparation) keeps it from starting. The preparation itself goes
+  /// on in the background.
   Future<void> cancelFlash() async {
+    if (installPending) {
+      installPending = false;
+      notifyListeners();
+      return;
+    }
     await _flashHandle?.cancel();
   }
 
@@ -922,6 +1016,7 @@ class AppState extends ChangeNotifier {
       for (final h in handles)
         if (h != null) h.cancel(),
       stopDetect(),
+      _cancelPrepare(),
     ]);
   }
 
@@ -958,6 +1053,9 @@ class AppState extends ChangeNotifier {
     cleanError = null;
     freedBytes = null;
     notifyListeners();
+    // Cleaning needs the workspace: a preparation still running stops (the
+    // install does any preparation still needed itself).
+    if (prepareRun.running) await _cancelPrepare();
     var ok = false;
     try {
       final r = await engine.clean(workspace: workspace.trim(), paths: paths);
@@ -1030,6 +1128,12 @@ class AppState extends ChangeNotifier {
       (e) {
         if (!current()) return;
         state.apply(e);
+        // The background preparation never interrupts with a dialog: the
+        // install repeats anything that failed and reports it there.
+        if (identical(state, prepareRun)) {
+          notifyListeners();
+          return;
+        }
         if (e is ErrorEvent && e.code == 'unsupported_host') hostError = e;
         if (e is ErrorEvent && e.code == 'not_enough_space') {
           spaceProblem = SpaceProblem(
@@ -1177,6 +1281,7 @@ class AppState extends ChangeNotifier {
       for (final h in handles)
         if (h != null) h.cancel(),
       stopDetect(),
+      _cancelPrepare(),
     ]);
   }
 

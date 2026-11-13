@@ -203,5 +203,16 @@
   "deleteBackupsBody": "每个文件夹都保存着设备校准数据（Wi-Fi、蓝牙、传感器）的备份。如果删除后校准数据损坏，将无法恢复。请只选择您另有副本的备份。",
   "deleteSelected": "删除所选",
   "partitionsErases": "将清除：{names}",
-  "cleanFailed": "无法删除这些文件"
+  "cleanFailed": "无法删除这些文件",
+  "connectSetupTitle": "准备连接",
+  "connectSetupSubtitle": "先不要连接 {device}。它的下载模式只持续几秒钟，所以要在按下“安装”之后再连接。",
+  "connectStepsLater": "按下“安装”后，在安装程序提示时：",
+  "connectAfterInstall": "按下“安装”之后",
+  "installThenConnect": "按下“安装”后，安装程序会先做好准备，然后提示你连接 {device}。连接之前不会写入任何内容。",
+  "preparingImage": "正在准备要安装的镜像…",
+  "imageReady": "镜像已准备好安装。",
+  "gettingReadyTitle": "正在准备",
+  "gettingReadyBody": "正在检查镜像并解出分区。先不要连接设备：到时会提示你。",
+  "connectNowTitle": "现在连接 {device}",
+  "waitingForDevice": "安装程序最多等待 {device} 5 分钟。尚未写入任何内容。"
 }

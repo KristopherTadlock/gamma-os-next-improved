@@ -59,6 +59,10 @@ pub enum Command {
     Detect {
         watch: bool,
     },
+    Prepare {
+        job: PathBuf,
+        mode: String,
+    },
     Flash {
         job: PathBuf,
         mode: String,
@@ -80,6 +84,7 @@ impl Command {
         matches!(
             self,
             Command::Build { .. }
+                | Command::Prepare { .. }
                 | Command::Flash { .. }
                 | Command::Unlock { .. }
                 | Command::Drivers { .. }
@@ -253,6 +258,10 @@ fn dispatch(g: &Global, cmd: Command, rep: &Reporter, out: &mut dyn FnMut(Value)
                 }
                 std::thread::sleep(std::time::Duration::from_millis(800));
             }
+        }
+        Command::Prepare { job, mode } => {
+            let r = flash::prepare(&cat, &job, flash::Mode::parse(&mode)?, rep)?;
+            out(json!({"type": "result", "ok": true, "files": r.files, "bytes": r.bytes}));
         }
         Command::Flash { job, mode, dry_run } => {
             let opts = flash::FlashOptions {

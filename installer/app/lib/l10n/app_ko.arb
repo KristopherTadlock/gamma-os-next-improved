@@ -203,5 +203,16 @@
   "deleteBackupsBody": "각 폴더에는 기기 보정 데이터(Wi-Fi, Bluetooth, 센서)의 백업이 들어 있습니다. 삭제한 후 보정 데이터가 손상되면 복원할 수 없습니다. 다른 사본이 있는 백업만 선택하세요.",
   "deleteSelected": "선택 항목 삭제",
   "partitionsErases": "지울 파티션: {names}",
-  "cleanFailed": "파일을 삭제할 수 없습니다"
+  "cleanFailed": "파일을 삭제할 수 없습니다",
+  "connectSetupTitle": "연결 준비",
+  "connectSetupSubtitle": "아직 {device}을(를) 연결하지 마세요. 다운로드 모드는 몇 초만 유지되므로 '설치'을(를) 누른 뒤에 연결합니다.",
+  "connectStepsLater": "'설치'을(를) 누른 뒤 설치 프로그램이 요청하면:",
+  "connectAfterInstall": "'설치'을(를) 누른 뒤",
+  "installThenConnect": "'설치'을(를) 누르면 설치 프로그램이 준비한 다음 {device}을(를) 연결하라고 요청합니다. 연결되기 전에는 아무것도 기록되지 않습니다.",
+  "preparingImage": "설치할 이미지를 준비하는 중…",
+  "imageReady": "이미지를 설치할 준비가 되었습니다.",
+  "gettingReadyTitle": "준비 중",
+  "gettingReadyBody": "이미지를 확인하고 파티션을 푸는 중입니다. 아직 기기를 연결하지 마세요. 안내가 표시됩니다.",
+  "connectNowTitle": "지금 {device}을(를) 연결하세요",
+  "waitingForDevice": "설치 프로그램이 {device}을(를) 최대 5분 동안 기다립니다. 아직 아무것도 기록되지 않았습니다."
 }

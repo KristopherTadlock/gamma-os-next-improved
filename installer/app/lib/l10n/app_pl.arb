@@ -203,5 +203,16 @@
   "deleteBackupsBody": "Każdy folder zawiera kopię zapasową danych kalibracyjnych urządzenia (Wi-Fi, Bluetooth, czujniki). Jeśli ją usuniesz, a kalibracja kiedyś ulegnie uszkodzeniu, nie da się jej przywrócić. Wybieraj tylko kopie, które masz zapisane także gdzie indziej.",
   "deleteSelected": "Usuń zaznaczone",
   "partitionsErases": "Wymazuje: {names}",
-  "cleanFailed": "Nie udało się usunąć plików"
+  "cleanFailed": "Nie udało się usunąć plików",
+  "connectSetupTitle": "Przygotuj się do podłączenia",
+  "connectSetupSubtitle": "Nie podłączaj jeszcze urządzenia {device}. Tryb pobierania trwa tylko kilka sekund, więc podłączasz je po naciśnięciu „Zainstaluj”.",
+  "connectStepsLater": "Po naciśnięciu „Zainstaluj”, gdy instalator o to poprosi:",
+  "connectAfterInstall": "Po naciśnięciu „Zainstaluj”",
+  "installThenConnect": "Po naciśnięciu „Zainstaluj” instalator się przygotowuje, a potem prosi o podłączenie urządzenia {device}. Nic nie jest zapisywane, dopóki nie zostanie podłączone.",
+  "preparingImage": "Przygotowywanie obrazu do instalacji…",
+  "imageReady": "Obraz jest gotowy do instalacji.",
+  "gettingReadyTitle": "Przygotowywanie",
+  "gettingReadyBody": "Sprawdzanie obrazu i rozpakowywanie partycji. Nie podłączaj jeszcze urządzenia: zostaniesz o to poproszony.",
+  "connectNowTitle": "Podłącz teraz {device}",
+  "waitingForDevice": "Instalator czeka na {device} do 5 minut. Nic jeszcze nie zostało zapisane."
 }

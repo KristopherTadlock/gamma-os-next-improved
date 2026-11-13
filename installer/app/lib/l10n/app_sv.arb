@@ -203,5 +203,16 @@
   "deleteBackupsBody": "Varje mapp innehåller en säkerhetskopia av enhetens kalibreringsdata (Wi-Fi, Bluetooth, sensorer). Om du tar bort den och kalibreringen någon gång skadas går den inte att återställa. Välj bara säkerhetskopior som du har en annan kopia av.",
   "deleteSelected": "Ta bort markerade",
   "partitionsErases": "Raderar: {names}",
-  "cleanFailed": "Filerna kunde inte tas bort"
+  "cleanFailed": "Filerna kunde inte tas bort",
+  "connectSetupTitle": "Gör klart för anslutning",
+  "connectSetupSubtitle": "Anslut inte {device} än. Nedladdningsläget varar bara några sekunder, så du ansluter den efter att du har tryckt på ”Installera”.",
+  "connectStepsLater": "Efter att du har tryckt på ”Installera”, när installationsprogrammet ber om det:",
+  "connectAfterInstall": "Efter att du har tryckt på ”Installera”",
+  "installThenConnect": "Efter ”Installera” gör installationsprogrammet sig klart och ber dig sedan ansluta {device}. Inget skrivs förrän den är ansluten.",
+  "preparingImage": "Förbereder avbildningen för installation …",
+  "imageReady": "Avbildningen är klar att installera.",
+  "gettingReadyTitle": "Förbereder",
+  "gettingReadyBody": "Kontrollerar avbildningen och packar upp partitionerna. Anslut inte enheten än: du blir ombedd.",
+  "connectNowTitle": "Anslut {device} nu",
+  "waitingForDevice": "Installationsprogrammet väntar upp till 5 minuter på {device}. Inget har skrivits än."
 }

@@ -45,7 +45,7 @@ fn run(g: &Global, cmd: Command) -> (i32, Vec<Value>) {
     (code, lines)
 }
 
-/// `run-YYYYMMDD-HHMMSS` → `run-<time>`, `YYYY-MM-DDTHH:MM:SSZ` → `<time>`.
+/// `run-YYYYMMDD-HHMMSS[-N]` → `run-<time>`, `YYYY-MM-DDTHH:MM:SSZ` → `<time>`.
 fn mask_times(s: &str) -> String {
     let b = s.as_bytes();
     let digits = |r: std::ops::Range<usize>| b[r].iter().all(u8::is_ascii_digit);
@@ -66,6 +66,14 @@ fn mask_times(s: &str) -> String {
         if stamp {
             out.push_str("run-<time>");
             i += 19;
+            // `-1`, `-2`... when two runs start in the same second: timing,
+            // not protocol.
+            if b.get(i) == Some(&b'-') && b.get(i + 1).is_some_and(u8::is_ascii_digit) {
+                i += 1;
+                while b.get(i).is_some_and(u8::is_ascii_digit) {
+                    i += 1;
+                }
+            }
         } else if iso {
             out.push_str("<time>");
             i += 20;
@@ -291,6 +299,18 @@ fn samples_build_flash_and_errors() {
     let (code, l) = run(&g, flash("full", true));
     assert_eq!(code, 0);
     sample("flash-dry-run.jsonl", &normalise(l, &paths));
+
+    // What the app runs in the background after the build: the install
+    // after it skips the checks it already did.
+    let (code, l) = run(
+        &g,
+        Command::Prepare {
+            job: job.clone(),
+            mode: "full".into(),
+        },
+    );
+    assert_eq!(code, 0, "{l:#?}");
+    sample("prepare.jsonl", &normalise(l, &paths));
 
     crate::detect::test::DEVICES.with(|d| *d.borrow_mut() = Some(vec![]));
     fake_tools(&[]);

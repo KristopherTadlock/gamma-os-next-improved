@@ -203,5 +203,16 @@
   "deleteBackupsBody": "每個資料夾都存有裝置校準資料（Wi-Fi、藍牙、感應器）的備份。如果刪除後校準資料損毀，將無法還原。請只選擇您另有副本的備份。",
   "deleteSelected": "刪除所選",
   "partitionsErases": "將清除：{names}",
-  "cleanFailed": "無法移除這些檔案"
+  "cleanFailed": "無法移除這些檔案",
+  "connectSetupTitle": "準備連接",
+  "connectSetupSubtitle": "先不要連接 {device}。它的下載模式只持續幾秒鐘，所以要在按下「安裝」之後再連接。",
+  "connectStepsLater": "按下「安裝」後，在安裝程式提示時：",
+  "connectAfterInstall": "按下「安裝」之後",
+  "installThenConnect": "按下「安裝」後，安裝程式會先做好準備，然後提示你連接 {device}。連接之前不會寫入任何內容。",
+  "preparingImage": "正在準備要安裝的映像檔…",
+  "imageReady": "映像檔已準備好安裝。",
+  "gettingReadyTitle": "正在準備",
+  "gettingReadyBody": "正在檢查映像檔並解出分割區。先不要連接裝置：到時會提示你。",
+  "connectNowTitle": "現在連接 {device}",
+  "waitingForDevice": "安裝程式最多等待 {device} 5 分鐘。尚未寫入任何內容。"
 }

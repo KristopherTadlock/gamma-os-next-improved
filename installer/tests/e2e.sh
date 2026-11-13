@@ -180,6 +180,42 @@ tail -1 "$WS/damaged.jsonl" | grep -q '"ok":true' && grep -q "super.img doesn't 
   && pass "damaged unpacked partition detected and unpacked again" || fail "damaged partition not caught"
 grep -q "^sha256 super $want\$" "$FAKE_SPD_LOG" && pass "flashed super equals the PAC entry after the repair" || fail "damaged super.img was flashed"
 
+# 5p. Prepare (what the app runs in the background after the build): the
+# image is checked and the partitions unpacked and checked with no device
+# and no flash tool. The install that follows skips that work.
+rm -f "$FAKE_SPD_LOG"
+THIMSY_TOOLS_DIR="$HERE/fake-tools" "$ENGINE" --json prepare --job "$JOB" --mode full > "$WS/prepare.jsonl"
+tail -1 "$WS/prepare.jsonl" | grep -q '"ok":true' && grep -q '"label":"Checking the image"' "$WS/prepare.jsonl" \
+  && grep -q '"label":"Preparing partitions"' "$WS/prepare.jsonl" && [ -f "$JOB/flash/prepared.json" ] \
+  && pass "prepare checks the image and unpacks the partitions" || fail "prepare"
+[ ! -f "$FAKE_SPD_LOG" ] && ! grep -q '"type":"prompt"' "$WS/prepare.jsonl" \
+  && pass "prepare never runs the flash tool or asks for the device" || fail "prepare touched the device"
+FAKE_SPD_HASH=1 THIMSY_TOOLS_DIR="$HERE/fake-tools" "$ENGINE" --json flash --job "$JOB" --mode full > "$WS/prepared-flash.jsonl"
+tail -1 "$WS/prepared-flash.jsonl" | grep -q '"ok":true' && grep -q 'unchanged since it was checked' "$WS/prepared-flash.jsonl" \
+  && ! grep -q '"label":"Checking the image"\|"label":"Preparing partitions"' "$WS/prepared-flash.jsonl" \
+  && pass "install after prepare goes straight to the device" || fail "install after prepare redid the preparation"
+grep -q "^sha256 super $want\$" "$FAKE_SPD_LOG" && pass "install after prepare writes the image's own super" || fail "install after prepare wrote another super"
+p=$(grep -n '"id":"enter_download_mode"' "$WS/prepared-flash.jsonl" | head -1 | cut -d: -f1)
+f=$(grep -n '"type":"stage","stage":"flash"' "$WS/prepared-flash.jsonl" | head -1 | cut -d: -f1)
+[ -n "$p" ] && [ -n "$f" ] && [ "$p" -lt "$f" ] && pass "and still asks for the device before installing" || fail "prompt after prepare"
+
+# 5q. Changed after prepare: an unpacked partition damaged and the image
+# touched. The install checks both again instead of trusting the record.
+rm -f "$FAKE_SPD_LOG"
+"$ENGINE" --json prepare --job "$JOB" --mode full > "$WS/prepare2.jsonl"
+tail -1 "$WS/prepare2.jsonl" | grep -q '"ok":true' || fail "second prepare"
+python3 -I -c "
+import sys
+with open(sys.argv[1], 'r+b') as f:
+    f.seek(8192); b = f.read(1); f.seek(8192); f.write(bytes([b[0] ^ 0xFF]))" "$JOB/flash/super.img"
+IMAGE=$(python3 -I -c "import json, sys; print(json.load(open(sys.argv[1]))['image'])" "$JOB/job.json")
+touch "$IMAGE"
+FAKE_SPD_HASH=1 THIMSY_TOOLS_DIR="$HERE/fake-tools" "$ENGINE" --json flash --job "$JOB" --mode full > "$WS/changed-flash.jsonl"
+tail -1 "$WS/changed-flash.jsonl" | grep -q '"ok":true' && grep -q '"label":"Checking the image"' "$WS/changed-flash.jsonl" \
+  && pass "image touched after prepare: checked again" || fail "touched image trusted"
+grep -q "super.img doesn't match the image; unpacking it again" "$WS/changed-flash.jsonl" && grep -q "^sha256 super $want\$" "$FAKE_SPD_LOG" \
+  && pass "partition damaged after prepare: caught and unpacked again" || fail "damaged partition after prepare was flashed"
+
 # 5f. Update mode on a device running the matching base: read back,
 # compared, then only the update's partitions are written.
 rm -f "$FAKE_SPD_LOG"
@@ -248,7 +284,7 @@ grep -q '"code":"unsupported_host"' "$WS/android.jsonl" && pass "android: unsupp
 "$ENGINE" --json clean --workspace "$WS" --dry-run | grep -q '"kind":"image"' && pass "clean lists the image" || fail "clean"
 "$ENGINE" --json clean --workspace "$WS" --scratch > "$WS/clean.jsonl"
 n=$(runs)
-[ ! -d "$JOB/flash" ] && [ "$n" = 8 ] && [ "$(stat -c %s "$RUN1/prodnv.img")" = 67108864 ] \
+[ ! -d "$JOB/flash" ] && [ "$n" = 10 ] && [ "$(stat -c %s "$RUN1/prodnv.img")" = 67108864 ] \
   && pass "clean --scratch keeps every backup" || fail "clean --scratch and backups ($n runs)"
 # Backups are listed run by run (with what device.json says) and can be
 # removed one at a time by path.
@@ -257,7 +293,7 @@ python3 -I -c "
 import json, sys
 items = json.load(open(sys.argv[1]))['items']
 runs = [i for i in items if i['kind'] == 'backup']
-sys.exit(0 if len(runs) == 8 and any(i.get('info', {}).get('device') == 'anbernic-rg-cube' for i in runs) else 1)" "$WS/clean-list.jsonl" \
+sys.exit(0 if len(runs) == 10 and any(i.get('info', {}).get('device') == 'anbernic-rg-cube' for i in runs) else 1)" "$WS/clean-list.jsonl" \
   && pass "clean lists each backup run" || fail "clean backup items"
 "$ENGINE" --json clean --workspace "$WS" --path "$RUNU" > /dev/null && [ ! -d "$RUNU" ] && [ -f "$RUN1/prodnv.img" ] \
   && pass "clean --path removes one run only" || fail "clean --path"

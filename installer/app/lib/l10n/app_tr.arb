@@ -203,5 +203,16 @@
   "deleteBackupsBody": "Her klasör, cihazınızın kalibrasyon verilerinin (Wi-Fi, Bluetooth, sensörler) bir yedeğini içerir. Silerseniz ve kalibrasyon bir gün bozulursa geri yüklenemez. Yalnızca başka bir kopyası olan yedekleri seçin.",
   "deleteSelected": "Seçilenleri sil",
   "partitionsErases": "Silinecek: {names}",
-  "cleanFailed": "Dosyalar kaldırılamadı"
+  "cleanFailed": "Dosyalar kaldırılamadı",
+  "connectSetupTitle": "Bağlamaya hazırlanın",
+  "connectSetupSubtitle": "{device} cihazını henüz bağlamayın. İndirme modu yalnızca birkaç saniye sürer, bu yüzden “Yükle” düğmesine bastıktan sonra bağlarsınız.",
+  "connectStepsLater": "“Yükle” düğmesine bastıktan sonra, yükleyici istediğinde:",
+  "connectAfterInstall": "“Yükle” düğmesine bastıktan sonra",
+  "installThenConnect": "“Yükle” düğmesine bastığınızda yükleyici hazırlanır, ardından {device} cihazını bağlamanızı ister. Bağlanana kadar hiçbir şey yazılmaz.",
+  "preparingImage": "Kalıp yüklemeye hazırlanıyor…",
+  "imageReady": "Kalıp yüklenmeye hazır.",
+  "gettingReadyTitle": "Hazırlanıyor",
+  "gettingReadyBody": "Kalıp denetleniyor ve bölümler açılıyor. Cihazınızı henüz bağlamayın: size söylenecek.",
+  "connectNowTitle": "{device} cihazını şimdi bağlayın",
+  "waitingForDevice": "Yükleyici {device} cihazını 5 dakikaya kadar bekliyor. Henüz hiçbir şey yazılmadı."
 }

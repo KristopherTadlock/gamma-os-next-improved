@@ -203,5 +203,16 @@
   "deleteBackupsBody": "Elke map bevat een back-up van de kalibratiegegevens van uw apparaat (wifi, Bluetooth, sensoren). Als u deze verwijdert en de kalibratie ooit beschadigd raakt, kan die niet worden hersteld. Kies alleen back-ups waarvan u nog een andere kopie hebt.",
   "deleteSelected": "Selectie verwijderen",
   "partitionsErases": "Wist: {names}",
-  "cleanFailed": "De bestanden konden niet worden verwijderd"
+  "cleanFailed": "De bestanden konden niet worden verwijderd",
+  "connectSetupTitle": "Klaarmaken om aan te sluiten",
+  "connectSetupSubtitle": "Sluit uw {device} nog niet aan. De downloadmodus duurt maar een paar seconden, dus u sluit het aan nadat u op ‘Installeren’ hebt gedrukt.",
+  "connectStepsLater": "Nadat u op ‘Installeren’ hebt gedrukt, wanneer het installatieprogramma erom vraagt:",
+  "connectAfterInstall": "Nadat u op ‘Installeren’ hebt gedrukt",
+  "installThenConnect": "Na ‘Installeren’ maakt het installatieprogramma zich klaar en vraagt het u daarna uw {device} aan te sluiten. Er wordt niets geschreven tot het is aangesloten.",
+  "preparingImage": "Image klaarmaken voor installatie…",
+  "imageReady": "De image is klaar om te installeren.",
+  "gettingReadyTitle": "Klaarmaken",
+  "gettingReadyBody": "De image wordt gecontroleerd en de partities worden uitgepakt. Sluit uw apparaat nog niet aan: daar wordt om gevraagd.",
+  "connectNowTitle": "Sluit uw {device} nu aan",
+  "waitingForDevice": "Het installatieprogramma wacht tot 5 minuten op uw {device}. Er is nog niets geschreven."
 }

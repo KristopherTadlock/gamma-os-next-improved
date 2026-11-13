@@ -40,9 +40,12 @@ class HeldRun implements EngineRun {
 /// The fake engine, with builds, flashes, space checks and plan resolves the
 /// test can hold and release.
 class ControlledEngine extends FakeEngine {
-  ControlledEngine({super.host}) : super(step: Duration.zero);
+  ControlledEngine({super.host, super.connectFirst})
+    : super(step: Duration.zero);
 
   bool holdBuild = false;
+  bool holdPrepare = false;
+  final List<HeldRun> prepares = [];
   bool holdFlash = false;
   bool holdDetect = false;
   bool holdUnlock = false;
@@ -83,6 +86,15 @@ class ControlledEngine extends FakeEngine {
     calls.add('detect');
     final run = HeldRun();
     detects.add(run);
+    return run;
+  }
+
+  @override
+  EngineRun prepare({required String job, FlashMode mode = FlashMode.full}) {
+    if (!holdPrepare) return super.prepare(job: job, mode: mode);
+    calls.add('prepare ${mode.name}');
+    final run = HeldRun();
+    prepares.add(run);
     return run;
   }
 
@@ -262,6 +274,7 @@ Future<void> next(WidgetTester tester) => tap(tester, key('next'));
 Future<void> toReview(
   WidgetTester tester, {
   String journey = 'returning',
+  void Function()? beforeReview,
 }) async {
   await tap(tester, key('device-$cube'));
   await next(tester);
@@ -280,6 +293,7 @@ Future<void> toReview(
     await next(tester);
   }
   expect(key('device-connected'), findsOneWidget);
+  beforeReview?.call();
   await next(tester);
   expect(key('install-button'), findsOneWidget);
 }
@@ -965,5 +979,229 @@ void main() {
     s.goTo(WizardStep.device);
     await s.selectDevice(rp4);
     expect(s.detected, isEmpty);
+  });
+
+  group('getting the build ready in the background', () {
+    ResultEvent prepared() =>
+        ResultEvent(true, {'type': 'result', 'ok': true, 'files': 60});
+    List<String> flashCalls(ControlledEngine e) =>
+        e.calls.where((c) => c.startsWith('flash')).toList();
+
+    Future<AppState> built(ControlledEngine engine) async {
+      final s = await toBuild(engine);
+      await s.startBuild();
+      await until(() => engine.prepares.isNotEmpty);
+      return s;
+    }
+
+    test('starts when the build finishes, without locking the steps', () async {
+      final engine = ControlledEngine()..holdPrepare = true;
+      final s = await built(engine);
+      expect(engine.calls, contains('prepare full'));
+      expect(s.prepareRun.running, isTrue);
+      expect(s.preparingCurrent, isTrue);
+      expect(s.busy, isFalse);
+      expect(s.canProceed(WizardStep.build), isTrue);
+    });
+
+    test('Install while preparing waits for it, then installs', () async {
+      final engine = ControlledEngine()
+        ..holdPrepare = true
+        ..holdFlash = true;
+      final s = await built(engine);
+      await toReviewState(s);
+      s.install();
+      expect(s.step, WizardStep.install);
+      expect(s.installPending, isTrue);
+      expect(s.busy, isTrue);
+      expect(flashCalls(engine), isEmpty);
+
+      await engine.prepares.single.finish(prepared());
+      await until(() => engine.flashes.isNotEmpty);
+      expect(flashCalls(engine), ['flash full']);
+      expect(s.installPending, isFalse);
+      expect(s.flashRun.running, isTrue);
+    });
+
+    test(
+      'a failed preparation still starts the install, which reports it',
+      () async {
+        final engine = ControlledEngine()
+          ..holdPrepare = true
+          ..holdFlash = true;
+        final s = await built(engine);
+        await toReviewState(s);
+        s.install();
+        final run = engine.prepares.single;
+        run.add(
+          const ErrorEvent(code: 'not_enough_space', message: 'needs 7 GB'),
+        );
+        await run.finish(ResultEvent(false, {'type': 'result', 'ok': false}));
+        await until(() => engine.flashes.isNotEmpty);
+        expect(flashCalls(engine), ['flash full']);
+        // The background run never raised the space dialog itself.
+        expect(s.spaceProblem, isNull);
+      },
+    );
+
+    test(
+      'Stop while waiting: nothing starts, the preparation goes on',
+      () async {
+        final engine = ControlledEngine()
+          ..holdPrepare = true
+          ..holdFlash = true;
+        final s = await built(engine);
+        await toReviewState(s);
+        s.install();
+        await s.cancelFlash();
+        expect(s.installPending, isFalse);
+        expect(s.busy, isFalse);
+        expect(engine.prepares.single.cancelled, isFalse);
+        await engine.prepares.single.finish(prepared());
+        await settle();
+        expect(flashCalls(engine), isEmpty);
+        expect(s.prepareRun.ok, isTrue);
+      },
+    );
+
+    test('a dry run never waits for it', () async {
+      final engine = ControlledEngine()
+        ..holdPrepare = true
+        ..holdFlash = true;
+      final s = await built(engine);
+      await toReviewState(s);
+      s.setDryRun(true);
+      s.install();
+      expect(s.installPending, isFalse);
+      expect(flashCalls(engine), ['flash full dry']);
+    });
+
+    test('a new build or another device stops it', () async {
+      final engine = ControlledEngine()..holdPrepare = true;
+      final s = await built(engine);
+      final first = engine.prepares.single;
+      await s.startBuild();
+      expect(first.cancelled, isTrue);
+      await until(() => engine.prepares.length == 2);
+      expect(s.prepareRun.running, isTrue);
+
+      s.goTo(WizardStep.device);
+      await s.selectDevice(rp4);
+      expect(engine.prepares.last.cancelled, isTrue);
+      expect(s.prepareRun.running, isFalse);
+      expect(s.preparingCurrent, isFalse);
+    });
+
+    test('closing the app stops it', () async {
+      final engine = ControlledEngine()..holdPrepare = true;
+      final s = await built(engine);
+      await s.shutdown();
+      expect(engine.prepares.single.cancelled, isTrue);
+    });
+
+    testWidgets('the install page says what is happening', (tester) async {
+      final engine = ControlledEngine()..holdFlash = true;
+      await startApp(tester, engine);
+      await toReview(tester);
+      expect(key('image-ready'), findsOneWidget);
+      await tap(tester, key('install-button'));
+      await tester.tap(key('confirm-install-yes'));
+      await pumpFor(tester);
+      final run = engine.flashes.single;
+
+      run.add(const StageEvent('check', 'Checking the build'));
+      await pumpFor(tester);
+      expect(find.text('Getting ready'), findsOneWidget);
+      expect(find.textContaining("Don't plug in your device yet"), findsOne);
+
+      run.add(
+        const StageEvent('wait_device', 'Connect the device in download mode'),
+      );
+      run.add(
+        const PromptEvent(
+          id: 'enter_download_mode',
+          title: 'Hold Back and plug in the cable',
+          body: 'Keep holding until installation starts.',
+        ),
+      );
+      await pumpFor(tester);
+      expect(find.text('Connect your Anbernic RG Cube now'), findsOneWidget);
+      expect(find.textContaining('Nothing has been written yet'), findsOne);
+      expect(key('prompt'), findsOneWidget);
+
+      run.add(const StageEvent('flash', 'Installing Thimsy'));
+      await pumpFor(tester);
+      expect(find.text('Installing'), findsOneWidget);
+      expect(find.textContaining("Don't unplug the cable"), findsOne);
+      await run.finish(ResultEvent(true, {'type': 'result', 'ok': true}));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('while waiting for the device, Stop stops at once', (
+      tester,
+    ) async {
+      final engine = ControlledEngine()..holdFlash = true;
+      await startApp(tester, engine);
+      await toReview(tester);
+      await tap(tester, key('install-button'));
+      await tester.tap(key('confirm-install-yes'));
+      await pumpFor(tester);
+      final run = engine.flashes.single;
+      run.add(const StageEvent('prepare', 'Preparing the partitions'));
+      run.add(
+        const StageEvent('wait_device', 'Connect the device in download mode'),
+      );
+      await pumpFor(tester);
+      await tapRunning(tester, key('stop-install'));
+      expect(key('confirm-stop'), findsNothing);
+      expect(run.cancelled, isTrue);
+      await run.finish(ResultEvent(false, {'type': 'result', 'ok': false}));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('Install while preparing shows the preparation first', (
+      tester,
+    ) async {
+      final engine = ControlledEngine()
+        ..holdPrepare = true
+        ..holdFlash = true;
+      await startApp(tester, engine);
+      // A known fraction, so Review's progress bar can settle.
+      await toReview(
+        tester,
+        beforeReview: () {
+          final prep = engine.prepares.single;
+          prep.add(const StageEvent('prepare', 'Preparing the partitions'));
+          prep.add(
+            const ProgressEvent(
+              stage: 'prepare',
+              label: 'Preparing partitions',
+              done: 1,
+              total: 4,
+            ),
+          );
+        },
+      );
+      final prep = engine.prepares.single;
+      await pumpFor(tester);
+      expect(key('preparing-image'), findsOneWidget);
+      expect(find.textContaining('25%'), findsOne);
+
+      await tapRunning(tester, key('install-button'));
+      await tapRunning(tester, key('confirm-install-yes'));
+      expect(find.text('Getting ready'), findsOneWidget);
+      expect(find.textContaining('Preparing partitions'), findsOne);
+      expect(engine.flashes, isEmpty);
+
+      await prep.finish(
+        ResultEvent(true, {'type': 'result', 'ok': true, 'files': 60}),
+      );
+      await pumpFor(tester);
+      expect(engine.flashes, hasLength(1));
+      await engine.flashes.single.finish(
+        ResultEvent(true, {'type': 'result', 'ok': true}),
+      );
+      await tester.pumpAndSettle();
+    });
   });
 }

@@ -1,10 +1,9 @@
 {"stage":"check","title":"Checking the build","type":"stage"}
 {"level":"info","message":"4 partitions to write (12.72 MB), 1 to back up, 2 to erase, 0 to compare","type":"log"}
-{"done":12774372,"label":"Checking the image","stage":"check","total":12774372,"type":"progress"}
+{"level":"info","message":"The image is unchanged since it was checked","type":"log"}
 {"stage":"driver","title":"Checking the USB driver","type":"stage"}
 {"level":"warn","message":"No udev rule gives this user access to 1782:4d00; if the device isn't found, set up USB access and try again","type":"log"}
 {"stage":"prepare","title":"Preparing the partitions","type":"stage"}
-{"done":12728320,"label":"Preparing partitions","stage":"prepare","total":12728320,"type":"progress"}
 {"done":12728320,"label":"Checking the partitions","stage":"prepare","total":12728320,"type":"progress"}
 {"stage":"wait_device","title":"Connect the device in download mode","type":"stage"}
 {"body":"Turn the Test Device off, hold Back and plug in the cable.","id":"enter_download_mode","image":null,"title":"Hold Back","type":"prompt"}
@@ -35,9 +34,9 @@
 {"level":"info","message":"load_partition: boot_a, target: 0x2000, written: 0x2000","type":"log"}
 {"level":"info","message":"Answer \"yes\" to confirm the \"write partition\" command: ","type":"log"}
 {"level":"info","message":"file size : 0xc00000","type":"log"}
+{"level":"info","message":"Answer \"yes\" to confirm the \"erase partition\" command: ","type":"log"}
 {"level":"info","message":"load_partition: super, target: 0xc00000, written: 0xc00000","type":"log"}
 {"done":12722176,"label":"Wrote super","stage":"flash","total":12722176,"type":"progress"}
-{"level":"info","message":"Answer \"yes\" to confirm the \"erase partition\" command: ","type":"log"}
 {"level":"info","message":"Answer \"yes\" to confirm the \"erase partition\" command: ","type":"log"}
 {"stage":"reboot","title":"Restarting the device","type":"stage"}
 {"level":"info","message":"The device restarts into Thimsy. The first boot takes a few minutes.","type":"log"}

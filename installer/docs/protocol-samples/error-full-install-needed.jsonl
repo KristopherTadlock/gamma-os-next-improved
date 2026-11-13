@@ -1,6 +1,6 @@
 {"stage":"check","title":"Checking the build","type":"stage"}
 {"level":"info","message":"3 partitions to write (12.71 MB), 1 to back up, 0 to erase, 1 to compare","type":"log"}
-{"done":12774372,"label":"Checking the image","stage":"check","total":12774372,"type":"progress"}
+{"level":"info","message":"The image is unchanged since it was checked","type":"log"}
 {"stage":"driver","title":"Checking the USB driver","type":"stage"}
 {"level":"warn","message":"No udev rule gives this user access to 1782:4d00; if the device isn't found, set up USB access and try again","type":"log"}
 {"stage":"prepare","title":"Preparing the partitions","type":"stage"}

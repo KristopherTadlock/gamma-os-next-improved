@@ -76,13 +76,22 @@ class ReviewScreen extends StatelessWidget {
             .map((p) => p.name)
             .firstOrNull ??
         '—';
+    // Unisoc: connected after Install starts (see the connect step).
+    final later = plan?.connectFirst == false;
+    final prep = s.prepareRun;
     return StepPage(
       title: l.reviewTitle,
       children: [
         row(l.rowDevice, s.device?.name ?? '—'),
         row(
           l.rowConnectedAs,
-          s.matchedDevice?.label ?? (s.dryRun ? l.dryRunValue : '—'),
+          s.matchedDevice?.label ??
+              (s.dryRun
+                  ? l.dryRunValue
+                  : later
+                  ? l.connectAfterInstall
+                  : '—'),
+          key: const ValueKey('row-connected-as'),
         ),
         row(l.rowProfile, profileName),
         row(l.rowImage, s.image ?? '—'),
@@ -163,7 +172,46 @@ class ReviewScreen extends StatelessWidget {
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
+        // The build being got ready in the background (`prepare`).
+        if (s.preparingCurrent && prep.running)
+          Padding(
+            key: const ValueKey('preparing-image'),
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  prep.fraction == null
+                      ? l.preparingImage
+                      : '${l.preparingImage} ${(prep.fraction! * 100).toStringAsFixed(0)}%',
+                ),
+                const SizedBox(height: 4),
+                LinearProgressIndicator(value: prep.fraction),
+              ],
+            ),
+          )
+        else if (s.preparingCurrent && prep.ok)
+          Padding(
+            key: const ValueKey('image-ready'),
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Colors.green, size: 18),
+                const SizedBox(width: 6),
+                Expanded(child: Text(l.imageReady)),
+              ],
+            ),
+          ),
+        if (later && !s.dryRun)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Text(
+              l.installThenConnect(s.device?.name ?? ''),
+              key: const ValueKey('install-then-connect'),
+            ),
+          ),
+        const SizedBox(height: 8),
         Align(
           alignment: AlignmentDirectional.centerStart,
           child: FilledButton.icon(

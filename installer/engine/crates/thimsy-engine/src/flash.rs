@@ -13,7 +13,8 @@ use crate::resolve;
 use crate::tools::{self, Invocation};
 use crate::util;
 use anyhow::{bail, Context, Result};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -822,9 +823,204 @@ pub struct FlashResult {
     pub commands: Vec<String>,
 }
 
-pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<FlashResult> {
-    rep.stage("check", "Checking the build");
-    let rec: JobRecord = job::load_job(&opts.job)?;
+/// Kept in `flash/`: what was last checked there (by `prepare` or an
+/// install), the image and each unpacked file with its size and
+/// modification time. A later run trusts a check only while the file is
+/// unchanged; anything else is read and checked again.
+pub const PREPARED: &str = "prepared.json";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+struct FileStamp {
+    size: u64,
+    modified_ns: u64,
+}
+
+impl FileStamp {
+    fn of(path: &Path) -> Option<FileStamp> {
+        let m = fs::metadata(path).ok()?;
+        let t = m
+            .modified()
+            .ok()?
+            .duration_since(std::time::UNIX_EPOCH)
+            .ok()?;
+        Some(FileStamp {
+            size: m.len(),
+            modified_ns: u64::try_from(t.as_nanos()).ok()?,
+        })
+    }
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+struct Prepared {
+    image_sha256: String,
+    image: Option<FileStamp>,
+    entries: Vec<job::EntryHash>,
+    /// Unpacked file → (its stamp when checked, its sha256).
+    files: BTreeMap<String, (FileStamp, String)>,
+}
+
+/// The record in `flash_dir`, if it is for the image with this sha256.
+fn load_prepared(flash_dir: &Path, sha256: &str) -> Prepared {
+    fs::read(flash_dir.join(PREPARED))
+        .ok()
+        .and_then(|b| serde_json::from_slice::<Prepared>(&b).ok())
+        .filter(|p| p.image_sha256 == sha256)
+        .unwrap_or_default()
+}
+
+/// [verify_image], skipped when the image is unchanged since it was last
+/// checked in full.
+fn check_image(rec: &JobRecord, prev: &Prepared, rep: &Reporter) -> Result<Vec<job::EntryHash>> {
+    let stamp = FileStamp::of(&rec.image);
+    let unchanged = stamp.is_some()
+        && prev.image == stamp
+        && stamp.is_some_and(|s| s.size == rec.bytes)
+        && prev.image_sha256 == rec.sha256
+        && !prev.entries.is_empty()
+        && (rec.entries.is_empty() || rec.entries == prev.entries);
+    if unchanged {
+        rep.info("The image is unchanged since it was checked");
+        return Ok(prev.entries.clone());
+    }
+    verify_image(rec, rep)
+}
+
+/// Unpacks every file `spd_dump` will read into `flash_dir` and checks each
+/// against its PAC entry (one that doesn't match is unpacked again, once).
+/// `reads` is what the run will also read from the device, for the space
+/// check. Records what was checked in [PREPARED].
+#[allow(clippy::too_many_arguments)]
+fn ready_files(
+    rec: &JobRecord,
+    p: &Pac,
+    plan: &SpdPlan,
+    flash_dir: &Path,
+    job_dir: &Path,
+    entries: &[job::EntryHash],
+    reads: u64,
+    rep: &Reporter,
+) -> Result<()> {
+    prepare_flash_dir(flash_dir, &rec.sha256)?;
+    let prev = load_prepared(flash_dir, &rec.sha256);
+    // An earlier engine read the device's table into the scratch folder.
+    let _ = fs::remove_file(flash_dir.join(DEVICE_PARTITIONS));
+    // (file name, PAC entry) for everything spd_dump reads.
+    let mut files: Vec<(String, &pac::Entry)> = Vec::new();
+    for (id, _) in &plan.fdl {
+        files.push((file_for(id), p.find(id)?));
+    }
+    for w in &plan.writes {
+        files.push((file_for(&w.partition), &p.entries[w.index]));
+    }
+    let missing: u64 = files
+        .iter()
+        .filter(|(n, e)| !fs::metadata(flash_dir.join(n)).is_ok_and(|m| m.len() == e.size))
+        .map(|(_, e)| e.size)
+        .sum();
+    let need = missing + missing / 20 + reads;
+    let free = crate::disk::probe(job_dir)
+        .map_err(|e| {
+            EngineError::new(
+                Code::BadInput,
+                format!("the free space in {} couldn't be checked ({e})", job_dir.display()),
+            )
+            .hint("The free space on this drive couldn't be checked. Choose another folder for the workspace.")
+        })?
+        .free;
+    if free < need {
+        return Err(job::not_enough_space(job_dir, need, free));
+    }
+    let total: u64 = files.iter().map(|(_, e)| e.size).sum();
+    let mut done = 0;
+    let unpack = |name: &str, e: &pac::Entry, done: u64| -> Result<()> {
+        // Complete-looking only once fully written.
+        let part = flash_dir.join(format!("{name}.part"));
+        p.extract(e, &part, &mut |n| {
+            rep.progress("Preparing partitions", done + n, total)
+        })?;
+        fs::rename(&part, flash_dir.join(name))?;
+        Ok(())
+    };
+    for (name, e) in &files {
+        if !fs::metadata(flash_dir.join(name)).is_ok_and(|m| m.len() == e.size) {
+            unpack(name, e, done)?;
+        }
+        done += e.size;
+    }
+    // Every file spd_dump will write must be exactly its PAC entry, however
+    // it got there: checked now, or unchanged since it was checked.
+    let mut record = Prepared {
+        image_sha256: rec.sha256.clone(),
+        image: FileStamp::of(&rec.image),
+        entries: entries.to_vec(),
+        // Earlier checks of files this run doesn't use (the other mode's)
+        // still hold while those files are unchanged.
+        files: prev
+            .files
+            .iter()
+            .filter(|(n, (s, _))| FileStamp::of(&flash_dir.join(n)) == Some(*s))
+            .map(|(n, v)| (n.clone(), v.clone()))
+            .collect(),
+    };
+    let mut checked_bytes = 0;
+    for (name, e) in &files {
+        let want = entry_hash(entries, e.index)?;
+        let path = flash_dir.join(name);
+        let trusted = record
+            .files
+            .get(name)
+            .is_some_and(|(s, sha)| sha == want && FileStamp::of(&path) == Some(*s));
+        if !trusted {
+            let hash = |path: &Path, at: u64| {
+                util::sha256_file(path, |d, _| {
+                    rep.progress("Checking the partitions", at + d, total)
+                })
+            };
+            if hash(&path, checked_bytes)? != want {
+                rep.warn(format!(
+                    "{name} doesn't match the image; unpacking it again"
+                ));
+                unpack(name, e, 0)?;
+                if hash(&path, checked_bytes)? != want {
+                    return Err(EngineError::new(
+                        Code::HashMismatch,
+                        format!("{name} still doesn't match the image after unpacking it again; nothing was written"),
+                    )
+                    .hint("The drive the workspace is on may be failing. Choose a workspace on another drive and build again.")
+                    .into());
+                }
+            }
+            match FileStamp::of(&path) {
+                Some(s) => {
+                    record.files.insert(name.clone(), (s, want.to_string()));
+                }
+                None => {
+                    record.files.remove(name);
+                }
+            }
+        }
+        checked_bytes += e.size;
+        rep.progress("Checking the partitions", checked_bytes, total);
+    }
+    if let Err(e) = serde_json::to_vec(&record)
+        .map_err(anyhow::Error::from)
+        .and_then(|b| util::write_atomic(&flash_dir.join(PREPARED), &b))
+    {
+        // Only means the next run checks everything again.
+        rep.warn(format!("couldn't record the checked files: {e:#}"));
+    }
+    Ok(())
+}
+
+/// The job, its device and the plan for `mode`: shared by [prepare] and
+/// [flash].
+fn load_for(
+    cat: &Catalog,
+    job_dir: &Path,
+    mode: Mode,
+    rep: &Reporter,
+) -> Result<(JobRecord, Pac, SpdPlan)> {
+    let rec: JobRecord = job::load_job(job_dir)?;
     if rec.catalog != cat.root.version {
         rep.warn(format!(
             "This build was made with catalog {}; the installer now has catalog {}. Build again if the device's recipe changed.",
@@ -832,12 +1028,6 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
         ));
     }
     let d = cat.device(&rec.device)?;
-    if let Err(e) = resolve::require_host(d, opts.host) {
-        if !opts.dry_run {
-            return Err(e);
-        }
-        rep.warn(format!("{e} (dry run continues)"));
-    }
     let f = d.flash.as_ref().context("device has no flash recipe")?;
     if f.method != "spd" {
         return Err(EngineError::new(
@@ -850,7 +1040,46 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
         .into());
     }
     let p = Pac::open(&rec.image)?;
-    let plan = spd_plan(d, &p, opts.mode)?;
+    let plan = spd_plan(d, &p, mode)?;
+    Ok((rec, p, plan))
+}
+
+#[derive(Debug, Serialize)]
+pub struct PrepareResult {
+    /// Files ready in the job's `flash` folder.
+    pub files: usize,
+    pub bytes: u64,
+}
+
+/// Gets a finished build ready to install in `mode`, without a device:
+/// checks the image, then unpacks and checks every partition the install
+/// will write. An install soon after skips that work if nothing changed.
+pub fn prepare(cat: &Catalog, job_dir: &Path, mode: Mode, rep: &Reporter) -> Result<PrepareResult> {
+    rep.stage("check", "Checking the build");
+    let (rec, p, plan) = load_for(cat, job_dir, mode, rep)?;
+    let d = cat.device(&rec.device)?;
+    let _lock = job::lock_workspace(&job::workspace_of(job_dir))?;
+    check_reference(cat, d, &rec)?;
+    let flash_dir = job_dir.join("flash");
+    let entries = check_image(&rec, &load_prepared(&flash_dir, &rec.sha256), rep)?;
+    rep.stage("prepare", "Preparing the partitions");
+    ready_files(&rec, &p, &plan, &flash_dir, job_dir, &entries, 0, rep)?;
+    Ok(PrepareResult {
+        files: plan.fdl.len() + plan.writes.len(),
+        bytes: plan.writes.iter().map(|w| w.bytes).sum(),
+    })
+}
+
+pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<FlashResult> {
+    rep.stage("check", "Checking the build");
+    let (rec, p, plan) = load_for(cat, &opts.job, opts.mode, rep)?;
+    let d = cat.device(&rec.device)?;
+    if let Err(e) = resolve::require_host(d, opts.host) {
+        if !opts.dry_run {
+            return Err(e);
+        }
+        rep.warn(format!("{e} (dry run continues)"));
+    }
     let flash_dir = opts.job.join("flash");
     let backup_root = opts.job.join("backup");
     let run_name = backup_run_name();
@@ -873,7 +1102,7 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
     // One run at a time per workspace, for the whole flash.
     let _lock = job::lock_workspace(&job::workspace_of(&opts.job))?;
     check_reference(cat, d, &rec)?;
-    let entries = verify_image(&rec, rep)?;
+    let entries = check_image(&rec, &load_prepared(&flash_dir, &rec.sha256), rep)?;
 
     rep.stage("driver", "Checking the USB driver");
     crate::drivers::ensure_for_flash(d, opts.host, rep)?;
@@ -887,80 +1116,8 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
             let _ = fs::remove_dir(e.path());
         }
     }
-    prepare_flash_dir(&flash_dir, &rec.sha256)?;
-    // An earlier engine read the device's table into the scratch folder.
-    let _ = fs::remove_file(flash_dir.join(DEVICE_PARTITIONS));
-    // (file name, PAC entry) for everything spd_dump reads.
-    let mut files: Vec<(String, &pac::Entry)> = Vec::new();
-    for (id, _) in &plan.fdl {
-        files.push((file_for(id), p.find(id)?));
-    }
-    for w in &plan.writes {
-        files.push((file_for(&w.partition), &p.entries[w.index]));
-    }
-    let missing: u64 = files
-        .iter()
-        .filter(|(n, e)| !fs::metadata(flash_dir.join(n)).is_ok_and(|m| m.len() == e.size))
-        .map(|(_, e)| e.size)
-        .sum();
     let reads: u64 = plan.backups.iter().chain(&plan.base).map(|b| b.bytes).sum();
-    let need = missing + missing / 20 + reads;
-    let free = crate::disk::probe(&opts.job)
-        .map_err(|e| {
-            EngineError::new(
-                Code::BadInput,
-                format!("the free space in {} couldn't be checked ({e})", opts.job.display()),
-            )
-            .hint("The free space on this drive couldn't be checked. Choose another folder for the workspace.")
-        })?
-        .free;
-    if free < need {
-        return Err(job::not_enough_space(&opts.job, need, free));
-    }
-    let total: u64 = files.iter().map(|(_, e)| e.size).sum();
-    let mut done = 0;
-    let unpack = |name: &str, e: &pac::Entry, done: u64| -> Result<()> {
-        // Complete-looking only once fully written.
-        let part = flash_dir.join(format!("{name}.part"));
-        p.extract(e, &part, &mut |n| {
-            rep.progress("Preparing partitions", done + n, total)
-        })?;
-        fs::rename(&part, flash_dir.join(name))?;
-        Ok(())
-    };
-    for (name, e) in &files {
-        if !fs::metadata(flash_dir.join(name)).is_ok_and(|m| m.len() == e.size) {
-            unpack(name, e, done)?;
-        }
-        done += e.size;
-    }
-    // Every file spd_dump will write must be exactly its PAC entry, however
-    // it got there; one that isn't is unpacked again, once.
-    let mut checked_bytes = 0;
-    for (name, e) in &files {
-        let want = entry_hash(&entries, e.index)?;
-        let path = flash_dir.join(name);
-        let hash = |path: &Path, at: u64| {
-            util::sha256_file(path, |d, _| {
-                rep.progress("Checking the partitions", at + d, total)
-            })
-        };
-        if hash(&path, checked_bytes)? != want {
-            rep.warn(format!(
-                "{name} doesn't match the image; unpacking it again"
-            ));
-            unpack(name, e, 0)?;
-            if hash(&path, checked_bytes)? != want {
-                return Err(EngineError::new(
-                    Code::HashMismatch,
-                    format!("{name} still doesn't match the image after unpacking it again; nothing was written"),
-                )
-                .hint("The drive the workspace is on may be failing. Choose a workspace on another drive and build again.")
-                .into());
-            }
-        }
-        checked_bytes += e.size;
-    }
+    ready_files(&rec, &p, &plan, &flash_dir, &opts.job, &entries, reads, rep)?;
     let run_dir = new_backup_run(&backup_root, "")?;
     let run_arg = format!(
         "../backup/{}",

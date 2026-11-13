@@ -22,12 +22,40 @@ class InstallScreen extends StatelessWidget {
     final code = run.failed ? run.error?.code : null;
     // The engine refused an update: repeating it would fail the same way.
     final needsFull = code == 'full_install_needed';
+    // Waiting for the background preparation: its progress is shown, and
+    // the install starts when it ends.
+    final pending = s.installPending;
+    final shown = pending ? s.prepareRun : run;
+    final name = s.device?.name ?? '';
+    final stage = run.stage;
+    // What the page says follows what's happening: getting ready (nothing
+    // touches the device), waiting for the device (nothing written yet),
+    // then installing.
+    final String title;
+    String? subtitle;
+    if (s.flashRunDry) {
+      title = l.dryRun;
+    } else if (pending ||
+        (run.running &&
+            (stage == null ||
+                stage == 'check' ||
+                stage == 'driver' ||
+                stage == 'prepare'))) {
+      title = l.gettingReadyTitle;
+      subtitle = l.gettingReadyBody;
+    } else if (run.running && stage == 'wait_device') {
+      title = l.connectNowTitle(name);
+      subtitle = l.waitingForDevice(name);
+    } else {
+      title = l.installingTitle;
+      subtitle = run.running ? l.keepConnected : null;
+    }
     return StepPage(
-      title: s.flashRunDry ? l.dryRun : l.installingTitle,
-      subtitle: run.running && !s.flashRunDry ? l.keepConnected : null,
+      title: title,
+      subtitle: subtitle,
       children: [
         RunView(
-          run,
+          shown,
           idleText: l.ready,
           errorExtra: (e) =>
               e.code == 'full_install_needed' ? l.fullInstallNeededBody : null,
@@ -73,13 +101,13 @@ class InstallScreen extends StatelessWidget {
               ),
               const SizedBox(width: 12),
             ],
-            if (!run.running && !(run.ok && !s.flashRunDry))
+            if (!run.running && !pending && !(run.ok && !s.flashRunDry))
               OutlinedButton(
                 key: const ValueKey('back-to-review'),
                 onPressed: () => s.goTo(WizardStep.review),
                 child: Text(l.backToReview),
               ),
-            if (run.running)
+            if (run.running || pending)
               OutlinedButton(
                 key: const ValueKey('stop-install'),
                 onPressed: () => _stop(context, s),

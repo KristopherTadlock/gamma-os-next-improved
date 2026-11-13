@@ -382,10 +382,26 @@ void main() {
     await tap(tester, key('unlock-confirm'));
     await next(tester);
     // Nothing detected, and that's expected: the tool will wait for it.
+    // The page sets up USB and shows the steps as what comes after Install,
+    // instead of asking to plug in now.
     expect(key('connect-later'), findsOneWidget);
     expect(key('device-connected'), findsNothing);
+    expect(find.text('Get ready to connect'), findsOneWidget);
+    expect(find.text('Connect your device'), findsNothing);
+    expect(key('connect-steps-later'), findsOneWidget);
+    expect(key('dry-run-continue'), findsNothing);
     await next(tester);
     expect(find.text('Review'), findsWidgets);
+    expect(
+      find.descendant(
+        of: key('row-connected-as'),
+        matching: find.text('After you press Install'),
+      ),
+      findsOneWidget,
+    );
+    expect(key('install-then-connect'), findsOneWidget);
+    expect(key('image-ready'), findsOneWidget);
+    expect(engine.calls, contains('prepare full'));
     await tap(tester, key('install-button'));
     await tap(tester, key('confirm-install-yes'));
     expect(engine.calls, contains('flash full'));

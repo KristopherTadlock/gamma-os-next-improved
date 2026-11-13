@@ -203,5 +203,16 @@
   "deleteBackupsBody": "Hver mappe indeholder en sikkerhedskopi af enhedens kalibreringsdata (Wi-Fi, Bluetooth, sensorer). Hvis du sletter den, og kalibreringen nogensinde bliver beskadiget, kan den ikke gendannes. Vælg kun sikkerhedskopier, som du har en anden kopi af.",
   "deleteSelected": "Slet valgte",
   "partitionsErases": "Sletter: {names}",
-  "cleanFailed": "Filerne kunne ikke fjernes"
+  "cleanFailed": "Filerne kunne ikke fjernes",
+  "connectSetupTitle": "Gør klar til at tilslutte",
+  "connectSetupSubtitle": "Tilslut ikke {device} endnu. Download-tilstanden varer kun få sekunder, så du tilslutter den, når du har trykket på »Installer«.",
+  "connectStepsLater": "Når du har trykket på »Installer«, og installationsprogrammet beder om det:",
+  "connectAfterInstall": "Når du har trykket på »Installer«",
+  "installThenConnect": "Når du trykker på »Installer«, gør installationsprogrammet sig klar og beder dig derefter om at tilslutte {device}. Intet skrives, før den er tilsluttet.",
+  "preparingImage": "Gør aftrykket klar til installation …",
+  "imageReady": "Aftrykket er klar til installation.",
+  "gettingReadyTitle": "Gør klar",
+  "gettingReadyBody": "Kontrollerer aftrykket og pakker partitionerne ud. Tilslut ikke enheden endnu: du bliver bedt om det.",
+  "connectNowTitle": "Tilslut {device} nu",
+  "waitingForDevice": "Installationsprogrammet venter op til 5 minutter på {device}. Intet er skrevet endnu."
 }

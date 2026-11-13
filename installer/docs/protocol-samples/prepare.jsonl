@@ -1,0 +1,6 @@
+{"stage":"check","title":"Checking the build","type":"stage"}
+{"done":12774372,"label":"Checking the image","stage":"check","total":12774372,"type":"progress"}
+{"stage":"prepare","title":"Preparing the partitions","type":"stage"}
+{"done":12728320,"label":"Preparing partitions","stage":"prepare","total":12728320,"type":"progress"}
+{"done":12728320,"label":"Checking the partitions","stage":"prepare","total":12728320,"type":"progress"}
+{"bytes":12722176,"files":6,"ok":true,"type":"result"}
