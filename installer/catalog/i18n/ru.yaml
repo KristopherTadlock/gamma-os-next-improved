@@ -141,6 +141,7 @@
 "Repeat the download-mode steps, then try again. If it still isn't found, check in Device Manager that Unisoc download mode uses the WinUSB driver.": "Повторите шаги для режима загрузки, затем повторите попытку. Если устройство по-прежнему не найдено, проверьте в диспетчере устройств, что для Unisoc download mode используется драйвер WinUSB."
 "Repeat the download-mode steps, then try again. If it still isn't found, unplug the cable, plug it into another USB port and try again.": "Повторите шаги для режима загрузки, затем повторите попытку. Если устройство по-прежнему не найдено, отключите кабель, подключите его к другому USB-порту и повторите попытку."
 "Restart into fastbootd": "Перезагрузка в fastbootd"
+"Restart the computer, then try again.": "Перезагрузите компьютер и повторите попытку."
 "Restart with Power": "Перезапуск кнопкой питания"
 "Restarting the device": "Перезапуск устройства"
 "RetroArch": "RetroArch"

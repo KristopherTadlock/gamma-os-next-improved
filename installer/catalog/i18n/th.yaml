@@ -141,6 +141,7 @@
 "Repeat the download-mode steps, then try again. If it still isn't found, check in Device Manager that Unisoc download mode uses the WinUSB driver.": "ทำตามขั้นตอนเข้าโหมดดาวน์โหลดอีกครั้ง แล้วลองอีกครั้ง หากยังไม่พบอุปกรณ์ ให้ตรวจสอบในตัวจัดการอุปกรณ์ว่า Unisoc download mode ใช้ไดรเวอร์ WinUSB"
 "Repeat the download-mode steps, then try again. If it still isn't found, unplug the cable, plug it into another USB port and try again.": "ทำตามขั้นตอนเข้าโหมดดาวน์โหลดอีกครั้ง แล้วลองอีกครั้ง หากยังไม่พบอุปกรณ์ ให้ถอดสาย เสียบเข้ากับพอร์ต USB อื่น แล้วลองอีกครั้ง"
 "Restart into fastbootd": "รีสตาร์ทเข้าสู่ fastbootd"
+"Restart the computer, then try again.": "รีสตาร์ตคอมพิวเตอร์ แล้วลองอีกครั้ง"
 "Restart with Power": "รีสตาร์ทด้วยปุ่มเปิด/ปิด"
 "Restarting the device": "กำลังรีสตาร์ทอุปกรณ์"
 "RetroArch": "RetroArch"

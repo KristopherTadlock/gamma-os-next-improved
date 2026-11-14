@@ -347,7 +347,9 @@ Errors while flashing:
   download mode with another driver (`download mode uses another driver
   (service class port), not WinUSB`; no driver or a problem only after 10
   s, since Windows may still be setting it up) or that driver's port is in
-  use (`serial port COMn is in use by another program`).
+  use (`serial port COMn is in use by another program`; it opens the port
+  to check once per state, never while Windows reports a problem, as it
+  does while changing the driver).
 
   Unisoc's own serial driver can't send the USB request smartphone
   chipsets need, and Windows prefers it when its package is installed
@@ -368,7 +370,10 @@ Errors while flashing:
   `enter_download_mode` prompt comes back and the next connection is
   switched. A declined prompt or a helper that can't start ends with
   `tool_failed` before the device is asked for; a failed switch ends with
-  `tool_failed` too, as does a helper that stops. Without the helper (no
+  `tool_failed` too, as does a helper that stops. A switch Windows says
+  needs a restart ends the run (`device_not_found`, hint: restart the
+  computer), as does a fourth switch in one run. The helper stops as soon
+  as `spd_dump` has opened the device. Without the helper (no
   other driver known up front), another driver ends the run at once with
   `device_not_found`; Windows then has a record of that driver for the
   port, so the next try starts the helper up front. One switch runs at a

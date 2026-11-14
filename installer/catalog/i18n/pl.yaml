@@ -141,6 +141,7 @@
 "Repeat the download-mode steps, then try again. If it still isn't found, check in Device Manager that Unisoc download mode uses the WinUSB driver.": "Powtórz kroki trybu pobierania, a następnie spróbuj ponownie. Jeśli urządzenie nadal nie zostanie znalezione, sprawdź w Menedżerze urządzeń, czy Unisoc download mode używa sterownika WinUSB."
 "Repeat the download-mode steps, then try again. If it still isn't found, unplug the cable, plug it into another USB port and try again.": "Powtórz kroki trybu pobierania, a następnie spróbuj ponownie. Jeśli urządzenie nadal nie zostanie znalezione, odłącz kabel, podłącz go do innego portu USB i spróbuj ponownie."
 "Restart into fastbootd": "Uruchom ponownie w trybie fastbootd"
+"Restart the computer, then try again.": "Uruchom ponownie komputer, a następnie spróbuj ponownie."
 "Restart with Power": "Uruchom ponownie przyciskiem zasilania"
 "Restarting the device": "Ponowne uruchamianie urządzenia"
 "RetroArch": "RetroArch"

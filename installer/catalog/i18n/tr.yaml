@@ -141,6 +141,7 @@
 "Repeat the download-mode steps, then try again. If it still isn't found, check in Device Manager that Unisoc download mode uses the WinUSB driver.": "İndirme modu adımlarını tekrarlayıp tekrar deneyin. Cihaz hâlâ bulunamazsa, Aygıt Yöneticisi'nde Unisoc download mode için WinUSB sürücüsünün kullanıldığını kontrol edin."
 "Repeat the download-mode steps, then try again. If it still isn't found, unplug the cable, plug it into another USB port and try again.": "İndirme modu adımlarını tekrarlayıp tekrar deneyin. Cihaz hâlâ bulunamazsa kabloyu çıkarın, başka bir USB bağlantı noktasına takın ve tekrar deneyin."
 "Restart into fastbootd": "fastbootd moduna yeniden başlatın"
+"Restart the computer, then try again.": "Bilgisayarı yeniden başlatıp tekrar deneyin."
 "Restart with Power": "Güç tuşuyla yeniden başlatın"
 "Restarting the device": "Cihaz yeniden başlatılıyor"
 "RetroArch": "RetroArch"

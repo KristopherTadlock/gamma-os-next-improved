@@ -141,6 +141,7 @@
 "Repeat the download-mode steps, then try again. If it still isn't found, check in Device Manager that Unisoc download mode uses the WinUSB driver.": "다운로드 모드 단계를 다시 진행한 다음 다시 시도하세요. 그래도 찾을 수 없으면 장치 관리자에서 Unisoc download mode가 WinUSB 드라이버를 사용하는지 확인하세요."
 "Repeat the download-mode steps, then try again. If it still isn't found, unplug the cable, plug it into another USB port and try again.": "다운로드 모드 단계를 다시 진행한 다음 다시 시도하세요. 그래도 찾을 수 없으면 케이블을 뽑아 다른 USB 포트에 꽂고 다시 시도하세요."
 "Restart into fastbootd": "fastbootd로 다시 시작하기"
+"Restart the computer, then try again.": "컴퓨터를 다시 시작한 다음 다시 시도하세요."
 "Restart with Power": "전원 버튼으로 다시 시작하기"
 "Restarting the device": "기기 재시작 중"
 "RetroArch": "RetroArch"

@@ -141,6 +141,7 @@
 "Repeat the download-mode steps, then try again. If it still isn't found, check in Device Manager that Unisoc download mode uses the WinUSB driver.": "請重複進入下載模式的步驟，然後再試一次。如果仍找不到裝置，請在裝置管理員中確認 Unisoc download mode 使用的是 WinUSB 驅動程式。"
 "Repeat the download-mode steps, then try again. If it still isn't found, unplug the cable, plug it into another USB port and try again.": "請重複進入下載模式的步驟，然後再試一次。如果仍找不到裝置，請拔下傳輸線，插到另一個 USB 連接埠後再試一次。"
 "Restart into fastbootd": "重新啟動進入 fastbootd"
+"Restart the computer, then try again.": "請重新啟動電腦，然後再試一次。"
 "Restart with Power": "用電源鍵重新啟動"
 "Restarting the device": "正在重新啟動裝置"
 "RetroArch": "RetroArch"

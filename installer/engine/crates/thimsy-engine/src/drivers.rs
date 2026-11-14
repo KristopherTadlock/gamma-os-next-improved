@@ -645,18 +645,20 @@ fn platform_install(d: &Device, rep: &Reporter) -> Result<bool> {
     let sha = crate::util::sha256_file(&tool, |_, _| {})?;
     // From the one pass until the install ran; looked up again after it.
     let ran = std::cell::Cell::new(false);
+    let rescan = std::cell::OnceCell::new();
     install_ids(
         d,
         &tool,
         &sha,
         rep,
         &|v, p| {
+            let at = ids.iter().position(|&id| id == (v, p));
             if ran.get() {
-                winusb_installed(v, p)
+                // One more pass for all IDs, after the install.
+                let (after, _) = rescan.get_or_init(|| store_classes(&ids));
+                at.is_some_and(|i| after[i])
             } else {
-                ids.iter()
-                    .position(|&id| id == (v, p))
-                    .is_some_and(|i| winusb[i])
+                at.is_some_and(|i| winusb[i])
             }
         },
         &mut |script| {

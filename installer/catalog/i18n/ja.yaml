@@ -141,6 +141,7 @@
 "Repeat the download-mode steps, then try again. If it still isn't found, check in Device Manager that Unisoc download mode uses the WinUSB driver.": "ダウンロードモードの手順をやり直してから、もう一度お試しください。それでも見つからない場合は、デバイス マネージャーで Unisoc download mode が WinUSB ドライバーを使用していることを確認してください。"
 "Repeat the download-mode steps, then try again. If it still isn't found, unplug the cable, plug it into another USB port and try again.": "ダウンロードモードの手順をやり直してから、もう一度お試しください。それでも見つからない場合は、ケーブルを抜いて別の USB ポートに挿し、もう一度お試しください。"
 "Restart into fastbootd": "fastbootd で再起動する"
+"Restart the computer, then try again.": "パソコンを再起動してから、もう一度お試しください。"
 "Restart with Power": "電源ボタンで再起動する"
 "Restarting the device": "デバイスを再起動しています"
 "RetroArch": "RetroArch"

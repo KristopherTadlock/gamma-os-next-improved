@@ -141,6 +141,7 @@
 "Repeat the download-mode steps, then try again. If it still isn't found, check in Device Manager that Unisoc download mode uses the WinUSB driver.": "Gentag trinene til download-tilstand, og prøv igen. Hvis den stadig ikke findes, så tjek i Enhedshåndtering, at Unisoc download mode bruger WinUSB-driveren."
 "Repeat the download-mode steps, then try again. If it still isn't found, unplug the cable, plug it into another USB port and try again.": "Gentag trinene til download-tilstand, og prøv igen. Hvis den stadig ikke findes, så tag kablet ud, sæt det i en anden USB-port, og prøv igen."
 "Restart into fastbootd": "Genstart i fastbootd"
+"Restart the computer, then try again.": "Genstart computeren, og prøv igen."
 "Restart with Power": "Genstart med afbryderknappen"
 "Restarting the device": "Genstarter enheden"
 "RetroArch": "RetroArch"

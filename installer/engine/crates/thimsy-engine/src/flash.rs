@@ -515,11 +515,14 @@ impl SpdConnect {
             // says it again, right after, if it still does).
             self.other_driver = None;
             self.port_busy = None;
+            self.unusable = None;
         } else if let Some(found) = l
             .strip_prefix("download mode uses another driver (")
             .and_then(|r| r.rsplit_once("), not WinUSB"))
         {
             self.other_driver = Some(found.0.to_string());
+            // spd_dump says this instead of a busy port: the port is free.
+            self.port_busy = None;
             return self.other_driver.clone();
         } else if let Some(port) = l
             .strip_prefix("serial port ")
@@ -630,14 +633,20 @@ pub struct WindowsWait {
     follow: SwitchFollow,
     /// spd_dump opened the device: the switch is over.
     opened: bool,
+    /// Switches asked for.
+    switches: u32,
 }
+
+/// The most switches one install asks for: more means Windows keeps
+/// giving the device another driver, which another switch won't change.
+pub const MAX_SWITCHES: u32 = 3;
 
 impl WindowsWait {
     /// One line from spd_dump; an error stops it.
     pub fn line(
         &mut self,
         line: &str,
-        mut helper: Option<&mut dyn SwitchHelper>,
+        helper: Option<&mut dyn SwitchHelper>,
         now: std::time::Instant,
     ) -> Result<Vec<WaitEffect>> {
         if line.trim().starts_with("connected through ") {
@@ -652,15 +661,43 @@ impl WindowsWait {
             WaitAction::Switch => {
                 // One at a time: the device may look different while a
                 // switch is under way; looked at again once it's answered.
-                if helper.as_mut().is_some_and(|h| h.request()) {
-                    self.follow.requested(now);
-                    out.push(WaitEffect::Info("Switching the device to WinUSB"));
-                } else {
+                if helper.as_ref().is_some_and(|h| h.pending()) {
                     self.follow.deferred();
+                } else if let Some(h) = helper {
+                    self.switch(h, now, &mut out)?;
                 }
             }
         }
         Ok(out)
+    }
+
+    /// Whether spd_dump has the device (the helper isn't needed any more).
+    pub fn opened(&self) -> bool {
+        self.opened
+    }
+
+    /// Asks for a switch, unless there were enough already.
+    fn switch(
+        &mut self,
+        h: &mut dyn SwitchHelper,
+        now: std::time::Instant,
+        out: &mut Vec<WaitEffect>,
+    ) -> Result<()> {
+        if self.switches >= MAX_SWITCHES {
+            let found = self.seen.other_driver.clone().unwrap_or_default();
+            return Err(EngineError::new(
+                Code::DeviceNotFound,
+                format!("the device was switched to WinUSB {MAX_SWITCHES} times, but Windows still gives it another driver ({found}); nothing was written"),
+            )
+            .hint("Repeat the download-mode steps, then try again. If it still isn't found, check in Device Manager that Unisoc download mode uses the WinUSB driver.")
+            .into());
+        }
+        if h.request() {
+            self.switches += 1;
+            self.follow.requested(now);
+            out.push(WaitEffect::Info("Switching the device to WinUSB"));
+        }
+        Ok(())
     }
 
     /// About every 200 ms while spd_dump waits; an error stops it.
@@ -669,12 +706,17 @@ impl WindowsWait {
         helper: Option<&mut dyn SwitchHelper>,
         now: std::time::Instant,
     ) -> Result<Vec<WaitEffect>> {
-        let Some(h) = helper else {
-            return Ok(Vec::new());
-        };
         if self.opened {
             return Ok(Vec::new());
         }
+        // A port that looked busy during a switch and still does after it
+        // (spd_dump says so only once).
+        if self.seen.port_busy.is_some() && !self.follow.switching(now) {
+            return Err(windows_problem(&self.seen).expect("port in use"));
+        }
+        let Some(h) = helper else {
+            return Ok(Vec::new());
+        };
         let status = h.step()?;
         let mut out = Vec::new();
         // The answer first, so a deferred report waits for spd_dump to say
@@ -683,18 +725,23 @@ impl WindowsWait {
         if self
             .follow
             .retry(h.pending(), self.seen.other_driver.is_some(), now)
-            && h.request()
         {
-            self.follow.requested(now);
-            out.push(WaitEffect::Info("Switching the device to WinUSB"));
+            self.switch(h, now, &mut out)?;
         }
         for event in events {
             match event {
-                FollowEvent::Switched { reboot } => {
+                // Until Windows restarts, the device keeps its old driver:
+                // switching again or reconnecting won't help.
+                FollowEvent::Switched { reboot: true } => {
+                    return Err(EngineError::new(
+                        Code::DeviceNotFound,
+                        "Windows needs a restart to finish switching the device to WinUSB; nothing was written",
+                    )
+                    .hint("Restart the computer, then try again.")
+                    .into());
+                }
+                FollowEvent::Switched { reboot: false } => {
                     out.push(WaitEffect::Info("The device now uses WinUSB"));
-                    if reboot {
-                        out.push(WaitEffect::Warn("Windows says it needs a restart to finish switching the driver; if the device isn't found, restart the computer and try again"));
-                    }
                 }
                 // It left download mode first: the next time it's
                 // connected, it's switched then.
@@ -776,6 +823,21 @@ fn windows_problem(seen: &SpdConnect) -> Option<anyhow::Error> {
                 format!("the device is connected in download mode, but another program is using it ({what}); nothing was written"),
             )
             .hint("Close every other program that talks to the device (such as Unisoc's UnlockBootloader or ResearchDownload), then try again.")
+            .into(),
+        );
+    }
+    if let Some(found) = seen
+        .other_driver
+        .as_ref()
+        .filter(|f| f.starts_with("WinUSB "))
+    {
+        // WinUSB, but it didn't start (a cable or port problem, often).
+        return Some(
+            EngineError::new(
+                Code::DeviceNotFound,
+                format!("the device is connected in download mode, but its WinUSB driver has a problem ({found}); nothing was written"),
+            )
+            .hint("Repeat the download-mode steps, then try again. If it still isn't found, unplug the cable, plug it into another USB port and try again.")
             .into(),
         );
     }
@@ -1533,7 +1595,9 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
     };
     // What the helper did, while the device isn't connected yet.
     let tick = || -> Result<()> {
-        if connected.get() {
+        // Once spd_dump has the device, the helper's job is done.
+        if connected.get() || wait.borrow().opened() {
+            drop(switcher.borrow_mut().take());
             return Ok(());
         }
         let mut sw = switcher.borrow_mut();
@@ -2290,5 +2354,139 @@ mod tests {
             e.to_string().contains("another program is using it (COM4)"),
             "{e}"
         );
+    }
+
+    #[test]
+    fn windows_wait_stops_rather_than_switch_forever() {
+        use std::time::{Duration, Instant};
+        let t0 = Instant::now();
+        let at = |ms: u64| t0 + Duration::from_millis(ms);
+        let other = "download mode uses another driver (sprdvcom Ports COM5), not WinUSB";
+        // Windows wants a restart: reconnecting or switching again won't
+        // help.
+        let mut w = WindowsWait::default();
+        let mut h = FakeHelper::default();
+        feed(&mut w, &mut h, at(0), other).unwrap();
+        h.answers.push_back(Status::Switched { n: 1, reboot: true });
+        let e = w
+            .tick(Some(&mut h as &mut dyn SwitchHelper), at(1_000))
+            .unwrap_err();
+        assert!(e.to_string().contains("needs a restart"), "{e}");
+        let hint = e
+            .downcast_ref::<EngineError>()
+            .and_then(|e| e.hint.clone())
+            .unwrap_or_default();
+        assert_eq!(hint, "Restart the computer, then try again.");
+        // Switched, yet still another driver, again and again: three tries.
+        let mut w = WindowsWait::default();
+        let mut h = FakeHelper::default();
+        let mut t = 0;
+        for n in 1..=MAX_SWITCHES {
+            feed(
+                &mut w,
+                &mut h,
+                at(t),
+                "Windows has: 1782:4d00 sprdvcom Ports COM5",
+            )
+            .unwrap();
+            assert_eq!(
+                feed(&mut w, &mut h, at(t), other).unwrap(),
+                vec![WaitEffect::Info("Switching the device to WinUSB")]
+            );
+            h.answers.push_back(Status::Switched { n, reboot: false });
+            tick(&mut w, &mut h, at(t + 500));
+            feed(
+                &mut w,
+                &mut h,
+                at(t + 600),
+                "Windows has: no Unisoc USB device",
+            )
+            .unwrap();
+            t += 20_000;
+        }
+        feed(
+            &mut w,
+            &mut h,
+            at(t),
+            "Windows has: 1782:4d00 sprdvcom Ports COM5",
+        )
+        .unwrap();
+        let e = feed(&mut w, &mut h, at(t), other).unwrap_err();
+        assert!(e.to_string().contains("switched to WinUSB 3 times"), "{e}");
+        assert_eq!(h.requested, MAX_SWITCHES);
+    }
+
+    #[test]
+    fn windows_wait_keeps_what_spd_dump_said_current() {
+        use std::time::{Duration, Instant};
+        let t0 = Instant::now();
+        let at = |ms: u64| t0 + Duration::from_millis(ms);
+        let mut w = WindowsWait::default();
+        let mut h = FakeHelper::default();
+        feed(
+            &mut w,
+            &mut h,
+            at(0),
+            "download mode uses another driver (sprdvcom Ports COM5), not WinUSB",
+        )
+        .unwrap();
+        // Busy during the switch: waits...
+        feed(
+            &mut w,
+            &mut h,
+            at(500),
+            "serial port COM5 is in use by another program",
+        )
+        .unwrap();
+        assert_eq!(tick(&mut w, &mut h, at(1_000)), vec![]);
+        // ...and once the switch is long over and it's still busy (said
+        // only once), stops on a tick.
+        let e = w
+            .tick(Some(&mut h as &mut dyn SwitchHelper), at(16_000))
+            .unwrap_err();
+        assert!(
+            e.to_string().contains("another program is using it (COM5)"),
+            "{e}"
+        );
+        // The port free again ("another driver" instead of busy): no stop.
+        let mut w = WindowsWait::default();
+        w.line("serial port COM5 is in use by another program", None, at(0))
+            .unwrap_err();
+        let mut w2 = WindowsWait::default();
+        w2.seen.port_busy = Some("COM5".into());
+        w2.seen
+            .line("download mode uses another driver (sprdvcom Ports COM5), not WinUSB");
+        assert_eq!(w2.seen.port_busy, None);
+        // A new state forgets a libusb error from before.
+        w.seen
+            .line("download mode is connected, but libusb can't open it : LIBUSB_ERROR_ACCESS");
+        assert!(w.seen.unusable.is_some());
+        w.seen.line("Windows has: 1782:4d00 WinUSB USBDevice");
+        assert_eq!(w.seen.unusable, None);
+        // Opened: the helper isn't needed any more.
+        assert!(!w.opened());
+        w.line("connected through libusb (WinUSB)", None, at(0))
+            .unwrap();
+        assert!(w.opened());
+    }
+
+    #[test]
+    fn a_winusb_problem_is_not_called_another_driver() {
+        let cat = crate::catalog::Catalog::bundled().unwrap();
+        let d = cat.device("anbernic-rg-cube").unwrap();
+        let mut seen = SpdConnect::default();
+        seen.line("download mode uses another driver (WinUSB USBDevice problem 10), not WinUSB");
+        let e = not_connected(d, Host::Windows, &seen, anyhow::anyhow!("spd_dump failed"));
+        assert!(
+            e.to_string()
+                .contains("its WinUSB driver has a problem (WinUSB USBDevice problem 10)"),
+            "{e}"
+        );
+        assert!(!e.to_string().contains("instead of WinUSB"), "{e}");
+        let hint = e
+            .downcast_ref::<EngineError>()
+            .and_then(|e| e.hint.clone())
+            .unwrap_or_default();
+        assert!(hint.contains("another USB port"), "{hint}");
     }
 }

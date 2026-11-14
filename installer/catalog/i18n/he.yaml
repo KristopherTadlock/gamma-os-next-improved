@@ -141,6 +141,7 @@
 "Repeat the download-mode steps, then try again. If it still isn't found, check in Device Manager that Unisoc download mode uses the WinUSB driver.": "יש לחזור על שלבי מצב ההורדה ולנסות שוב. אם המכשיר עדיין לא נמצא, יש לוודא במנהל ההתקנים ש-Unisoc download mode משתמש במנהל ההתקן WinUSB."
 "Repeat the download-mode steps, then try again. If it still isn't found, unplug the cable, plug it into another USB port and try again.": "יש לחזור על שלבי מצב ההורדה ולנסות שוב. אם המכשיר עדיין לא נמצא, יש לנתק את הכבל, לחבר אותו ליציאת USB אחרת ולנסות שוב."
 "Restart into fastbootd": "הפעלה מחדש במצב fastbootd"
+"Restart the computer, then try again.": "יש להפעיל מחדש את המחשב ולנסות שוב."
 "Restart with Power": "הפעלה מחדש בלחצן ההפעלה"
 "Restarting the device": "מפעילים מחדש את המכשיר"
 "RetroArch": "RetroArch"
