@@ -352,7 +352,9 @@ Errors while flashing:
   Unisoc's own serial driver can't send the USB request smartphone
   chipsets need, and Windows prefers it when its package is installed
   (unlocking needs it, so it stays). So when the driver store has another
-  package than WinUSB for the ID, `flash` first shows the
+  package than WinUSB for the ID (among Windows' published packages,
+  `INF\oem*.inf`), or Windows keeps another driver for it on a USB port
+  it was connected to before (`Enum\USB`), `flash` first shows the
   `allow_driver_switch` prompt (in a second `driver` stage), then starts
   an elevated helper (one UAC prompt) and waits until it's ready, before
   `wait_device`. The helper (`driver_watch.rs`) forces the WinUSB package
@@ -364,10 +366,14 @@ Errors while flashing:
   `enter_download_mode` prompt comes back and the next connection is
   switched. A declined prompt or a helper that can't start ends with
   `tool_failed` before the device is asked for; a failed switch ends with
-  `tool_failed` too, as does a helper that stops. Without another package
-  found up front, the helper is started (with its UAC prompt) the first
-  time `spd_dump` reports another driver; the device is switched then or,
-  if it left download mode meanwhile, when it's back. The helper's
+  `tool_failed` too, as does a helper that stops. Without the helper (no
+  other driver known up front), another driver ends the run at once with
+  `device_not_found`; Windows then has a record of that driver for the
+  port, so the next try starts the helper up front. One switch runs at a
+  time; a report that comes during one is looked at again once it's
+  answered, and the reconnect prompt isn't shown once `spd_dump` has
+  opened the device. What `spd_dump` said about the driver and its port
+  is forgotten whenever it logs a new `Windows has:` line. The helper's
   `ProgramData` folder must be a plain folder owned by Administrators or
   SYSTEM: an existing one is never taken over (a standard user could have
   made it, or a junction there); otherwise it stops (exit code 6).

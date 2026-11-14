@@ -5,6 +5,7 @@
 "A fresh install erases the internal storage. Copy ROMs, saves, screenshots and anything else you want to keep to your computer or the microSD card. Games on the microSD card are not touched.": "Μια καθαρή εγκατάσταση διαγράφει τον εσωτερικό χώρο αποθήκευσης. Αντιγράψτε τα ROMs, τα αποθηκευμένα παιχνίδια, τα στιγμιότυπα οθόνης και ό,τι άλλο θέλετε να κρατήσετε στον υπολογιστή σας ή στην κάρτα microSD. Τα παιχνίδια στην κάρτα microSD δεν επηρεάζονται."
 "ARMSX2": "ARMSX2"
 "Accept the Windows permission prompt, or install WinUSB with Zadig.": "Αποδεχτείτε το αίτημα άδειας των Windows ή εγκαταστήστε το WinUSB με το Zadig."
+"Accept the Windows permission prompt, then try again.": "Αποδεχτείτε το αίτημα άδειας των Windows και δοκιμάστε ξανά."
 "After you take the card out, press Power to turn the {device} on.": "Αφού αφαιρέσετε την κάρτα, πατήστε το πλήκτρο λειτουργίας για να ενεργοποιήσετε το {device}."
 "Allow the USB driver switch": "Επιτρέψτε την αλλαγή προγράμματος οδήγησης USB"
 "Already runs GammaOS or Thimsy: install new firmware": "Εκτελεί ήδη GammaOS ή Thimsy: εγκατάσταση νέου υλικολογισμικού"

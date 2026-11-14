@@ -483,7 +483,8 @@ void main() {
     test('Check again after a flash space error repeats the dry run', () async {
       final (engine, s) = await drySpaceFailure();
       await s.recheckSpace();
-      await settle();
+      // Waits for the run to end (a fixed wait was too short on slow CI).
+      await until(() => !s.flashRun.running && s.flashRun.result != null);
       expect(engine.calls.where((c) => c.startsWith('flash')), [
         'flash full dry',
         'flash full dry',

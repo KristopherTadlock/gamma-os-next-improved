@@ -5,6 +5,7 @@
 "A fresh install erases the internal storage. Copy ROMs, saves, screenshots and anything else you want to keep to your computer or the microSD card. Games on the microSD card are not touched.": "Una instalación limpia borra el almacenamiento interno. Copia las ROMs, partidas guardadas, capturas de pantalla y todo lo que quieras conservar en tu ordenador o en la tarjeta microSD. Los juegos de la tarjeta microSD no se tocan."
 "ARMSX2": "ARMSX2"
 "Accept the Windows permission prompt, or install WinUSB with Zadig.": "Acepta la solicitud de permiso de Windows o instala WinUSB con Zadig."
+"Accept the Windows permission prompt, then try again.": "Acepta la solicitud de permiso de Windows y vuelve a intentarlo."
 "After you take the card out, press Power to turn the {device} on.": "Después de sacar la tarjeta, pulsa el botón de encendido para encender el {device}."
 "Allow the USB driver switch": "Permite el cambio de controlador USB"
 "Already runs GammaOS or Thimsy: install new firmware": "Ya ejecuta GammaOS o Thimsy: instalar el nuevo firmware"

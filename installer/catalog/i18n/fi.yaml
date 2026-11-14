@@ -5,6 +5,7 @@
 "A fresh install erases the internal storage. Copy ROMs, saves, screenshots and anything else you want to keep to your computer or the microSD card. Games on the microSD card are not touched.": "Puhdas asennus tyhjentää sisäisen tallennustilan. Kopioi ROMs-tiedostot, tallennukset, kuvakaappaukset ja kaikki muu, mitä haluat säilyttää, tietokoneelle tai microSD-kortille. microSD-kortin peleihin ei kosketa."
 "ARMSX2": "ARMSX2"
 "Accept the Windows permission prompt, or install WinUSB with Zadig.": "Hyväksy Windowsin käyttöoikeuskysely tai asenna WinUSB Zadigilla."
+"Accept the Windows permission prompt, then try again.": "Hyväksy Windowsin lupapyyntö ja yritä sitten uudelleen."
 "After you take the card out, press Power to turn the {device} on.": "Kun olet poistanut kortin, käynnistä {device}-laite painamalla virtapainiketta."
 "Allow the USB driver switch": "Salli USB-ohjaimen vaihto"
 "Already runs GammaOS or Thimsy: install new firmware": "Laitteessa on jo GammaOS tai Thimsy: asenna uusi laiteohjelmisto"

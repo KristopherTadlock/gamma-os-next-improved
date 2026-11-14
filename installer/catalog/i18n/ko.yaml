@@ -5,6 +5,7 @@
 "A fresh install erases the internal storage. Copy ROMs, saves, screenshots and anything else you want to keep to your computer or the microSD card. Games on the microSD card are not touched.": "클린 설치를 하면 내부 저장소가 지워집니다. ROMs, 세이브 파일, 스크린샷 등 보관하려는 모든 것을 컴퓨터나 microSD 카드에 복사하세요. microSD 카드의 게임은 그대로 유지됩니다."
 "ARMSX2": "ARMSX2"
 "Accept the Windows permission prompt, or install WinUSB with Zadig.": "Windows 권한 요청을 허용하거나 Zadig로 WinUSB를 설치하세요."
+"Accept the Windows permission prompt, then try again.": "Windows 권한 요청을 수락한 다음 다시 시도하세요."
 "After you take the card out, press Power to turn the {device} on.": "카드를 뺀 다음 전원 버튼을 눌러 {device}을(를) 켜세요."
 "Allow the USB driver switch": "USB 드라이버 전환 허용하기"
 "Already runs GammaOS or Thimsy: install new firmware": "이미 GammaOS 또는 Thimsy 실행 중: 새 펌웨어 설치"

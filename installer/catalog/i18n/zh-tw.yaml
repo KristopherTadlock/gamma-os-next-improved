@@ -5,6 +5,7 @@
 "A fresh install erases the internal storage. Copy ROMs, saves, screenshots and anything else you want to keep to your computer or the microSD card. Games on the microSD card are not touched.": "全新安裝會清除內部儲存空間。請將 ROMs、遊戲存檔、螢幕截圖及其他想保留的內容複製到電腦或 microSD 卡。microSD 卡上的遊戲不受影響。"
 "ARMSX2": "ARMSX2"
 "Accept the Windows permission prompt, or install WinUSB with Zadig.": "請接受 Windows 的權限提示，或使用 Zadig 安裝 WinUSB。"
+"Accept the Windows permission prompt, then try again.": "請接受 Windows 的權限要求，然後再試一次。"
 "After you take the card out, press Power to turn the {device} on.": "取出記憶卡後，按電源鍵開啟 {device}。"
 "Allow the USB driver switch": "允許切換 USB 驅動程式"
 "Already runs GammaOS or Thimsy: install new firmware": "已在執行 GammaOS 或 Thimsy：安裝新韌體"

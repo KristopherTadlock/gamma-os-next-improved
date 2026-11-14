@@ -192,9 +192,9 @@ fn inf_flat_is_other_for(flat: &str, vid: u16, pid: u16) -> bool {
         && !inf_flat_is_winusb_for(flat, vid, pid)
 }
 
-/// Looks through Windows' driver store for a WinUSB package covering the ID.
-/// Readable without admin rights; the package's file name doesn't matter, so
-/// earlier installs (any name, or Zadig) count too.
+/// Looks through Windows' published driver packages for a WinUSB package
+/// covering the ID. Readable without admin rights; the package's original
+/// name doesn't matter, so earlier installs (any name, or Zadig) count too.
 #[cfg(windows)]
 fn winusb_installed(vid: u16, pid: u16) -> bool {
     store_has(|t| inf_is_winusb_for(t, vid, pid))
@@ -281,26 +281,33 @@ fn devnode_services(vid: u16, pid: u16) -> Vec<String> {
     out
 }
 
-/// Whether any .inf in Windows' driver store matches.
+/// Whether any third-party driver package Windows has published (its
+/// `INF\oem*.inf`, the packages Windows installs from) matches.
 #[cfg(windows)]
 fn store_has(matches: impl Fn(&str) -> bool) -> bool {
-    let root = std::env::var_os("SystemRoot")
-        .map(std::path::PathBuf::from)
-        .unwrap_or_else(|| "C:\\Windows".into())
-        .join("System32\\DriverStore\\FileRepository");
-    let Ok(dirs) = std::fs::read_dir(&root) else {
+    let Ok(files) = std::fs::read_dir(windows_dir().join("INF")) else {
         return false;
     };
-    dirs.flatten().any(|dir| {
-        let Ok(files) = std::fs::read_dir(dir.path()) else {
-            return false;
-        };
-        files.flatten().any(|f| {
-            let p = f.path();
-            p.extension().is_some_and(|x| x.eq_ignore_ascii_case("inf"))
-                && std::fs::read(&p).is_ok_and(|b| matches(&decode_inf(&b)))
-        })
+    files.flatten().any(|f| {
+        let name = f.file_name().to_string_lossy().to_ascii_lowercase();
+        name.starts_with("oem")
+            && name.ends_with(".inf")
+            && std::fs::read(f.path()).is_ok_and(|b| matches(&decode_inf(&b)))
     })
+}
+
+/// The Windows folder, from the system (not the environment).
+#[cfg(windows)]
+pub(crate) fn windows_dir() -> PathBuf {
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::System::SystemInformation::GetSystemWindowsDirectoryW;
+    let mut buf = [0u16; 512];
+    // SAFETY: the buffer is as long as passed.
+    let n = unsafe { GetSystemWindowsDirectoryW(buf.as_mut_ptr(), buf.len() as u32) } as usize;
+    if n == 0 || n >= buf.len() {
+        return PathBuf::from(r"C:\Windows");
+    }
+    PathBuf::from(std::ffi::OsString::from_wide(&buf[..n]))
 }
 
 #[cfg(not(windows))]

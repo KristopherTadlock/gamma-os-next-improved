@@ -411,6 +411,10 @@ pub struct SwitchFollow {
     /// Until when the device's port may look busy because its driver is
     /// being switched.
     busy_until: Option<std::time::Instant>,
+    /// When the helper last answered.
+    answered_at: Option<std::time::Instant>,
+    /// spd_dump reported another driver while a switch was pending.
+    deferred: bool,
 }
 
 /// What the engine reports, from [`SwitchFollow::next`].
@@ -431,11 +435,34 @@ pub enum FollowEvent {
 pub const RECONNECT_AFTER: std::time::Duration = std::time::Duration::from_secs(4);
 /// How long the port may look busy around a switch.
 pub const SWITCH_BUSY: std::time::Duration = std::time::Duration::from_secs(15);
+/// How long after an answer a deferred report is looked at again: spd_dump
+/// says within a second when what Windows has changed (and with it, the
+/// driver it reports).
+pub const RETRY_AFTER: std::time::Duration = std::time::Duration::from_millis(1500);
 
 impl SwitchFollow {
     /// A switch was asked for at `now`.
     pub fn requested(&mut self, now: std::time::Instant) {
         self.busy_until = Some(now + SWITCH_BUSY);
+    }
+
+    /// spd_dump reported another driver while a switch was pending.
+    pub fn deferred(&mut self) {
+        self.deferred = true;
+    }
+
+    /// Whether to ask for a switch now for a deferred report: once nothing
+    /// is pending and spd_dump had time to say what Windows has since the
+    /// answer, if the device still has another driver (`other_now`).
+    pub fn retry(&mut self, pending: bool, other_now: bool, now: std::time::Instant) -> bool {
+        let settled = self
+            .answered_at
+            .is_some_and(|t| now.duration_since(t) >= RETRY_AFTER);
+        if !self.deferred || pending || !settled {
+            return false;
+        }
+        self.deferred = false;
+        other_now
     }
 
     /// Whether a switch is under way at `now` (its port may look busy).
@@ -446,6 +473,12 @@ impl SwitchFollow {
     /// What to report at `now`, given the helper's new status (if any).
     pub fn next(&mut self, status: Option<Status>, now: std::time::Instant) -> Vec<FollowEvent> {
         let mut out = Vec::new();
+        if matches!(
+            status,
+            Some(Status::Switched { .. } | Status::Failed { .. })
+        ) {
+            self.answered_at = Some(now);
+        }
         match status {
             Some(Status::Switched { reboot, .. }) => {
                 self.switched_at = Some(now);
@@ -475,7 +508,7 @@ impl SwitchFollow {
 
 fn stopped_error(message: &str) -> anyhow::Error {
     EngineError::new(Code::ToolFailed, format!("{message}; nothing was written"))
-        .hint("Accept the Windows permission prompt, or install WinUSB with Zadig.")
+        .hint("Accept the Windows permission prompt, then try again.")
         .into()
 }
 
@@ -842,6 +875,43 @@ mod tests {
             vec![FollowEvent::Failed(5)]
         );
         assert_eq!(f.next(Some(Status::Ready), at(22_000)), vec![]);
+    }
+
+    #[test]
+    fn a_report_during_a_switch_is_looked_at_once_it_is_answered() {
+        use std::time::{Duration, Instant};
+        let t0 = Instant::now();
+        let at = |s: u64| t0 + Duration::from_millis(s);
+        let mut f = SwitchFollow::default();
+        // Nothing deferred: never.
+        assert!(!f.retry(false, true, at(0)));
+        f.requested(at(0));
+        f.deferred();
+        // Still pending, or answered only just now: not yet.
+        assert!(!f.retry(true, true, at(500)));
+        f.next(
+            Some(Status::Switched {
+                n: 1,
+                reboot: false,
+            }),
+            at(1_000),
+        );
+        assert!(!f.retry(false, true, at(2_000)));
+        // Settled, and spd_dump still reports another driver: once.
+        assert!(f.retry(false, true, at(2_500)));
+        assert!(!f.retry(false, true, at(3_000)));
+        // Settled with WinUSB now (the report was from before the switch):
+        // dropped.
+        f.deferred();
+        f.next(
+            Some(Status::Failed {
+                n: 2,
+                code: NO_DEVICE,
+            }),
+            at(4_000),
+        );
+        assert!(!f.retry(false, false, at(6_000)));
+        assert!(!f.retry(false, true, at(7_000)));
     }
 
     /// The scripts run by Windows PowerShell, as the installer runs them.

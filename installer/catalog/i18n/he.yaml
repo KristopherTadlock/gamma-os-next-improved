@@ -5,6 +5,7 @@
 "A fresh install erases the internal storage. Copy ROMs, saves, screenshots and anything else you want to keep to your computer or the microSD card. Games on the microSD card are not touched.": "התקנה נקייה מוחקת את האחסון הפנימי. כדאי להעתיק ROMs, שמירות משחק, צילומי מסך וכל דבר אחר שרוצים לשמור למחשב או לכרטיס ה-microSD. משחקים בכרטיס ה-microSD לא ייפגעו."
 "ARMSX2": "ARMSX2"
 "Accept the Windows permission prompt, or install WinUSB with Zadig.": "יש לאשר את בקשת ההרשאה של Windows, או להתקין את WinUSB באמצעות Zadig."
+"Accept the Windows permission prompt, then try again.": "יש לאשר את בקשת ההרשאה של Windows ולנסות שוב."
 "After you take the card out, press Power to turn the {device} on.": "אחרי הוצאת הכרטיס, יש ללחוץ על לחצן ההפעלה כדי להדליק את {device}."
 "Allow the USB driver switch": "אישור החלפת מנהל ההתקן של USB"
 "Already runs GammaOS or Thimsy: install new firmware": "כבר פועל עם GammaOS או Thimsy: התקנת קושחה חדשה"
