@@ -348,8 +348,13 @@ Errors while flashing:
   send the USB request smartphone chipsets need), it stops with `download
   mode uses another driver (service class port), not WinUSB`; the engine then installs
   WinUSB again while the device is connected (one more UAC prompt; libwdi
-  replaces the driver on a connected device), logs it and runs `spd_dump`
-  again, once. If the device still has that driver, or libusb can't open
+  replaces the driver on a connected device), logs it, shows the
+  `reconnect_download_mode` prompt (download mode has usually ended by
+  then: unplug, turn off, repeat the steps on the same USB port, which
+  keeps WinUSB) and runs `spd_dump` again, once. When that driver's COM
+  port is open in another program (`serial port COMn is in use by another
+  program`), Windows can't change it: the error says so and the hint says
+  to close Unisoc's tools. If the device still has that driver, or libusb can't open
   it for another reason (`download mode is connected, but libusb can't open
   it : …`), the error says so and the hint points to Device Manager. A
   declined or failed switch ends with that `tool_failed` error instead.

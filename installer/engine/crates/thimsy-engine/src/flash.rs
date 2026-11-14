@@ -492,6 +492,9 @@ fn entry_hash(entries: &[job::EntryHash], index: usize) -> Result<&str> {
 pub struct SpdConnect {
     /// The other driver the device has (`sprdvcom Ports COM5`).
     pub other_driver: Option<String>,
+    /// That driver's serial port is open in another program (`COM5`), so
+    /// Windows can't change its driver.
+    pub port_busy: Option<String>,
     /// The device was there, but libusb couldn't open it: what spd_dump
     /// said.
     pub unusable: Option<String>,
@@ -508,6 +511,11 @@ impl SpdConnect {
             .and_then(|r| r.rsplit_once("), not WinUSB"))
         {
             self.other_driver = Some(found.0.to_string());
+        } else if let Some(port) = l
+            .strip_prefix("serial port ")
+            .and_then(|r| r.strip_suffix(" is in use by another program"))
+        {
+            self.port_busy = Some(port.to_string());
         } else if l.starts_with("download mode is connected, but libusb can't open it") {
             self.unusable = Some(l.to_string());
         }
@@ -518,6 +526,14 @@ impl SpdConnect {
 fn not_connected(d: &Device, host: Host, seen: &SpdConnect, e: anyhow::Error) -> anyhow::Error {
     let detail = format!("{e:#}");
     if host == Host::Windows {
+        if let Some(port) = &seen.port_busy {
+            return EngineError::new(
+                Code::DeviceNotFound,
+                format!("the device is connected in download mode, but another program is using its serial port ({port}), so Windows can't give it the driver the installer needs; nothing was written"),
+            )
+            .hint("Close every other program that talks to the device (such as Unisoc's UnlockBootloader or ResearchDownload), then try again.")
+            .into();
+        }
         let why = match (&seen.other_driver, &seen.unusable) {
             (Some(found), _) => Some(format!(
                 "Windows still gives it another driver ({found}) instead of WinUSB"
@@ -1246,6 +1262,21 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
                     switch_failed = true;
                     break Err(e);
                 }
+                // Download mode doesn't wait long: it has usually ended
+                // by now, and the device must enter it again (on the same
+                // USB port, which keeps WinUSB).
+                let steps = step
+                    .as_ref()
+                    .map_or(String::new(), |s| format!("\n\n{}\n{}", s.title, s.body));
+                rep.prompt(
+                    "reconnect_download_mode",
+                    "Connect it again",
+                    &format!(
+                        "{}{steps}",
+                        crate::i18n::tr("Windows now gives the device the driver the installer needs. Unplug the cable and turn the device off, then repeat the download-mode steps with the same USB port.")
+                    ),
+                    None,
+                );
                 continue;
             }
         }
@@ -1591,6 +1622,18 @@ mod tests {
         let mut opened = seen.clone();
         opened.line("connected through libusb (WinUSB)");
         assert_eq!(opened, SpdConnect::default());
+
+        // Unisoc's tools hold the port: Windows can't switch its driver.
+        let mut seen = SpdConnect::default();
+        seen.line("serial port COM9 is in use by another program");
+        assert_eq!(seen.port_busy.as_deref(), Some("COM9"));
+        let e = not_connected(d, Host::Windows, &seen, failed());
+        assert!(
+            e.to_string()
+                .contains("another program is using its serial port (COM9)"),
+            "{e}"
+        );
+        assert!(hint(&e).contains("ResearchDownload"), "{}", hint(&e));
 
         let mut seen = SpdConnect::default();
         seen.line(
