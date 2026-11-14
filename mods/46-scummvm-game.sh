@@ -104,14 +104,16 @@ fi
 PACK="scummvm-bass.tar.xz"
 GAME_DIR="games/Beneath a Steel Sky"
 # The setup lines come first: when setup.sh already has them, this mod ran on
-# the image before.
+# the image before. As on 1.4.4, a setup re-run keeps the user's settings file.
 cat >"$work/setup-steps.sh" <<EOF
+if [ ! -e /$app/files/scummvm.ini ]; then
 echo "Adding Beneath a Steel Sky to ScummVM."
 launcheruser=\$(stat -c "%U" /$app) && \\
 launchergroup=\$(stat -c "%G" /$app) && \\
 tar -xJf /system/etc/$PACK -C / && \\
 chown -R \$launcheruser:\$launchergroup /$app/files && \\
 restorecon -R /$app/files
+fi
 
 EOF
 if setup_has "$SYSTEM" "$work/setup-steps.sh"; then

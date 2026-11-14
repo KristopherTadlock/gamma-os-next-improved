@@ -51,8 +51,13 @@ def parse(path):
         line = line.rstrip("\n")
         if not line.strip() or line.lstrip().startswith("#"):
             continue
-        kind, target, *pairs = re.split(r"\s{2,}", line.strip())
-        fields = dict(pair.split("=", 1) for pair in pairs)
+        try:
+            kind, target, *pairs = re.split(r"\s{2,}", line.strip())
+            fields = dict(pair.split("=", 1) for pair in pairs)
+        except ValueError:
+            sys.exit(f"{path}:{number}: can't parse: {line}")
+        if fields.get("base", "nano") not in ("nano", "1.2"):
+            sys.exit(f"{path}:{number}: base= must be nano or 1.2: {line}")
         if kind == "folder":
             entries.append((kind, target, fields))
             continue

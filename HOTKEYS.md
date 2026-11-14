@@ -62,10 +62,12 @@ It runs while a game is in front (`app_launched`, overlay down, not in a drastic
    A Volume key while armed is not swallowed: it changes the brightness (the volume key handler reads the Anbernic button's physical state), and the Quick Menu does not open on release.
 
    Select or Start pressed while the Anbernic button is physically held comes before the hotkeys: Select flips `persist.gammaos.shader.enable`, and Start sets `sys.gammaos.nano.qs_summon=2` with `show_overlay=1`, so Nano rises on the Applications view. The button's repeats and key-up are swallowed. Select works even with the Anbernic button given back to apps (Toolbox); Start needs it to be Nano's.
+
+   Back pressed while armed is a chord too: the Anbernic button's release opens no Quick Menu, and with Universal Hotkeys on the app gets no Back. With them off the app gets its Back when Back is let go, as usual ([Back acts when it is let go](#back-acts-when-it-is-let-go)).
 3. **Anbernic up:**
    - after a chord: nothing more;
    - alone, within 3 s: the overlay rises on the Quick Menu.
-4. **Hold to quit:** the Anbernic button held on its own for 3 s runs quit, and its release opens nothing. Any other key pressed during the hold cancels it. With Universal Hotkeys off there is no hold to quit, and a release within 10 s opens the Quick Menu as before. The 10 s emergency recovery hold (BACK, or a pad's mode button) is unchanged, and checks the key is still down when it fires. The D-pad reaches Android as a hat axis, so over an Android app it doesn't cancel a hold.
+4. **Hold to quit:** the Anbernic button held on its own for 3 s runs quit, and its release opens nothing. Any other key pressed during the hold cancels it. With Universal Hotkeys off there is no hold to quit, and a release within 10 s opens the Quick Menu as before. The 10 s emergency recovery hold (BACK, `BUTTON_MODE`, or the function button on a device with no Back) is unchanged, and checks the key is still down when it fires. It also works while Nano's overlay holds input back (`sys.gammaos.nano.drop_input`, which a crash can leave set): `BUTTON_MODE`, F10 and `HOME` get through to it then, as Back does, so it works where the recovery key is the function button. They get through only for the hold: while Nano holds input they don't reach the app, raise the Quick Menu or go Home. Injected keys (a hotkey's own, `input keyevent`) neither start nor cancel it. The D-pad reaches Android as a hat axis, so over an Android app it doesn't cancel a hold.
 5. **Start + Select:** the second of the two pressed while the other is held, with no other pad button down, arms the chord. Both keys still reach the app. Their down state is tracked from the key events, and a chord whose key-ups went missing (the overlay holds them back) is dropped at the next key.
    - A hotkey button pressed while both are held runs its hotkey and is swallowed like an Anbernic chord. Any other key reaches the app. A game's own combination that starts with Start + Select and then adds a hotkey button (L + R + Start + Select resets DS games) runs the hotkeys instead; *Start + Select Hotkeys* off avoids that.
    - Held for 3 s with nothing else pressed, it runs quit. Any other key, or Start or Select pressed again, cancels the hold until both are let go.
@@ -74,8 +76,9 @@ It runs while a game is in front (`app_launched`, overlay down, not in a drastic
 6. **Quit button:** if *Quit Game Button* is set, that button must stay down for 1 s (*Hold to Quit*). Releasing it earlier cancels.
 7. **Order of presses:** only Anbernic first, then the button, is a chord. A button already held when Anbernic goes down passes through untouched.
 8. **A lost key-up:** if the Anbernic button's key-up goes missing, a later chord checks that it is physically down before acting. Start + Select reads both buttons' physical state.
+9. **A key-up left over:** when the app stops while the Anbernic button or Back is held (a hold to quit, the 10 s recovery), the chords are forgotten, and that button's key-up, if it still comes, is dropped.
 
-Nano's own menus follow the same rule. The Quick Menu toggles on release, and a button pressed while the Anbernic button is held cancels it and is ignored. Start and Select act when they are released, so pressing both together toggles the Quick Menu once both are up. A key pressed while either is held cancels its action. Anbernic + Volume is brightness, and cancels the Quick Menu like any other chord. Anbernic + Select (shader) and Anbernic + Start (Applications) act on the press and are not a Start + Select chord; Select's search and Start's own action don't run. Applications closes back to where it was opened from, and Start on its own closes it too.
+Nano's own menus follow the same rule. The Quick Menu toggles on release, and a button pressed while the Anbernic button is held cancels it and is ignored. Back pressed while the Anbernic button is held is a chord too: neither the Quick Menu nor Back acts. Start and Select act when they are released, so pressing both together toggles the Quick Menu once both are up. A key pressed while either is held cancels its action. Anbernic + Volume is brightness, and cancels the Quick Menu like any other chord. Anbernic + Select (shader) and Anbernic + Start (Applications) act on the press and are not a Start + Select chord; Select's search and Start's own action don't run. Applications closes back to where it was opened from, and Start on its own closes it too.
 
 ### ThimsyHotkeyController (system_server)
 
@@ -264,12 +267,13 @@ The two resolvers are held to the same test cases (`gammaos-nano/test/fixtures/d
 - **The properties used:**
   - `ro.gammaos.device`: only newer GammaOS vendor images set it (`anbernicrgds`, `anbernicrgrotate`, `trimuibrick`, `magicxxu20v32`, `pocketairmini`, `retroidpocketduolite`, ...). The T820, T618 RG405M/V/RG505, MediaTek, Retroid 4 Pro/Classic, KT-R1, ZPG, Pocket Micro and E6 Max images don't, so those match by model or platform.
   - `ro.product.vendor.model`, `ro.product.odm.model`, `ro.product.odm_dlkm.model`: the real strings, spaces included (`RGCUBE`, `RG 406H`, `RG 477V`, `RG VITA`, `Retroid Pocket Classic`). Anbernic shares vendor images, so the RG406V reports `RG 406H` and the RG Slide reports `RG 476H`; their keys are the same.
-  - `ro.product.vendor.manufacturer`;
+  - `ro.product.vendor.manufacturer`, `ro.product.odm.manufacturer` (the MediaTek Anbernics);
   - `ro.board.platform` (`ums9620` for T820, `ums512` for T618, `ceres` for A133P, `mt6897`, `mt6893`).
 - **A key:**
   - `linux`, the evdev code Nano and drastic-nano read;
   - `android`, the keycode name PhoneWindowManager sees after the key layout. A key without one (the AYANEO codes 753 and 754, which no layout maps) is for Nano and drastic-nano only;
   - `gamepad_only`, so a keyboard's F10 still reaches the app.
+- **A function key without `gamepad_only`** counts over apps only from a built-in device or a gamepad, so a plugged-in keyboard's Home stays Home.
 - **An entry without `function` or `back`:** takes the default's. `"function": []` means the device has no function button.
 - **`"fallback": "back"`:** Back doubles as the function button (below).
 
@@ -342,14 +346,18 @@ On every device, the RG Cube included, the Back button acts on its release, neve
 
 - **Over a running app (PhoneWindowManager):**
   - The press is held back.
-  - Let go on its own, the app gets a normal Back press and release (injected).
-  - Held to the long press, it runs the long-press-Back exit as before (where a long-press action is set), and the release sends nothing.
-  - Any other key pressed while it is held (Volume for brightness, a RetroArch Back + button combination) means nothing is sent.
+  - Let go on its own, the app gets a normal Back press and release (injected), without the virtual-key vibration.
+  - Held to the long press, it runs the long-press-Back exit as before (where a long-press action is set), and the release sends nothing. A release that comes as the long press fires does exactly one of the two, never both.
+  - Pressed during the Anbernic or Start + Select 3 s hold to quit, it cancels the hold, like any other key.
+  - Pressed while the Anbernic button is held, it makes a chord: the Anbernic button's release opens no Quick Menu, and with Universal Hotkeys on the release sends nothing. With them off the app gets Back as usual.
+  - If the app stops while Back is held, Back's key-up, when it comes, is dropped.
+  - Any other key pressed while it is held (Volume, a RetroArch Back + button combination) means nothing is sent. A key-up cancelled by the system (a device reset mid-press) sends nothing either.
   - Held into the 10 s recovery hold, nothing is sent; the recovery hold itself still starts on the press.
-  - The device's Back key is used even where its raw code isn't `KEY_BACK` (the AYANEO button, 754, on the Pocket Air Mini): Nano and drastic-nano read it as Back, and over apps PhoneWindowManager sends the tap as `BACK`.
+  - The device's Back key is used even where its raw code isn't `KEY_BACK` (the AYANEO button, 754, on the Pocket Air Mini): Nano and drastic-nano read it as Back. PhoneWindowManager only sees Android keycodes, and 754 has none, so over apps it gets that button as `BACK` only through GammaPad's default remap (754 → 158).
 - **Nano's menus:**
   - Back is held back like Start and Select, and acts (goes back, closes the keyboard or dialog) when let go.
   - Another key pressed meanwhile cancels it.
+  - Pressed while the Anbernic button is held, neither acts: no Back, and no Quick Menu on the Anbernic button's release.
   - Holding it no longer repeats.
 - **drastic-nano:** Back already acted on release (a tap opens its menu, a long press exits). The device's Back key reads as Back there too.
 - **Quick Resume preview:** the same, already on release.
@@ -413,8 +421,9 @@ On the device, for each emulator:
    - Anbernic, or Start + Select, held 3 s quits; a key pressed during the hold cancels it;
    - Start + Select + R1 saves, and Start + Select released opens nothing in a game;
    - Anbernic + an unmapped button does nothing;
-   - the 10 s emergency hold still recovers;
+   - the 10 s emergency hold still recovers, with Nano's overlay up too;
+   - Anbernic + Back over an app opens nothing and, with Universal Hotkeys on, doesn't go back;
    - Anbernic + Select turns the shader off and on again, in Nano, in a game and in drastic-nano, and Power on its own sleeps;
    - Anbernic + Start opens Applications over a game, and Start, B or Anbernic + Start returns to the game;
    - rewind released when the Quick Menu opens.
-   - Back acts on release: in an app (Settings, a browser) a tap goes back once when let go, a long press runs the exit, and Back held while Volume changes the brightness never goes back. In Nano's menus Back goes back on release and never repeats while held.
+   - Back acts on release: in an app (Settings, a browser) a tap goes back once when let go, a long press runs the exit, and Back held while Volume is pressed never goes back. In Nano's menus Back goes back on release and never repeats while held.

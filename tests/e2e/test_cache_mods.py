@@ -11,7 +11,7 @@ import tarfile
 
 from tests import util
 from tests.e2e.modrun import ModCase
-from tests.fixtures import systree
+from tests.fixtures import setup_sandbox, systree
 
 NANO_SRC = os.path.join(util.AOSP, "frameworks/base/cmds/gammaos-nano/ps3xmb")
 
@@ -105,13 +105,39 @@ class CacheMods(ModCase):
         self.assertTrue({f"{game}/sky.dsk", f"{game}/sky.dnr", f"{game}/readme.txt"} <= set(names))
         self.assertIn("versioninfo=2026.3.0\n", ini)
         self.assertIn("path=/data/user/0/org.scummvm.scummvm/files/games/Beneath a Steel Sky\n", ini)
-        self.assertRegex(util.slurp(f"{self.system}/bin/setup.sh", text=True),
-                         r"pm install /system/etc/scummvm-2026\.3\.0\.apk\n\n# thimsy: 46-scummvm-game\.sh "
-                         r"[0-9a-f]{16}\necho \"Adding Beneath a Steel Sky to ScummVM\.\"\n")
+        setup = util.slurp(f"{self.system}/bin/setup.sh", text=True)
+        self.assertRegex(setup, r"pm install /system/etc/scummvm-2026\.3\.0\.apk\n\n# thimsy: 46-scummvm-game\.sh "
+                                r"[0-9a-f]{16}\nif \[ ! -e /data/data/org\.scummvm\.scummvm/files/scummvm\.ini \]; "
+                                r"then\necho \"Adding Beneath a Steel Sky to ScummVM\.\"\n")
         before = util.manifest(self.system)
         self.assertOk(self.run_mod("46"))
         self.assertEqual(util.manifest(self.system), before)
         self.assertEqual(self.shim_calls("curl"), [])
+        if not util.have_userns():
+            self.skipTest("no user namespaces for the setup sandbox")
+        pack = util.slurp(f"{self.system}/etc/scummvm-bass.tar.xz")
+        ini = "data/data/org.scummvm.scummvm/files/scummvm.ini"
+        for rerun in (False, True):
+            with self.subTest(rerun=rerun):
+                box = setup_sandbox.Sandbox(self.path("rerun" if rerun else "fresh"), setup)
+                with open(os.path.join(box.root, "system/etc/scummvm-bass.tar.xz"), "wb") as f:
+                    f.write(pack)
+                box.installed("org.scummvm.scummvm")
+                if rerun:
+                    os.makedirs(os.path.join(box.root, os.path.dirname(ini)))
+                    with open(os.path.join(box.root, ini), "w") as f:
+                        f.write("[scummvm]\nmine=1\n")
+                result = box.run()
+                self.assertEqual(result.returncode, 0, result.output)
+                got = util.slurp(os.path.join(box.root, ini), text=True)
+                if rerun:
+                    self.assertEqual(got, "[scummvm]\nmine=1\n")
+                    self.assertNotIn("Adding Beneath a Steel Sky to ScummVM.", result.output)
+                    self.assertFalse(os.path.exists(os.path.join(box.root, os.path.dirname(ini), "games")))
+                else:
+                    self.assertIn("path=/data/user/0/org.scummvm.scummvm/files/games/Beneath a Steel Sky\n", got)
+                    self.assertIn("Adding Beneath a Steel Sky to ScummVM.", result.output)
+                    self.assertIn("restorecon -R /data/data/org.scummvm.scummvm/files", result.calls)
 
     def test_57_boot_sound(self):
         self.seed("boot-sound")

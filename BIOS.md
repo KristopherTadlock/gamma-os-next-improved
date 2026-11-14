@@ -43,7 +43,7 @@ Thimsy OS looks through the whole folder, copies everything it recognises to the
 - **Flycast's arcade BIOS sets** (`naomi.zip`, `naomi2.zip`, `awbios.zip`, `hod2bios.zip`, `f355bios.zip`, `f355dlx.zip`, `airlbios.zip`): left out on purpose.
 - **WatermelonDS** keeps its built-in free BIOS: its custom BIOS mode also needs the console-unique DS firmware, so Thimsy OS doesn't switch it. DSi files are not installed for the same reason.
 
-These systems need no BIOS: PSP, Xbox, 3DS (decrypted games), N64 cartridges, Virtual Boy, Atari 2600, WonderSwan, Neo Geo Pocket, PICO-8, 32X, and CPS-1/CPS-2 in FBNeo need no BIOS.
+These systems need no BIOS: PSP, Xbox, 3DS (decrypted games), N64 cartridges, Virtual Boy, Atari 2600, WonderSwan, Neo Geo Pocket, PICO-8, 32X, and CPS-1/CPS-2 in FBNeo.
 
 ## Listed in setup
 
@@ -258,7 +258,7 @@ Emulators: M64Plus FZ, Mupen64Plus. Required for 64DD disks (not listed in setup
 
 ### Nintendo DS
 
-Emulators: DraStic, built-in DS player, SeedlessDS. Optional (not listed in setup). Optional (not listed in setup). Firmware of your own DS.
+Emulators: DraStic, built-in DS player, SeedlessDS. Optional (not listed in setup). Firmware of your own DS.
 
 | File | Size | SHA-1 / check | MD5 | Listed | How | Installed to |
 |---|---|---|---|---|---|---|

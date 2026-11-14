@@ -44,8 +44,14 @@ class Parse(util.TestCase):
         for line, message in [
             ("upstream  gb/Up.gb", "can't parse"),
             ("bogus  x  license=CC0", "can't parse"),
+            ("local x.scummvm license=GPL", "can't parse"),
+            ("local  x.scummvm  license", "can't parse"),
+            ("folder", "can't parse"),
             ("add  x  license=CC0  url=u", "add needs url= and sha256="),
             ("tree  x/  license=CC0  url=u  sha256=s", "tree needs member="),
+            # A misspelt base would otherwise drop the line on both bases.
+            ("local  x.scummvm  license=GPL  base=1.4.4", "base= must be nano or 1.2"),
+            ("folder  n64  base=Nano", "base= must be nano or 1.2"),
         ]:
             p = self.write("list.txt", line + "\n")
             self.assertIn(message, exits(self, br.parse, p))

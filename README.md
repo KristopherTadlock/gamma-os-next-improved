@@ -496,9 +496,11 @@ It also changes Nano:
 - **Move Emulator Files to microSD** (Game Settings): moves the settings of
   every emulator GammaOS ships, and the saves and states kept with them, to
   `emulator_config/<emulator>` on the card and points each emulator there:
-  RetroArch, PPSSPP, Flycast, DraStic (its whole system folder), M64Plus FZ (its
-  game data, which it copies in and out around each game), the built-in DS
-  emulator, ARMSX2 (its data folder, without the BIOS and caches), ScummVM (its
+  RetroArch (its `RetroArch` folder, apart from the box-art thumbnails, which
+  stay on internal storage; the shaders, overlays, filters and controller
+  profiles it keeps in its app folder stay there), PPSSPP, Flycast, DraStic
+  (its whole system folder), M64Plus FZ (its game data, which it copies in and
+  out around each game), the built-in DS emulator, ARMSX2 (its data folder, without the BIOS and caches), ScummVM (its
   saves), Vita3K (its whole memory card and system, installed games included)
   and Azahar (its folder, without caches). They reach the card by plain folder
   paths, which GammaOS's MediaProvider allows every app. Azahar only takes a
