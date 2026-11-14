@@ -1,5 +1,5 @@
 diff --git a/spd_dump.c b/spd_dump.c
-index f8ba370..8e4bf2e 100644
+index f8ba370..da21f37 100644
 --- a/spd_dump.c
 +++ b/spd_dump.c
 @@ -37,6 +37,25 @@
@@ -28,7 +28,7 @@ index f8ba370..8e4bf2e 100644
  #include "spd_cmd.h"
  
  static void print_mem(FILE *f, uint8_t *buf, size_t len) {
-@@ -190,6 +209,118 @@ static void init_serial(int serial) {
+@@ -190,6 +209,126 @@ static void init_serial(int serial) {
  }
  #endif
  
@@ -49,6 +49,7 @@ index f8ba370..8e4bf2e 100644
 +	size_t used = 0;
 +	HDEVINFO set = SetupDiGetClassDevsA(NULL, "USB", NULL,
 +			DIGCF_PRESENT | DIGCF_ALLCLASSES);
++	int any = 0;
 +	seen[0] = 0;
 +	if (set == INVALID_HANDLE_VALUE) return 0;
 +	for (idx = 0; ; idx++) {
@@ -92,6 +93,7 @@ index f8ba370..8e4bf2e 100644
 +		if (used + strlen(one) + 3 < seen_len)
 +			used += snprintf(seen + used, seen_len - used, "%s%s",
 +					used ? "; " : "", one);
++		if (!strcmp(pid, "4d00")) any = 1;
 +		if (!found && !strcmp(pid, "4d00") &&
 +				(_stricmp(svc, "WinUSB") || prob[0])) {
 +			char path[80];
@@ -120,6 +122,12 @@ index f8ba370..8e4bf2e 100644
 +		}
 +	}
 +	SetupDiDestroyDeviceInfoList(set);
++	/* Gone: nothing about its port holds any more. */
++	if (!any) {
++		busy_for[0] = 0;
++		busy = 0;
++		busy_age = 0;
++	}
 +	return found;
 +}
 +
@@ -147,7 +155,7 @@ index f8ba370..8e4bf2e 100644
  #if USE_LIBUSB
  static spdio_t* spdio_init(libusb_device_handle *dev_handle, int flags) {
  #else
-@@ -1187,6 +1318,10 @@ int main(int argc, char **argv) {
+@@ -1187,6 +1326,10 @@ int main(int argc, char **argv) {
  	libusb_device_handle *device;
  #else
  	int serial;
@@ -158,7 +166,7 @@ index f8ba370..8e4bf2e 100644
  #endif
  	spdio_t *io; int ret, i;
  	int wait = 300 * REOPEN_FREQ;
-@@ -1223,7 +1358,50 @@ int main(int argc, char **argv) {
+@@ -1223,7 +1366,53 @@ int main(int argc, char **argv) {
  	}
  
  	for (i = 0; ; i++) {
@@ -177,6 +185,9 @@ index f8ba370..8e4bf2e 100644
 +				DBG_LOG("Windows has: %s\n",
 +						win_seen[0] ? win_seen : "no Unisoc USB device");
 +				strcpy(win_last, win_seen);
++				/* The caller forgets what was said with each new state:
++				   say it again if it still holds. */
++				win_said[0] = 0;
 +			}
 +			/* No driver or a problem: only once it lasts (10 s); Windows
 +			   may still be setting the device up. */

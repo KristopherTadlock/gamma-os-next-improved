@@ -90,11 +90,12 @@ pub fn exit_text(code: i32) -> String {
 }
 
 /// Whether Windows may give the device another driver than WinUSB (another
-/// package for one of its download-mode IDs, or another driver it keeps for
-/// one on a USB port), so the helper must be ready before it's connected.
-pub fn needed(d: &Device) -> bool {
+/// package for one of its download-mode IDs, `other_package`, as the
+/// driver check found, or another driver it keeps for one on a USB port),
+/// so the helper must be ready before it's connected.
+pub fn needed(d: &Device, other_package: bool) -> bool {
     let ids: Vec<(u16, u16)> = d.identify.usb.iter().map(|u| (u.vid, u.pid)).collect();
-    crate::drivers::other_driver_known(&ids)
+    other_package || crate::drivers::other_driver_on_ports(&ids)
 }
 
 /// PowerShell's `Test-WinUsbInf $text $key`: the same test as
@@ -105,6 +106,32 @@ pub const WINUSB_INF_RULE: &str = r#"function Test-WinUsbInf([string]$text, [str
   return $t.Contains($key.ToUpperInvariant()) -and $t.Contains('INCLUDE=WINUSB.INF') -and $services -gt 0 -and [regex]::Matches($t, 'ADDSERVICE=WINUSB,').Count -eq $services
 }
 "#;
+
+/// The C# the helper compiles (`Add-Type`): `[ThimsyNewDev]::StoreInf`
+/// and `[ThimsyNewDev]::Switch`.
+pub const NEWDEV_CS: &str = r#"using System;
+using System.Runtime.InteropServices;
+using System.Text;
+public static class ThimsyNewDev {
+    [DllImport("setupapi.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool SetupGetInfDriverStoreLocationW(string fileName, IntPtr platform, string locale, StringBuilder buffer, int size, out int needed);
+    // The driver store's copy of a published package's .inf (next to its
+    // catalog and files, where an install should come from), or null.
+    public static string StoreInf(string published) {
+        var b = new StringBuilder(1024);
+        int needed;
+        return SetupGetInfDriverStoreLocationW(published, IntPtr.Zero, null, b, b.Capacity, out needed) ? b.ToString() : null;
+    }
+    [DllImport("newdev.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    static extern bool UpdateDriverForPlugAndPlayDevicesW(IntPtr parent, string hardwareId, string infPath, uint flags, out bool reboot);
+    // FORCE | NONINTERACTIVE: replace the device's driver, and fail rather
+    // than wait on a dialog nobody sees. 0, or the Windows error read right
+    // after the call (PowerShell may change it between statements).
+    public static int Switch(string hardwareId, string infPath, out bool reboot) {
+        if (UpdateDriverForPlugAndPlayDevicesW(IntPtr.Zero, hardwareId, infPath, 5, out reboot)) return 0;
+        return Marshal.GetLastWin32Error();
+    }
+}"#;
 
 /// The script the elevated PowerShell runs (see the module notes): `ids`
 /// the download-mode IDs, `status_name` the name of its status folder under
@@ -132,7 +159,13 @@ pub fn script(ids: &[(u16, u16)], status_name: &str, ipc: &Path, engine: u32) ->
     s.push_str(
         r#"$status = Join-Path $dir 'status'
 $made = $false
-function Say([string]$text) { [System.IO.File]::WriteAllText($status, "$text end") }
+# Retried for a while: something else (an antivirus) may hold the file.
+function Say([string]$text) {
+  for ($i = 0; ; $i++) {
+    try { [System.IO.File]::WriteAllText($status, "$text end"); return }
+    catch { if ($i -ge 50) { throw } ; Start-Sleep -Milliseconds 100 }
+  }
+}
 # The engine's count; 0 while the file is missing, being written, or not a
 # number.
 function Read-Trigger {
@@ -153,29 +186,25 @@ try {
   New-AdminFolder $dir $true
   $made = $true
   Add-Type -TypeDefinition @'
-using System;
-using System.Runtime.InteropServices;
-public static class ThimsyNewDev {
-    [DllImport("newdev.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    static extern bool UpdateDriverForPlugAndPlayDevicesW(IntPtr parent, string hardwareId, string infPath, uint flags, out bool reboot);
-    // FORCE | NONINTERACTIVE: replace the device's driver, and fail rather
-    // than wait on a dialog nobody sees. 0, or the Windows error read right
-    // after the call (PowerShell may change it between statements).
-    public static int Switch(string hardwareId, string infPath, out bool reboot) {
-        if (UpdateDriverForPlugAndPlayDevicesW(IntPtr.Zero, hardwareId, infPath, 5, out reboot)) return 0;
-        return Marshal.GetLastWin32Error();
-    }
-}
+"#,
+    );
+    s.push_str(NEWDEV_CS);
+    s.push_str(
+        r#"
 '@
-  # The WinUSB package for each ID, as Windows published it (the Windows
-  # folder from the system, not the environment).
+  # The WinUSB package for each ID among the published ones (in the
+  # Windows folder from the system, not the environment; each read once),
+  # installed from its copy in the driver store.
+  $published = @(Get-ChildItem -LiteralPath (Join-Path ([Environment]::GetFolderPath('Windows')) 'INF') -Filter 'oem*.inf' | ForEach-Object {
+    try { [pscustomobject]@{ Path = $_.FullName; Text = (Get-Content -LiteralPath $_.FullName -Raw) } } catch { }
+  })
   $infs = @{}
-  $published = Get-ChildItem -LiteralPath (Join-Path ([Environment]::GetFolderPath('Windows')) 'INF') -Filter 'oem*.inf'
   foreach ($id in $ids) {
     $key = $id.Substring(4)
-    $inf = $published | Where-Object { try { Test-WinUsbInf (Get-Content -LiteralPath $_.FullName -Raw) $key } catch { $false } } | Select-Object -First 1
-    if (-not $inf) { $code = 4; throw "no WinUSB package for $id" }
-    $infs[$id] = $inf.FullName
+    $inf = $published | Where-Object { Test-WinUsbInf $_.Text $key } | Select-Object -First 1
+    $stored = if ($inf) { [ThimsyNewDev]::StoreInf($inf.Path) } else { $null }
+    if (-not $stored) { $code = 4; throw "no WinUSB package for $id" }
+    $infs[$id] = $stored
   }
   Say 'ready'
   $done = 0
@@ -432,7 +461,7 @@ pub enum FollowEvent {
 }
 
 /// How long after a switch the device may still answer by itself.
-pub const RECONNECT_AFTER: std::time::Duration = std::time::Duration::from_secs(4);
+pub const RECONNECT_AFTER: std::time::Duration = std::time::Duration::from_secs(8);
 /// How long the port may look busy around a switch.
 pub const SWITCH_BUSY: std::time::Duration = std::time::Duration::from_secs(15);
 /// How long after an answer a deferred report is looked at again: spd_dump
@@ -444,6 +473,8 @@ impl SwitchFollow {
     /// A switch was asked for at `now`.
     pub fn requested(&mut self, now: std::time::Instant) {
         self.busy_until = Some(now + SWITCH_BUSY);
+        // A new switch: the last one's reconnect no longer applies.
+        self.switched_at = None;
     }
 
     /// spd_dump reported another driver while a switch was pending.
@@ -512,15 +543,25 @@ fn stopped_error(message: &str) -> anyhow::Error {
         .into()
 }
 
-/// The elevated helper process.
+/// An elevated Windows PowerShell (this helper, or the WinUSB install).
 #[cfg(windows)]
-struct Process(windows_sys::Win32::Foundation::HANDLE);
+pub(crate) struct Process(windows_sys::Win32::Foundation::HANDLE);
 
 #[cfg(windows)]
 impl Process {
-    /// Runs `script` in a hidden, elevated Windows PowerShell (one UAC
-    /// prompt) without waiting for it.
+    /// The helper: like [`Process::launch`], declining is an error.
     fn start(script: &str) -> Result<Process> {
+        Process::launch(script)?.ok_or_else(|| {
+            stopped_error(
+                "the driver switch couldn't start (the Windows permission prompt was declined)",
+            )
+        })
+    }
+
+    /// Runs `script` in a hidden, elevated Windows PowerShell (one UAC
+    /// prompt) without waiting for it; `None` when the prompt was
+    /// declined. It inherits none of the engine's handles.
+    pub(crate) fn launch(script: &str) -> Result<Option<Process>> {
         use std::os::windows::ffi::OsStrExt;
         use windows_sys::Win32::Foundation::{GetLastError, ERROR_CANCELLED};
         use windows_sys::Win32::UI::Shell::{
@@ -545,23 +586,21 @@ impl Process {
             info.nShow = 0; // SW_HIDE
             if ShellExecuteExW(&mut info) == 0 {
                 if GetLastError() == ERROR_CANCELLED {
-                    return Err(stopped_error(
-                        "the driver switch couldn't start (the Windows permission prompt was declined)",
-                    ));
+                    return Ok(None);
                 }
                 return Err(std::io::Error::last_os_error().into());
             }
             if info.hProcess.is_null() {
                 return Err(stopped_error(
-                    "the driver switch couldn't start (Windows didn't start it)",
+                    "the elevated PowerShell couldn't start (Windows didn't start it)",
                 ));
             }
-            Ok(Process(info.hProcess))
+            Ok(Some(Process(info.hProcess)))
         }
     }
 
     /// Its exit code, once it has ended.
-    fn exit_code(&self) -> Option<i32> {
+    pub(crate) fn exit_code(&self) -> Option<i32> {
         use windows_sys::Win32::Foundation::WAIT_OBJECT_0;
         use windows_sys::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject};
         // SAFETY: the handle stays open until drop.
@@ -574,8 +613,9 @@ impl Process {
         }
     }
 
-    /// Waits up to `ms` for it to end; whether it has.
-    fn wait(&self, ms: u32) -> bool {
+    /// Waits up to `ms` (`u32::MAX`: as long as it takes) for it to end;
+    /// whether it has.
+    pub(crate) fn wait(&self, ms: u32) -> bool {
         use windows_sys::Win32::Foundation::WAIT_OBJECT_0;
         use windows_sys::Win32::System::Threading::WaitForSingleObject;
         // SAFETY: the handle stays open until drop.
@@ -703,7 +743,10 @@ mod tests {
         assert_eq!(0xE000_020Bu32 as i32, -536870389);
         assert!(s.contains("[Environment]::GetFolderPath('Windows')"));
         assert!(!s.contains("$env:"), "no environment variables: {s}");
-        assert!(s.contains("Test-WinUsbInf (Get-Content"));
+        assert!(s.contains("Test-WinUsbInf $_.Text $key"));
+        // Installed from the driver store's copy, next to its catalog.
+        assert!(s.contains("[ThimsyNewDev]::StoreInf($inf.Path)"));
+        assert!(s.contains(NEWDEV_CS));
         // It ends with the engine (held from the start), and needs to see
         // the engine's folder.
         assert!(s.contains("$enginePid = 4242\n"));
@@ -834,17 +877,17 @@ mod tests {
         f.requested(t0);
         assert!(f.switching(at(14_000)));
         assert!(!f.switching(at(15_000)));
-        // Switched; if the device answers within 4 s nothing more is said
+        // Switched; if the device answers within 8 s nothing more is said
         // (the engine stops following once it's connected)...
         assert_eq!(
             f.next(Some(Status::Switched { n: 1, reboot: true }), at(1_000)),
             vec![FollowEvent::Switched { reboot: true }]
         );
         assert!(f.switching(at(15_000)));
-        assert_eq!(f.next(None, at(4_999)), vec![]);
+        assert_eq!(f.next(None, at(8_999)), vec![]);
         // ...otherwise it must be connected again, once.
-        assert_eq!(f.next(None, at(5_000)), vec![FollowEvent::Reconnect]);
-        assert_eq!(f.next(None, at(9_000)), vec![]);
+        assert_eq!(f.next(None, at(9_000)), vec![FollowEvent::Reconnect]);
+        assert_eq!(f.next(None, at(9_500)), vec![]);
         // Gone before the switch: ask for it again, no reconnect later.
         f.requested(at(10_000));
         assert_eq!(
@@ -946,6 +989,29 @@ mod tests {
             );
             assert_eq!(powershell(&check), "0", "{s}");
         }
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_compiles_the_helpers_csharp_and_its_calls_work() {
+        // A published package (any: the runner has some) maps to its copy
+        // in the driver store, and a switch for an ID no device has fails
+        // with a Windows error read in the same call.
+        let out = powershell(&format!(
+            "Add-Type -TypeDefinition @'\n{NEWDEV_CS}\n'@\n\
+             $f = Get-ChildItem -LiteralPath (Join-Path ([Environment]::GetFolderPath('Windows')) 'INF') -Filter 'oem*.inf' | Select-Object -First 1\n\
+             if (-not $f) {{ 'none'; exit 0 }}\n\
+             $s = [ThimsyNewDev]::StoreInf($f.FullName)\n\
+             $r = $false\n\
+             $e = [ThimsyNewDev]::Switch('USB\\VID_FFFF&PID_FFFE', $s, [ref]$r)\n\
+             \"$s|$e\""
+        ));
+        if out == "none" {
+            return;
+        }
+        let (stored, err) = out.rsplit_once('|').expect("path|error");
+        assert!(stored.to_ascii_lowercase().contains("driverstore"), "{out}");
+        assert_ne!(err, "0", "{out}");
     }
 
     #[cfg(windows)]

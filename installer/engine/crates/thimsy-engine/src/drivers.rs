@@ -200,25 +200,39 @@ fn winusb_installed(vid: u16, pid: u16) -> bool {
     store_has(|t| inf_is_winusb_for(t, vid, pid))
 }
 
-/// Whether Windows may give one of `ids` another driver than WinUSB: the
-/// driver store has another package for it, or Windows keeps another
-/// driver for it on a USB port it was connected to before (in one pass
-/// over the store).
+/// Whether Windows keeps another driver than WinUSB for one of `ids` on a
+/// USB port the device was connected to before.
 #[cfg(windows)]
-pub fn other_driver_known(ids: &[(u16, u16)]) -> bool {
+pub fn other_driver_on_ports(ids: &[(u16, u16)]) -> bool {
     ids.iter().any(|&(v, p)| {
         devnode_services(v, p)
             .iter()
             .any(|s| !s.eq_ignore_ascii_case("WinUSB"))
-    }) || store_has(|t| {
-        let flat = inf_flat(t);
-        ids.iter().any(|&(v, p)| inf_flat_is_other_for(&flat, v, p))
     })
 }
 
 #[cfg(not(windows))]
-pub fn other_driver_known(_ids: &[(u16, u16)]) -> bool {
+pub fn other_driver_on_ports(_ids: &[(u16, u16)]) -> bool {
     false
+}
+
+/// In one pass over the published packages: whether each of `ids` has a
+/// WinUSB package, and whether any has another package.
+#[cfg(windows)]
+fn store_classes(ids: &[(u16, u16)]) -> (Vec<bool>, bool) {
+    let mut winusb = vec![false; ids.len()];
+    let mut other = false;
+    for_each_published(|t| {
+        let flat = inf_flat(t);
+        for (i, &(v, p)) in ids.iter().enumerate() {
+            if inf_flat_is_winusb_for(&flat, v, p) {
+                winusb[i] = true;
+            } else if inf_flat_is_other_for(&flat, v, p) {
+                other = true;
+            }
+        }
+    });
+    (winusb, other)
 }
 
 /// The driver service Windows keeps for each device it has seen with the
@@ -285,15 +299,26 @@ fn devnode_services(vid: u16, pid: u16) -> Vec<String> {
 /// `INF\oem*.inf`, the packages Windows installs from) matches.
 #[cfg(windows)]
 fn store_has(matches: impl Fn(&str) -> bool) -> bool {
+    let mut found = false;
+    for_each_published(|t| found = found || matches(t));
+    found
+}
+
+/// Calls `f` with the text of each published third-party package
+/// (`<Windows>\INF\oem*.inf`).
+#[cfg(windows)]
+fn for_each_published(mut f: impl FnMut(&str)) {
     let Ok(files) = std::fs::read_dir(windows_dir().join("INF")) else {
-        return false;
+        return;
     };
-    files.flatten().any(|f| {
-        let name = f.file_name().to_string_lossy().to_ascii_lowercase();
-        name.starts_with("oem")
-            && name.ends_with(".inf")
-            && std::fs::read(f.path()).is_ok_and(|b| matches(&decode_inf(&b)))
-    })
+    for e in files.flatten() {
+        let name = e.file_name().to_string_lossy().to_ascii_lowercase();
+        if name.starts_with("oem") && name.ends_with(".inf") {
+            if let Ok(b) = std::fs::read(e.path()) {
+                f(&decode_inf(&b));
+            }
+        }
+    }
 }
 
 /// The Windows folder, from the system (not the environment).
@@ -328,7 +353,7 @@ fn ids(d: &Device) -> String {
 /// writes the udev rule (one password prompt); other hosts need nothing.
 pub fn install_for(d: &Device, host: Host, rep: &Reporter) -> Result<()> {
     match host {
-        Host::Windows => install(d, rep),
+        Host::Windows => install(d, rep).map(|_| ()),
         Host::Linux => linux_install(d, rep),
         _ => {
             rep.info("No driver needed on this computer");
@@ -341,7 +366,10 @@ pub fn install_for(d: &Device, host: Host, rep: &Reporter) -> Result<()> {
 /// Linux only warns when no udev rule covers the device (the app offers
 /// `drivers --install`; asking for a password in the middle of a flash
 /// would be a surprise); other hosts need nothing.
-pub fn ensure_for_flash(d: &Device, host: Host, rep: &Reporter) -> Result<()> {
+///
+/// Returns whether Windows also has another driver package for the device
+/// (Windows only), found in the same pass.
+pub fn ensure_for_flash(d: &Device, host: Host, rep: &Reporter) -> Result<bool> {
     match host {
         Host::Windows => install(d, rep),
         Host::Linux => {
@@ -351,11 +379,11 @@ pub fn ensure_for_flash(d: &Device, host: Host, rep: &Reporter) -> Result<()> {
                     ids(d)
                 ));
             }
-            Ok(())
+            Ok(false)
         }
         _ => {
             rep.info("No driver needed on this computer");
-            Ok(())
+            Ok(false)
         }
     }
 }
@@ -600,25 +628,47 @@ fn run_install(
     .into())
 }
 
-/// Installs WinUSB for every flashing-mode ID of the device.
-fn install(d: &Device, rep: &Reporter) -> Result<()> {
+/// Installs WinUSB for every flashing-mode ID of the device; whether
+/// Windows also has another package for one (Windows only).
+fn install(d: &Device, rep: &Reporter) -> Result<bool> {
     if let Some(r) = test_install(d, rep) {
-        return r;
+        return r.map(|()| false);
     }
     platform_install(d, rep)
 }
 
 #[cfg(windows)]
-fn platform_install(d: &Device, rep: &Reporter) -> Result<()> {
+fn platform_install(d: &Device, rep: &Reporter) -> Result<bool> {
+    let ids: Vec<(u16, u16)> = d.identify.usb.iter().map(|u| (u.vid, u.pid)).collect();
+    let (winusb, other) = store_classes(&ids);
     let tool = crate::tools::locate("wdi-simple")?;
     let sha = crate::util::sha256_file(&tool, |_, _| {})?;
-    install_ids(d, &tool, &sha, rep, &winusb_installed, &mut |script| {
-        run_elevated(script)
-    })
+    // From the one pass until the install ran; looked up again after it.
+    let ran = std::cell::Cell::new(false);
+    install_ids(
+        d,
+        &tool,
+        &sha,
+        rep,
+        &|v, p| {
+            if ran.get() {
+                winusb_installed(v, p)
+            } else {
+                ids.iter()
+                    .position(|&id| id == (v, p))
+                    .is_some_and(|i| winusb[i])
+            }
+        },
+        &mut |script| {
+            ran.set(true);
+            run_elevated(script)
+        },
+    )?;
+    Ok(other)
 }
 
 #[cfg(not(windows))]
-fn platform_install(_d: &Device, _rep: &Reporter) -> Result<()> {
+fn platform_install(_d: &Device, _rep: &Reporter) -> Result<bool> {
     Err(EngineError::new(
         Code::UnsupportedHost,
         "WinUSB can only be installed on Windows",
@@ -646,48 +696,13 @@ pub(crate) fn powershell_path() -> Result<PathBuf> {
 /// declined. The elevated process inherits none of the engine's handles.
 #[cfg(windows)]
 fn run_elevated(script: &str) -> Result<Option<i32>> {
-    use std::os::windows::ffi::OsStrExt;
-    use windows_sys::Win32::Foundation::{CloseHandle, GetLastError, ERROR_CANCELLED};
-    use windows_sys::Win32::System::Threading::{
-        GetExitCodeProcess, WaitForSingleObject, INFINITE,
-    };
-    use windows_sys::Win32::UI::Shell::{
-        ShellExecuteExW, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW,
-    };
-    let wide = |s: &std::ffi::OsStr| -> Vec<u16> { s.encode_wide().chain([0]).collect() };
-    let exe = wide(powershell_path()?.as_os_str());
-    let verb = wide(std::ffi::OsStr::new("runas"));
-    let params = wide(std::ffi::OsStr::new(&format!(
-        "-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand {}",
-        encode_command(script)
-    )));
-    // SAFETY: the strings outlive the call; the process handle is closed here.
-    unsafe {
-        let mut info: SHELLEXECUTEINFOW = std::mem::zeroed();
-        info.cbSize = std::mem::size_of::<SHELLEXECUTEINFOW>() as u32;
-        info.fMask = SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC;
-        info.lpVerb = verb.as_ptr();
-        info.lpFile = exe.as_ptr();
-        info.lpParameters = params.as_ptr();
-        info.nShow = 0; // SW_HIDE
-        if ShellExecuteExW(&mut info) == 0 {
-            if GetLastError() == ERROR_CANCELLED {
-                return Ok(Some(DECLINED));
-            }
-            return Err(std::io::Error::last_os_error().into());
+    Ok(match crate::driver_watch::Process::launch(script)? {
+        None => Some(DECLINED),
+        Some(p) => {
+            p.wait(u32::MAX);
+            p.exit_code()
         }
-        if info.hProcess.is_null() {
-            return Ok(None);
-        }
-        WaitForSingleObject(info.hProcess, INFINITE);
-        let mut code = 0u32;
-        let ok = GetExitCodeProcess(info.hProcess, &mut code);
-        CloseHandle(info.hProcess);
-        if ok == 0 {
-            return Ok(None);
-        }
-        Ok(Some(code as i32))
-    }
+    })
 }
 
 /// First of `candidates` that exists.

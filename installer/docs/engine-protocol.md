@@ -358,9 +358,11 @@ Errors while flashing:
   `allow_driver_switch` prompt (in a second `driver` stage), then starts
   an elevated helper (one UAC prompt) and waits until it's ready, before
   `wait_device`. The helper (`driver_watch.rs`) forces the WinUSB package
-  already in the driver store onto the device each time the engine asks:
+  already in the driver store (installed from the store's copy, next to
+  its catalog) onto the device each time the engine asks:
   the engine asks when `spd_dump` reports another driver, logs the
-  outcome, and if installing hasn't started 4 s after a switch, shows
+  outcome, and if `spd_dump` hasn't opened the device 8 s after a switch,
+  shows
   `reconnect_download_mode` (download mode has usually ended; the same USB
   port keeps WinUSB). If the device left before the switch, the
   `enter_download_mode` prompt comes back and the next connection is
