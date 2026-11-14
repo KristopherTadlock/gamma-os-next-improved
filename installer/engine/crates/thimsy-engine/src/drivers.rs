@@ -170,7 +170,10 @@ fn inf_flat(text: &str) -> String {
 /// that merely mentions WinUSB somewhere doesn't count.
 /// `driver_watch::WINUSB_INF_RULE` is the same test in PowerShell.
 pub fn inf_is_winusb_for(text: &str, vid: u16, pid: u16) -> bool {
-    let t = inf_flat(text);
+    inf_flat_is_winusb_for(&inf_flat(text), vid, pid)
+}
+
+fn inf_flat_is_winusb_for(t: &str, vid: u16, pid: u16) -> bool {
     let services = t.matches("ADDSERVICE=").count();
     t.contains(&format!("VID_{vid:04X}&PID_{pid:04X}"))
         && t.contains("INCLUDE=WINUSB.INF")
@@ -181,8 +184,12 @@ pub fn inf_is_winusb_for(text: &str, vid: u16, pid: u16) -> bool {
 /// Whether an .inf names VID:PID but isn't a WinUSB package (a vendor
 /// driver such as Unisoc's "SPRD U2S Diag").
 pub fn inf_is_other_for(text: &str, vid: u16, pid: u16) -> bool {
-    inf_flat(text).contains(&format!("VID_{vid:04X}&PID_{pid:04X}"))
-        && !inf_is_winusb_for(text, vid, pid)
+    inf_flat_is_other_for(&inf_flat(text), vid, pid)
+}
+
+fn inf_flat_is_other_for(flat: &str, vid: u16, pid: u16) -> bool {
+    flat.contains(&format!("VID_{vid:04X}&PID_{pid:04X}"))
+        && !inf_flat_is_winusb_for(flat, vid, pid)
 }
 
 /// Looks through Windows' driver store for a WinUSB package covering the ID.
@@ -193,16 +200,85 @@ fn winusb_installed(vid: u16, pid: u16) -> bool {
     store_has(|t| inf_is_winusb_for(t, vid, pid))
 }
 
-/// Whether the driver store has another package than WinUSB for the ID,
-/// which Windows may give the device instead.
+/// Whether Windows may give one of `ids` another driver than WinUSB: the
+/// driver store has another package for it, or Windows keeps another
+/// driver for it on a USB port it was connected to before (in one pass
+/// over the store).
 #[cfg(windows)]
-pub fn other_installed(vid: u16, pid: u16) -> bool {
-    store_has(|t| inf_is_other_for(t, vid, pid))
+pub fn other_driver_known(ids: &[(u16, u16)]) -> bool {
+    ids.iter().any(|&(v, p)| {
+        devnode_services(v, p)
+            .iter()
+            .any(|s| !s.eq_ignore_ascii_case("WinUSB"))
+    }) || store_has(|t| {
+        let flat = inf_flat(t);
+        ids.iter().any(|&(v, p)| inf_flat_is_other_for(&flat, v, p))
+    })
 }
 
 #[cfg(not(windows))]
-pub fn other_installed(_vid: u16, _pid: u16) -> bool {
+pub fn other_driver_known(_ids: &[(u16, u16)]) -> bool {
     false
+}
+
+/// The driver service Windows keeps for each device it has seen with the
+/// ID (one per USB port), from `HKLM\SYSTEM\CurrentControlSet\Enum\USB`;
+/// readable without admin rights.
+#[cfg(windows)]
+fn devnode_services(vid: u16, pid: u16) -> Vec<String> {
+    use windows_sys::Win32::Foundation::ERROR_SUCCESS;
+    use windows_sys::Win32::System::Registry::{
+        RegCloseKey, RegEnumKeyExW, RegGetValueW, RegOpenKeyExW, HKEY, HKEY_LOCAL_MACHINE,
+        KEY_READ, RRF_RT_REG_SZ,
+    };
+    let wide = |s: &str| -> Vec<u16> { s.encode_utf16().chain([0]).collect() };
+    let path = wide(&format!(
+        "SYSTEM\\CurrentControlSet\\Enum\\USB\\VID_{vid:04X}&PID_{pid:04X}"
+    ));
+    let value = wide("Service");
+    let mut out = Vec::new();
+    // SAFETY: buffers are as long as passed; the key is closed below.
+    unsafe {
+        let mut key: HKEY = std::ptr::null_mut();
+        if RegOpenKeyExW(HKEY_LOCAL_MACHINE, path.as_ptr(), 0, KEY_READ, &mut key) != ERROR_SUCCESS
+        {
+            return out;
+        }
+        for i in 0.. {
+            let mut name = [0u16; 256];
+            let mut len = name.len() as u32;
+            let r = RegEnumKeyExW(
+                key,
+                i,
+                name.as_mut_ptr(),
+                &mut len,
+                std::ptr::null(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+                std::ptr::null_mut(),
+            );
+            if r != ERROR_SUCCESS {
+                break;
+            }
+            let mut buf = [0u16; 128];
+            let mut size = std::mem::size_of_val(&buf) as u32;
+            if RegGetValueW(
+                key,
+                name.as_ptr(),
+                value.as_ptr(),
+                RRF_RT_REG_SZ,
+                std::ptr::null_mut(),
+                buf.as_mut_ptr().cast(),
+                &mut size,
+            ) == ERROR_SUCCESS
+            {
+                let n = buf.iter().position(|&c| c == 0).unwrap_or(buf.len());
+                out.push(String::from_utf16_lossy(&buf[..n]));
+            }
+        }
+        RegCloseKey(key);
+    }
+    out
 }
 
 /// Whether any .inf in Windows' driver store matches.
@@ -297,11 +373,12 @@ pub fn ps_literal(s: &str) -> String {
 /// administrators and SYSTEM SIDs, `New-AdminSecurity` (a protected ACL that
 /// only they can change; with `$true`, signed-in users may read too) and
 /// `Assert-AdminRoot`, which makes `$root` (`<ProgramData>\Thimsy
-/// Installer`) a plain folder owned by Administrators or SYSTEM, or stops
-/// with code 6. Standard users can create folders under ProgramData, so an
-/// existing one is never taken over or re-permissioned (a junction or a
-/// user's folder there would make that change something else); only one
-/// administrators or SYSTEM own, which users can't change, is used.
+/// Installer`) a plain folder owned by Administrators or SYSTEM that nobody
+/// else may change, or stops with code 6, and `New-AdminFolder`, which
+/// makes a new folder in it and checks it's what was made. Standard users
+/// can create folders under ProgramData, so an existing one is never taken
+/// over or re-permissioned (a junction or a user's folder there would make
+/// that change something else).
 pub const ADMIN_PRELUDE: &str = r#"$ErrorActionPreference = 'Stop'
 $code = 1
 $admins = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-544')
@@ -320,19 +397,48 @@ function New-AdminSecurity([bool]$readable) {
   return $sec
 }
 $root = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'Thimsy Installer'
+# A plain folder (not a junction or link) owned by Administrators or
+# SYSTEM, or stop (code 6).
+function Assert-AdminOwned([string]$path) {
+  $item = Get-Item -LiteralPath $path -Force
+  if (-not $item.PSIsContainer -or ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+    $script:code = 6; throw "$path isn't a plain folder"
+  }
+  $owner = (Get-Acl -LiteralPath $path).GetOwner([System.Security.Principal.SecurityIdentifier])
+  if ($owner -ne $admins -and $owner -ne $system) {
+    $script:code = 6; throw "$path isn't owned by administrators"
+  }
+}
 function Assert-AdminRoot {
   if (-not (Test-Path -LiteralPath $root)) {
     [void][System.IO.Directory]::CreateDirectory($root, (New-AdminSecurity $false))
   }
   # Checked after creating it too: someone may have made it first.
-  $item = Get-Item -LiteralPath $root -Force
-  if (-not $item.PSIsContainer -or ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
-    $script:code = 6; throw "$root isn't a plain folder"
+  Assert-AdminOwned $root
+  # Nobody else may make or change anything in it (a folder another
+  # installer made with ProgramData's inherited rights may let users).
+  $trusted = @($admins, $system,
+    (New-Object System.Security.Principal.SecurityIdentifier('S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464')),
+    (New-Object System.Security.Principal.SecurityIdentifier('S-1-3-0')))
+  $writes = [int][System.Security.AccessControl.FileSystemRights]'CreateFiles, CreateDirectories, WriteAttributes, WriteExtendedAttributes, DeleteSubdirectoriesAndFiles, Delete, ChangePermissions, TakeOwnership'
+  # GENERIC_ALL and GENERIC_WRITE, which rules may carry unmapped.
+  $writes = $writes -bor 0x10000000 -bor 0x40000000
+  foreach ($rule in (Get-Acl -LiteralPath $root).GetAccessRules($true, $true, [System.Security.Principal.SecurityIdentifier])) {
+    if ($rule.AccessControlType -eq 'Allow' -and
+        -not ($rule.PropagationFlags -band [System.Security.AccessControl.PropagationFlags]::InheritOnly) -and
+        ([int]$rule.FileSystemRights -band $writes) -and
+        -not ($trusted -contains $rule.IdentityReference)) {
+      $script:code = 6; throw "others can change $root"
+    }
   }
-  $owner = (Get-Acl -LiteralPath $root).GetOwner([System.Security.Principal.SecurityIdentifier])
-  if ($owner -ne $admins -and $owner -ne $system) {
-    $script:code = 6; throw "$root isn't owned by administrators"
-  }
+}
+# A new folder only administrators and SYSTEM can change (signed-in users
+# may read it with $readable), or stop: code 5 if it exists, 6 if what was
+# made isn't one (someone made it first).
+function New-AdminFolder([string]$path, [bool]$readable) {
+  if (Test-Path -LiteralPath $path) { $script:code = 5; throw "$path already exists" }
+  [void][System.IO.Directory]::CreateDirectory($path, (New-AdminSecurity $readable))
+  Assert-AdminOwned $path
 }
 "#;
 
@@ -349,9 +455,11 @@ pub fn driver_script(tool: &Path, sha256: &str, usb: &[(u16, u16, String)]) -> S
     let mut s = String::from(ADMIN_PRELUDE);
     s.push_str(
         r#"$dir = Join-Path $root ('driver-' + [guid]::NewGuid().ToString())
+$made = $false
 try {
   Assert-AdminRoot
-  [void][System.IO.Directory]::CreateDirectory($dir, (New-AdminSecurity $false))
+  New-AdminFolder $dir $false
+  $made = $true
   $exe = Join-Path $dir 'wdi-simple.exe'
   $dest = Join-Path $dir 'inf'
 "#,
@@ -378,7 +486,7 @@ try {
         r#"} catch {
   if ($code -eq 0) { $code = 1 }
 } finally {
-  Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue
+  if ($made) { Remove-Item -LiteralPath $dir -Recurse -Force -ErrorAction SilentlyContinue }
 }
 exit $code
 "#,
@@ -803,19 +911,25 @@ pub(crate) mod tests {
         assert!(s.starts_with(ADMIN_PRELUDE));
         assert!(!s.contains("takeown") && !s.contains("Set-Acl"));
         let checked = s.find("\n  Assert-AdminRoot\n").expect("checks the root");
-        assert!(checked < s.find("CreateDirectory($dir").unwrap());
+        assert!(checked < s.find("New-AdminFolder $dir $false").unwrap());
+        assert!(ADMIN_PRELUDE.contains("throw \"others can change $root\""));
+        assert!(ADMIN_PRELUDE.contains("PropagationFlags]::InheritOnly"));
         assert!(ADMIN_PRELUDE.contains("ReparsePoint"));
         assert!(ADMIN_PRELUDE.contains("GetOwner([System.Security.Principal.SecurityIdentifier])"));
         assert!(ADMIN_PRELUDE.contains("$owner -ne $admins -and $owner -ne $system"));
         assert!(s.contains("'S-1-5-32-544'") && s.contains("'S-1-5-18'"));
         assert!(s.contains(".Hash -ne 'ABC123'"));
         assert!(s.contains("& $exe '--vid' '0x1782' '--pid' '0x4d00' '--type' '0' '--name' 'Unisoc download mode' '--inf' 'thimsy_1782_4d00.inf' '--dest' $dest; $code = $LASTEXITCODE"), "{s}");
-        // The folder is made admin-only before anything is copied into it,
-        // and removed whatever happens.
-        let made = s.find("CreateDirectory($dir").unwrap();
+        // The folder is made admin-only (and checked) before anything is
+        // copied into it, and removed whatever happens, if it was made.
+        let made = s
+            .find("New-AdminFolder $dir $false\n  $made = $true")
+            .unwrap();
         assert!(made < s.find("Copy-Item").unwrap());
         assert!(s.find("Copy-Item").unwrap() < s.find("Get-FileHash").unwrap());
-        assert!(s.contains("finally {\n  Remove-Item -LiteralPath $dir -Recurse -Force"));
+        assert!(
+            s.contains("finally {\n  if ($made) { Remove-Item -LiteralPath $dir -Recurse -Force")
+        );
         assert!(s.trim_end().ends_with("exit $code"));
         // The encoded form PowerShell decodes back to the script.
         let enc = encode_command("exit 0");

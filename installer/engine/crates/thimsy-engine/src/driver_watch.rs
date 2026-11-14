@@ -84,17 +84,17 @@ pub fn exit_text(code: i32) -> String {
         4 => "Windows has no WinUSB package for the device".to_string(),
         5 => "its status folder already existed".to_string(),
         6 => UNSAFE_ROOT.to_string(),
+        7 => "it can't see the installer's temporary folder".to_string(),
         c => format!("exit code {c}"),
     }
 }
 
-/// Whether Windows has another driver package than WinUSB for one of the
-/// device's download-mode IDs, which it would give the device instead.
+/// Whether Windows may give the device another driver than WinUSB (another
+/// package for one of its download-mode IDs, or another driver it keeps for
+/// one on a USB port), so the helper must be ready before it's connected.
 pub fn needed(d: &Device) -> bool {
-    d.identify
-        .usb
-        .iter()
-        .any(|u| crate::drivers::other_installed(u.vid, u.pid))
+    let ids: Vec<(u16, u16)> = d.identify.usb.iter().map(|u| (u.vid, u.pid)).collect();
+    crate::drivers::other_driver_known(&ids)
 }
 
 /// PowerShell's `Test-WinUsbInf $text $key`: the same test as
@@ -109,11 +109,12 @@ pub const WINUSB_INF_RULE: &str = r#"function Test-WinUsbInf([string]$text, [str
 /// The script the elevated PowerShell runs (see the module notes): `ids`
 /// the download-mode IDs, `status_name` the name of its status folder under
 /// `<ProgramData>\Thimsy Installer` (made fresh, or the script stops),
-/// `ipc` the absolute folder with `trigger` and `stop`. Exit codes: 0
-/// stopped or timed out (20 minutes), 4 no WinUSB package for an ID, 5 the
-/// status folder already existed, 6 the ProgramData folder isn't safe to
-/// use, 1 anything else.
-pub fn script(ids: &[(u16, u16)], status_name: &str, ipc: &Path) -> String {
+/// `ipc` the absolute folder with `trigger` and `stop`, `engine` the
+/// engine's process ID (the helper stops when it ends). Exit codes: 0
+/// stopped, timed out (20 minutes) or the engine ended, 4 no WinUSB package
+/// for an ID, 5 the status folder already existed, 6 a folder in
+/// ProgramData isn't safe to use, 7 it can't see `ipc`, 1 anything else.
+pub fn script(ids: &[(u16, u16)], status_name: &str, ipc: &Path, engine: u32) -> String {
     let ids: Vec<String> = ids
         .iter()
         .map(|(v, p)| ps_literal(&format!("USB\\VID_{v:04X}&PID_{p:04X}")))
@@ -121,8 +122,9 @@ pub fn script(ids: &[(u16, u16)], status_name: &str, ipc: &Path) -> String {
     let mut s = String::from(ADMIN_PRELUDE);
     s.push_str(WINUSB_INF_RULE);
     s.push_str(&format!(
-        "$dir = Join-Path $root {}\n$trigger = {}\n$stop = {}\n$ids = @({})\n",
+        "$dir = Join-Path $root {}\n$ipc = {}\n$trigger = {}\n$stop = {}\n$ids = @({})\n$enginePid = {engine}\n",
         ps_literal(status_name),
+        ps_literal(&ipc.display().to_string()),
         ps_literal(&ipc.join("trigger").display().to_string()),
         ps_literal(&ipc.join("stop").display().to_string()),
         ids.join(", ")
@@ -143,16 +145,26 @@ function Read-Trigger {
   return 0
 }
 try {
+  # Held from the start, so it's the engine that ends, not a later process
+  # with its ID.
+  $engine = [System.Diagnostics.Process]::GetProcessById($enginePid)
+  if (-not (Test-Path -LiteralPath $ipc -PathType Container)) { $code = 7; throw "can't see $ipc" }
   Assert-AdminRoot
-  if (Test-Path -LiteralPath $dir) { $code = 5; throw 'the status folder already exists' }
-  [void][System.IO.Directory]::CreateDirectory($dir, (New-AdminSecurity $true))
+  New-AdminFolder $dir $true
   $made = $true
   Add-Type -TypeDefinition @'
 using System;
 using System.Runtime.InteropServices;
 public static class ThimsyNewDev {
     [DllImport("newdev.dll", CharSet = CharSet.Unicode, SetLastError = true)]
-    public static extern bool UpdateDriverForPlugAndPlayDevicesW(IntPtr parent, string hardwareId, string infPath, uint flags, out bool reboot);
+    static extern bool UpdateDriverForPlugAndPlayDevicesW(IntPtr parent, string hardwareId, string infPath, uint flags, out bool reboot);
+    // FORCE | NONINTERACTIVE: replace the device's driver, and fail rather
+    // than wait on a dialog nobody sees. 0, or the Windows error read right
+    // after the call (PowerShell may change it between statements).
+    public static int Switch(string hardwareId, string infPath, out bool reboot) {
+        if (UpdateDriverForPlugAndPlayDevicesW(IntPtr.Zero, hardwareId, infPath, 5, out reboot)) return 0;
+        return Marshal.GetLastWin32Error();
+    }
 }
 '@
   # The WinUSB package for each ID, as Windows published it (the Windows
@@ -168,20 +180,22 @@ public static class ThimsyNewDev {
   Say 'ready'
   $done = 0
   $until = [DateTime]::UtcNow.AddMinutes(20)
-  while ([DateTime]::UtcNow -lt $until -and -not (Test-Path -LiteralPath $stop)) {
+  # ERROR_NO_SUCH_DEVINST (0xE000020B): that ID isn't connected.
+  $noDevice = -536870389
+  while ([DateTime]::UtcNow -lt $until -and -not $engine.HasExited -and -not (Test-Path -LiteralPath $stop)) {
     $n = Read-Trigger
     if ($n -gt $done) {
       $done = $n
-      # FORCE | NONINTERACTIVE: replace the device's driver, and fail
-      # rather than wait on a dialog nobody sees.
       $switched = $false; $reboot = $false; $err = 0
       foreach ($id in $ids) {
         $r = $false
-        if ([ThimsyNewDev]::UpdateDriverForPlugAndPlayDevicesW([IntPtr]::Zero, $id, $infs[$id], 5, [ref]$r)) {
+        $e = [ThimsyNewDev]::Switch($id, $infs[$id], [ref]$r)
+        if ($e -eq 0) {
           $switched = $true
           if ($r) { $reboot = $true }
-        } else {
-          $err = [Runtime.InteropServices.Marshal]::GetLastWin32Error()
+        } elseif ($err -eq 0 -or $err -eq $noDevice) {
+          # A real failure says more than an ID that isn't connected.
+          $err = $e
         }
       }
       if ($switched) {
@@ -209,9 +223,11 @@ exit $code
 pub struct DriverWatch {
     ipc: PathBuf,
     status: PathBuf,
-    /// Switches asked for, and how many of those `trigger` holds.
+    /// Switches asked for, how many of those `trigger` holds, and the last
+    /// one the helper answered.
     requested: u32,
     written: u32,
+    answered: u32,
     last: String,
     process: Option<Process>,
 }
@@ -220,8 +236,11 @@ impl DriverWatch {
     /// Starts the helper for the device's download-mode IDs (one UAC
     /// prompt) and waits until it's ready.
     pub fn start(d: &Device, rep: &Reporter) -> Result<DriverWatch> {
-        let name = status_name();
-        let ipc = std::path::absolute(std::env::temp_dir())?.join(format!("thimsy-{name}"));
+        // Unrelated random names: the temp folder's (which others may see)
+        // gives nothing away about the status folder's.
+        let name = format!("watch-{}", random_hex());
+        let ipc =
+            std::path::absolute(std::env::temp_dir())?.join(format!("thimsy-{}", random_hex()));
         std::fs::create_dir(&ipc)?;
         let ids: Vec<(u16, u16)> = d.identify.usb.iter().map(|u| (u.vid, u.pid)).collect();
         let status = program_data()
@@ -229,7 +248,7 @@ impl DriverWatch {
             .join(&name)
             .join("status");
         rep.info("Starting the driver switch; Windows asks for permission");
-        let process = match Process::start(&script(&ids, &name, &ipc)) {
+        let process = match Process::start(&script(&ids, &name, &ipc, std::process::id())) {
             Ok(p) => p,
             Err(e) => {
                 let _ = std::fs::remove_dir_all(&ipc);
@@ -247,16 +266,27 @@ impl DriverWatch {
             status,
             requested: 0,
             written: 0,
+            answered: 0,
             last: String::new(),
             process,
         }
     }
 
     /// Asks the helper for one switch (written now, or by the next
-    /// [`DriverWatch::step`] if the helper was reading the file).
-    pub fn request(&mut self) {
+    /// [`DriverWatch::step`] if the helper was reading the file), unless
+    /// one it hasn't answered yet is pending. Whether it asked.
+    pub fn request(&mut self) -> bool {
+        if self.pending() {
+            return false;
+        }
         self.requested += 1;
         self.write_trigger();
+        true
+    }
+
+    /// Whether a switch was asked for that the helper hasn't answered.
+    pub fn pending(&self) -> bool {
+        self.answered < self.requested
     }
 
     fn write_trigger(&mut self) {
@@ -292,6 +322,9 @@ impl DriverWatch {
             return None;
         }
         self.last = text;
+        if let Status::Switched { n, .. } | Status::Failed { n, .. } = status {
+            self.answered = self.answered.max(n);
+        }
         Some(status)
     }
 
@@ -328,19 +361,116 @@ impl Drop for DriverWatch {
     }
 }
 
-/// A fresh name for the helper's folders.
-fn status_name() -> String {
-    let nanos = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_nanos())
-        .unwrap_or_default();
-    format!("watch-{nanos:x}-{:x}", std::process::id())
+/// 128 random bits in hex (from the randomly keyed hasher std seeds from
+/// the system's random source).
+fn random_hex() -> String {
+    use std::hash::{BuildHasher, Hasher};
+    let part = || {
+        std::collections::hash_map::RandomState::new()
+            .build_hasher()
+            .finish()
+    };
+    format!("{:016x}{:016x}", part(), part())
 }
 
+/// ProgramData as the system knows it (what the helper's
+/// `GetFolderPath('CommonApplicationData')` gives), not as the environment
+/// says.
+#[cfg(windows)]
 fn program_data() -> PathBuf {
-    std::env::var_os("ProgramData")
-        .map(PathBuf::from)
-        .unwrap_or_else(|| PathBuf::from(r"C:\ProgramData"))
+    use std::os::windows::ffi::OsStringExt;
+    use windows_sys::Win32::System::Com::CoTaskMemFree;
+    use windows_sys::Win32::UI::Shell::{FOLDERID_ProgramData, SHGetKnownFolderPath};
+    let mut p: windows_sys::core::PWSTR = std::ptr::null_mut();
+    // SAFETY: Windows allocates the string, freed here.
+    unsafe {
+        let found =
+            SHGetKnownFolderPath(&FOLDERID_ProgramData, 0, std::ptr::null_mut(), &mut p) == 0;
+        let path = found.then(|| {
+            let n = (0..).take_while(|&i| *p.add(i) != 0).count();
+            PathBuf::from(std::ffi::OsString::from_wide(std::slice::from_raw_parts(
+                p, n,
+            )))
+        });
+        CoTaskMemFree(p.cast());
+        path.unwrap_or_else(|| PathBuf::from(r"C:\ProgramData"))
+    }
+}
+
+#[cfg(not(windows))]
+fn program_data() -> PathBuf {
+    PathBuf::from(r"C:\ProgramData")
+}
+
+/// How the engine follows the helper's switches, as time goes by.
+#[derive(Debug, Default)]
+pub struct SwitchFollow {
+    /// The last switch that worked, until the device answers or it's time
+    /// to ask for it again.
+    switched_at: Option<std::time::Instant>,
+    /// Until when the device's port may look busy because its driver is
+    /// being switched.
+    busy_until: Option<std::time::Instant>,
+}
+
+/// What the engine reports, from [`SwitchFollow::next`].
+#[derive(Debug, PartialEq)]
+pub enum FollowEvent {
+    /// The device now has WinUSB.
+    Switched { reboot: bool },
+    /// It left download mode before the switch: ask for it again.
+    LeftFirst,
+    /// The switch failed with this Windows error.
+    Failed(u32),
+    /// Switched a while ago, but the device hasn't answered: download mode
+    /// ended, so it must be connected again.
+    Reconnect,
+}
+
+/// How long after a switch the device may still answer by itself.
+pub const RECONNECT_AFTER: std::time::Duration = std::time::Duration::from_secs(4);
+/// How long the port may look busy around a switch.
+pub const SWITCH_BUSY: std::time::Duration = std::time::Duration::from_secs(15);
+
+impl SwitchFollow {
+    /// A switch was asked for at `now`.
+    pub fn requested(&mut self, now: std::time::Instant) {
+        self.busy_until = Some(now + SWITCH_BUSY);
+    }
+
+    /// Whether a switch is under way at `now` (its port may look busy).
+    pub fn switching(&self, now: std::time::Instant) -> bool {
+        self.busy_until.is_some_and(|t| now < t)
+    }
+
+    /// What to report at `now`, given the helper's new status (if any).
+    pub fn next(&mut self, status: Option<Status>, now: std::time::Instant) -> Vec<FollowEvent> {
+        let mut out = Vec::new();
+        match status {
+            Some(Status::Switched { reboot, .. }) => {
+                self.switched_at = Some(now);
+                self.busy_until = Some(now + SWITCH_BUSY);
+                out.push(FollowEvent::Switched { reboot });
+            }
+            Some(Status::Failed {
+                code: NO_DEVICE, ..
+            }) => {
+                self.switched_at = None;
+                self.busy_until = None;
+                out.push(FollowEvent::LeftFirst);
+            }
+            Some(Status::Failed { code, .. }) => out.push(FollowEvent::Failed(code)),
+            Some(Status::Ready) | None => {}
+        }
+        if self
+            .switched_at
+            .is_some_and(|t| now.duration_since(t) >= RECONNECT_AFTER)
+        {
+            self.switched_at = None;
+            out.push(FollowEvent::Reconnect);
+        }
+        out
+    }
 }
 
 fn stopped_error(message: &str) -> anyhow::Error {
@@ -430,9 +560,12 @@ impl Drop for Process {
     }
 }
 
-/// No elevated helper outside Windows.
+/// No elevated helper outside Windows (tests make one that has ended with
+/// `exited`).
 #[cfg(not(windows))]
-struct Process;
+struct Process {
+    exited: Option<i32>,
+}
 
 #[cfg(not(windows))]
 impl Process {
@@ -444,10 +577,10 @@ impl Process {
         .into())
     }
     fn exit_code(&self) -> Option<i32> {
-        None
+        self.exited
     }
     fn wait(&self, _ms: u32) -> bool {
-        true
+        self.exited.is_some()
     }
 }
 
@@ -505,7 +638,7 @@ mod tests {
 
     fn sample_script() -> (PathBuf, String) {
         let ipc = PathBuf::from(r"C:\Users\Ann O'Neil\AppData\Local\Temp\thimsy-watch-1");
-        let s = script(&[(0x1782, 0x4d00)], "watch-abc", &ipc);
+        let s = script(&[(0x1782, 0x4d00)], "watch-abc", &ipc, 4242);
         (ipc, s)
     }
 
@@ -522,22 +655,36 @@ mod tests {
             assert!(s.contains(&format!("${var} = {lit}")), "{s}");
         }
         // FORCE (1) | NONINTERACTIVE (4), with the published WinUSB package
-        // found under the system's Windows folder.
+        // found under the system's Windows folder, and the error read in
+        // the same call.
         assert!(s.contains(
-            "UpdateDriverForPlugAndPlayDevicesW([IntPtr]::Zero, $id, $infs[$id], 5, [ref]$r)"
+            "if (UpdateDriverForPlugAndPlayDevicesW(IntPtr.Zero, hardwareId, infPath, 5, out reboot)) return 0;\n        return Marshal.GetLastWin32Error();"
         ));
+        assert!(s.contains("$e = [ThimsyNewDev]::Switch($id, $infs[$id], [ref]$r)"));
+        assert!(
+            !s.contains("GetLastWin32Error()\n      }"),
+            "not read later"
+        );
+        assert!(s.contains("elseif ($err -eq 0 -or $err -eq $noDevice)"));
+        assert!(s.contains("$noDevice = -536870389"));
+        assert_eq!(0xE000_020Bu32 as i32, -536870389);
         assert!(s.contains("[Environment]::GetFolderPath('Windows')"));
         assert!(!s.contains("$env:"), "no environment variables: {s}");
         assert!(s.contains("Test-WinUsbInf (Get-Content"));
-        // Its folder: in a ProgramData folder that was checked, made fresh,
-        // admin-only but readable, and gone when the helper ends.
+        // It ends with the engine (held from the start), and needs to see
+        // the engine's folder.
+        assert!(s.contains("$enginePid = 4242\n"));
+        assert!(s.contains("[System.Diagnostics.Process]::GetProcessById($enginePid)"));
+        assert!(s.contains("-not $engine.HasExited"));
+        assert!(s.contains("Test-Path -LiteralPath $ipc -PathType Container)) { $code = 7;"));
+        // Its folder: in a ProgramData folder that was checked, made fresh
+        // and checked, admin-only but readable, and removed only if made.
         let checked = s.find("\n  Assert-AdminRoot\n").expect("checks the root");
         let made = s
-            .find("CreateDirectory($dir, (New-AdminSecurity $true))")
+            .find("New-AdminFolder $dir $true\n  $made = $true")
             .unwrap();
         assert!(checked < made);
-        assert!(s.contains("if (Test-Path -LiteralPath $dir) { $code = 5;"));
-        assert!(s.contains("Remove-Item -LiteralPath $dir -Recurse -Force"));
+        assert!(s.contains("if ($made) { Remove-Item -LiteralPath $dir -Recurse -Force"));
         // Never takes over or re-permissions something that already exists.
         assert!(!s.contains("takeown") && !s.contains("Set-Acl"));
         // Everything it writes goes to its own folder; the engine's folder
@@ -562,6 +709,10 @@ mod tests {
         assert_eq!(w.step().unwrap(), None);
         w.request();
         assert_eq!(std::fs::read_to_string(ipc.join("trigger")).unwrap(), "1");
+        // One at a time: nothing more until the helper answers.
+        assert!(w.pending());
+        assert!(!w.request());
+        assert_eq!(w.requested, 1);
         // The helper writes; half a status is ignored, the whole one is
         // reported once.
         std::fs::write(&status, "switched 1").unwrap();
@@ -593,9 +744,104 @@ mod tests {
                 code: NO_DEVICE
             })
         );
+        assert!(!w.pending());
         // Dropped: asks the helper to stop; with it gone, the folder goes.
         drop(w);
         assert!(!ipc.exists());
+    }
+
+    #[cfg(not(windows))]
+    #[test]
+    fn a_helper_that_stopped_is_an_error_after_its_last_word() {
+        let dir = tempfile::tempdir().unwrap();
+        let ipc = dir.path().join("ipc");
+        std::fs::create_dir(&ipc).unwrap();
+        let status = dir.path().join("status");
+        std::fs::write(&status, "switched 1 end").unwrap();
+        let mut w = DriverWatch::new(ipc.clone(), status, Some(Process { exited: Some(4) }));
+        // What it said before it stopped comes first...
+        assert_eq!(
+            w.step().unwrap(),
+            Some(Status::Switched {
+                n: 1,
+                reboot: false
+            })
+        );
+        // ...then that it stopped, and why.
+        let e = w.step().unwrap_err();
+        assert!(
+            e.to_string().contains(
+                "the driver switch stopped (Windows has no WinUSB package for the device)"
+            ),
+            "{e}"
+        );
+        assert_eq!(crate::error::code_of(&e).0, Code::ToolFailed);
+        drop(w);
+        assert!(!ipc.exists());
+        // One still running keeps its folder (and `stop`) when dropped.
+        let ipc2 = dir.path().join("ipc2");
+        std::fs::create_dir(&ipc2).unwrap();
+        drop(DriverWatch::new(
+            ipc2.clone(),
+            dir.path().join("none"),
+            Some(Process { exited: None }),
+        ));
+        assert!(ipc2.join("stop").exists());
+    }
+
+    #[test]
+    fn switches_are_followed_over_time() {
+        use std::time::{Duration, Instant};
+        let t0 = Instant::now();
+        let at = |s: u64| t0 + Duration::from_millis(s);
+        let mut f = SwitchFollow::default();
+        assert!(!f.switching(t0));
+        assert_eq!(f.next(None, t0), vec![]);
+        // Asked: the port may look busy for a while.
+        f.requested(t0);
+        assert!(f.switching(at(14_000)));
+        assert!(!f.switching(at(15_000)));
+        // Switched; if the device answers within 4 s nothing more is said
+        // (the engine stops following once it's connected)...
+        assert_eq!(
+            f.next(Some(Status::Switched { n: 1, reboot: true }), at(1_000)),
+            vec![FollowEvent::Switched { reboot: true }]
+        );
+        assert!(f.switching(at(15_000)));
+        assert_eq!(f.next(None, at(4_999)), vec![]);
+        // ...otherwise it must be connected again, once.
+        assert_eq!(f.next(None, at(5_000)), vec![FollowEvent::Reconnect]);
+        assert_eq!(f.next(None, at(9_000)), vec![]);
+        // Gone before the switch: ask for it again, no reconnect later.
+        f.requested(at(10_000));
+        assert_eq!(
+            f.next(
+                Some(Status::Switched {
+                    n: 2,
+                    reboot: false
+                }),
+                at(10_500)
+            ),
+            vec![FollowEvent::Switched { reboot: false }]
+        );
+        assert_eq!(
+            f.next(
+                Some(Status::Failed {
+                    n: 3,
+                    code: NO_DEVICE
+                }),
+                at(11_000)
+            ),
+            vec![FollowEvent::LeftFirst]
+        );
+        assert!(!f.switching(at(11_000)));
+        assert_eq!(f.next(None, at(20_000)), vec![]);
+        // Any other failure is passed on.
+        assert_eq!(
+            f.next(Some(Status::Failed { n: 4, code: 5 }), at(21_000)),
+            vec![FollowEvent::Failed(5)]
+        );
+        assert_eq!(f.next(Some(Status::Ready), at(22_000)), vec![]);
     }
 
     /// The scripts run by Windows PowerShell, as the installer runs them.
