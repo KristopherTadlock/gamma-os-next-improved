@@ -241,6 +241,154 @@ Rewind works on every system whose emulator or core can rewind; performance is n
 
 Holding the power button for 7 s shuts the console down, in a game or in Nano. `PhoneWindowManager` handles it. Shutdown closes the game first where it can: drastic-nano saves slot 9, and Quick Resume is prepared. drastic-nano's own 5 s power-off was removed so the two don't race.
 
+## Devices
+
+"The Anbernic button" in this document means the device's **function button**. On the RG Cube it is the Anbernic logo button. Other handhelds GammaOS supports have a Mode, Home or Menu button instead, or only a Back button. Every chord above, and the coming Anbernic + bottom face button, works through the same lookup, so they work the same on every device.
+
+### How a device's buttons are found
+
+One table, `/system/etc/gammaos/device_keys.json` (from `mods/device-keys.json`, installed by `mods/55-hotkeys.sh`), lists each device's function and Back buttons. Every reader picks the first entry whose `match` fits the device's system properties, or the table's `default` if none does:
+
+| Reader | Code | Uses |
+|---|---|---|
+| PhoneWindowManager | `ThimsyDeviceKeys.java`, read once at `systemReady` | Android keycodes: the chord detector, the Anbernic + Volume / Select / Start checks, the 10 s recovery hold |
+| Nano | `NanoDeviceKeys.cpp`, read on first use | evdev codes: its menus' Anbernic handling, Anbernic + Volume / Select / Start |
+| drastic-nano | the same `NanoDeviceKeys.cpp` | evdev codes: its chord detector, and which input devices it opens |
+
+`ThimsyHotkeyController` doesn't change. It only injects keyboard keys, and never reads the pad.
+
+The two resolvers are held to the same test cases (`gammaos-nano/test/fixtures/devkeys/cases.json`), so they always pick the same keys.
+
+- **No table, or a broken one:** the RG Cube's keys, the ones Thimsy always used. Those are F10 from a gamepad, `BUTTON_MODE` and Back.
+- **`match`:** a list of alternatives. All the properties an alternative names must match, and any one alternative is enough. A value matches case-insensitively, or as a prefix when it ends in `*`.
+- **The properties used:**
+  - `ro.gammaos.device`: only newer GammaOS vendor images set it (`anbernicrgds`, `anbernicrgrotate`, `trimuibrick`, `magicxxu20v32`, `pocketairmini`, `retroidpocketduolite`, ...). The T820, T618 RG405M/V/RG505, MediaTek, Retroid 4 Pro/Classic, KT-R1, ZPG, Pocket Micro and E6 Max images don't, so those match by model or platform.
+  - `ro.product.vendor.model`, `ro.product.odm.model`, `ro.product.odm_dlkm.model`: the real strings, spaces included (`RGCUBE`, `RG 406H`, `RG 477V`, `RG VITA`, `Retroid Pocket Classic`). Anbernic shares vendor images, so the RG406V reports `RG 406H` and the RG Slide reports `RG 476H`; their keys are the same.
+  - `ro.product.vendor.manufacturer`;
+  - `ro.board.platform` (`ums9620` for T820, `ums512` for T618, `ceres` for A133P, `mt6897`, `mt6893`).
+- **A key:**
+  - `linux`, the evdev code Nano and drastic-nano read;
+  - `android`, the keycode name PhoneWindowManager sees after the key layout. A key without one (the AYANEO codes 753 and 754, which no layout maps) is for Nano and drastic-nano only;
+  - `gamepad_only`, so a keyboard's F10 still reaches the app.
+- **An entry without `function` or `back`:** takes the default's. `"function": []` means the device has no function button.
+- **`"fallback": "back"`:** Back doubles as the function button (below).
+
+The default function buttons are F10 (gamepad only), `BUTTON_MODE` and `HOME`, and the default Back is `BACK`. The Cube's own entry leaves out `HOME`, so nothing on the Cube changes.
+
+Nano maps the function button's code to the Cube's F10 as it reads it, after the button pickers (which record the raw code). The rest of its menu code then needs no change. F10 and `BUTTON_MODE` keep working there on every device, as before.
+
+**GammaPad remaps.** On many newer images (`persist.gammaos.gamepad.enable=1` in the vendor `build.prop`), GammaPad grabs the pad and re-emits it as "Xbox Wireless Controller", after its default remaps:
+- RG DS and RG DS Plus: Mode 316 → 204.
+- RG Vita and RG Vita Pro: F10 68 → 204.
+- Pocket Air Mini: AYANEO 754 → 158, ≡ 753 → 204.
+
+Such entries list both the raw and the remapped code, so the key matches whichever arrives. On the virtual pad 204 reaches Android as `NOTIFICATION` (`Generic.kl`, product `0b13`) or as `ALL_APPS` (the `02fd` layout), so both are listed.
+
+On the RG DS, 204 is also the key Nano's Control Center toggles on. With the Mode button as the function button, it raises the Quick Menu and toggles the Control Center at once. That needs a product decision there: turn the remap off, or give the Control Center another key.
+
+**The `045e:02fd` layout.** `Vendor_045e_Product_02fd.kl` (in AOSP, `frameworks/base/data/keyboards`) now maps `key 68 F10`. Without it, a GammaPad that presents as `045e:02fd` (the old vendor `gammapad`, or the `0x02fd` preset) would hand the Anbernic button to PhoneWindowManager as `KEYCODE_UNKNOWN`. The RG Cube's own pad (`484b:1101`) doesn't use it.
+
+### Device map
+
+Sources:
+- **level 1:** the device tree or key layout inside a GammaOS release image or stock dump;
+- **level 2:** driver or daemon source or binary;
+- **level 3:** GammaOS vendor configuration (`GammaOSCoreVendor`);
+- **level 4:** reviews and spec pages, for labels.
+
+The research notes are `work/device-buttons-research.md`. "GP" is the code after GammaOS's default GammaPad remap.
+
+| Device | SoC | Detected by | Function button → evdev / Android | Back button → evdev / Android | Confidence (source) |
+|---|---|---|---|---|---|
+| RG Cube | T820 | vendor/odm model `RGCUBE` | Anbernic logo → 68 / `F10`; 316 / `BUTTON_MODE` kept | Back → 158 / `BACK` | verified (1: v1.2 dtbo, vendor key layout, `build.prop`) |
+| RG556, RG406H, RG406V, RG476H, RG Slide | T820 | `RG556`, `RG 406H`, `RG 476H`, or `ums9620` + Anbernic | Anbernic / Home → 68 / `F10` | Back → 158 / `BACK` (Slide: right of the screen) | verified (1: each model's dtbo) |
+| RG477M, RG477V, RG557 | Dimensity 8300 | odm model `RG477M`, `RG 477V`, `RG557` | Home → 68 / `F10` | Back → 158 / `BACK` | verified (1: stock dtbo from the Unbricker dumps) |
+| RG Rotate | T618 | `anbernicrgrotate` | side Function → 68 / `F10`; a second key sends 67 / `F9` | centre home/return → 158 / `BACK` | codes verified (1), labels likely (4); which side key is 67 or 68 unconfirmed |
+| RG Vita | **T618** | `anbernicrgvita`, `RG VITA` | Anbernic → 68 / `F10` (GP 204 / `NOTIFICATION`) | Back → 158 / `BACK` | verified (1, 3) |
+| RG405V | T618 | odm/vendor model `RG405V` (assumed string) | side Function → 68 / `F10` | front Home → 158 / `BACK` | likely (1 codes, 4 labels) |
+| RG405M, RG505 | T618 | `RG405M` (verified), `RG505` (assumed), or `ums512` + Anbernic | **None** (68 is wired to no button) | Home / Back → 158 / `BACK` | codes verified (1), labels likely (4). **Back doubles as function** |
+| RG Vita Pro | RK3576 | `anbernicrgvitapro`, `RG VITA Pro` | Anbernic → 68 / `F10` (GP 204) | Back → 158 / `BACK` (on `adc-keys`) | verified (1, 3) |
+| RG DS, RG DS Plus | RK3568 | `anbernicrgds`, `anbernicrgdsplus` | Mode → 316 / `BUTTON_MODE` (GP 204) | adc-keys button → 158 / `BACK` | codes verified (1: v1.4.4 OTA dtb), labels unverified |
+| TrimUI Brick, MagicX Zero 40, Mini Zero 28, XU20 V32 | A133P | `trimuibrick`, `magicxzero40`, `magicxminizero28`, `magicxxu20v32`, or `ceres` + `QUAD-CORE A133 aw4` | **None** | **Menu** → 158 / `BACK` | verified (1, 2). **Menu doubles as function** |
+| GKD 350H Ultra | RK3576 | `gkd350hultra` | "F1" → 316 / `BUTTON_MODE` | "F" → 158 / `BACK` | codes verified (1), labels from the device tree |
+| AYANEO Pocket Air Mini | MT6785 | `pocketairmini` | ≡ → 753 / none (GP 204 / `NOTIFICATION`) | AYANEO → 754 / none (GP 158 / `BACK`) | codes verified (1, 3); the role split is GammaOS's |
+| Retroid Pocket 4 Pro | Dimensity 1100 | `mt6893` + `Moorechip` | Home → 316 / `BUTTON_MODE` | Back → 158 / `BACK` | verified (2: `retroidpad` binary) |
+| Retroid Pocket Classic | Qualcomm `parrot` | `Retroid Pocket Classic` | **None distinct** (Home also sends 158) | Back and Home → 158 / `BACK` | verified (2). **Back doubles as function** |
+| Retroid Pocket Duo Lite (beta), Duo | Qualcomm | `retroidpocketduolite`, `retroidpocketduo` | Home → 316 / `BUTTON_MODE` | Back → 158 / `BACK` | verified (2: `RetroidPad.c`) |
+| GameMT E6 Max | A527 `saturn` | `A527 PRO` + `saturn` | Home → 316 / `BUTTON_MODE` (likely) | default (unverified) | partial (1: stock dtb) |
+| Mangmi Air X | SD680 | `mangmiairxmq65`, `mangmiairxmq66` | Home → 316 / `BUTTON_MODE` (likely) | default (unverified) | likely (3) |
+| KT Pocket KT-R1 | `mt6789` | odm model `KTPocket-R1` | default list | default | unverified: detection only |
+| ZPG A1 Unicorn | `mt6789` | odm model `ZPG A1` | default list | default | unverified: detection only |
+| AYANEO Pocket Micro | `mt6789` | `Pocket Micro` + AYANEO | default list | default | unverified: detection only |
+
+Not supported, so not in the table: AYN Thor, the GammaOS Core (Android TV) devices, and the planned AYANEO Pocket S/DMG and Air, Retroid Pocket Mini, Flip 2 and 5, and Powkiddy X28. They get the default.
+
+**Still to check with `adb shell getevent -lp`, then `getevent -l` while pressing each system button:**
+- **KT-R1:** which buttons send `KEY_MENU`, `KEY_HOMEPAGE`, `BTN_START` and `BTN_SELECT`.
+- **ZPG A1 and Pocket Micro:** the Home and Back codes.
+- **Mangmi Air X:** Back's code, and confirm Home is 316.
+- **E6 Max (both revisions):** Back's code, and the USB "Lenovo GamePad" codes.
+- **RG Rotate:** which side key sends 67 and which sends 68.
+- **RG Vita:** what the 67 "RESET" key is.
+- **RG405M and RG505:** that nothing is wired to 68, and the RG505's model string.
+- **RG405V:** that the side button sends 68, and its model string.
+- **RG DS / DS Plus and Air Mini:** the printed labels.
+- **TrimUI and MagicX:** when Menu also sends 256.
+- **Any GammaPad device on a Thimsy build:** `dumpsys input`, to see which virtual product ID (`0b13` or `02fd`) and key layout are in use.
+
+### Back acts when it is let go
+
+On every device, the RG Cube included, the Back button acts on its release, never on its press. A Back press that turns into a chord or a hold therefore never also goes back.
+
+- **Over a running app (PhoneWindowManager):**
+  - The press is held back.
+  - Let go on its own, the app gets a normal Back press and release (injected).
+  - Held to the long press, it runs the long-press-Back exit as before (where a long-press action is set), and the release sends nothing.
+  - Any other key pressed while it is held (Volume for brightness, a RetroArch Back + button combination) means nothing is sent.
+  - Held into the 10 s recovery hold, nothing is sent; the recovery hold itself still starts on the press.
+  - The device's Back key is used even where its raw code isn't `KEY_BACK` (the AYANEO button, 754, on the Pocket Air Mini): Nano and drastic-nano read it as Back, and over apps PhoneWindowManager sends the tap as `BACK`.
+- **Nano's menus:**
+  - Back is held back like Start and Select, and acts (goes back, closes the keyboard or dialog) when let go.
+  - Another key pressed meanwhile cancels it.
+  - Holding it no longer repeats.
+- **drastic-nano:** Back already acted on release (a tap opens its menu, a long press exits). The device's Back key reads as Back there too.
+- **Quick Resume preview:** the same, already on release.
+
+The decision on release is `devkeys::backRelease` (C++) and `ThimsyDeviceKeys.backRelease` (Java), held to the same test cases. With nothing else pressed:
+- Back alone, released short of the 10 s recovery hold: Back.
+- Where Back doubles as the function button:
+  - under 1 s: Back;
+  - 1 to 3 s: the Quick Menu;
+  - 3 s or more: nothing (that was the hold to quit).
+
+### Devices without a function or Back button
+
+- **No function button, only Back** (RG405M, RG505, and the Retroid Pocket Classic, whose Home and Back both send 158), `"fallback": "back"`. Back + a button replaces the Anbernic chord. Back works like the Anbernic button over a game, except on its own:
+  - Back + a button: that button's hotkey. Back + Volume is brightness, Back + Select toggles the shader, and Back + Start opens Applications.
+  - Back held on its own for 3 s quits the game.
+  - Back tapped and let go within 1 s: the game gets a Back press and release, sent on the release.
+  - Back held between 1 s and 3 s: the Quick Menu, as the Anbernic button's release does.
+  - In Nano's menus Back goes back when let go within 1 s, and held 1 to 3 s it opens the Quick Menu. Back + Volume, Select and Start work there too.
+  - In drastic-nano, Back keeps its own tap (in-game menu) and long press (exit). Back + a button is a hotkey and opens no menu.
+  - Toolbox → *Anbernic Button Opens Quick Menu* off makes Back plain Back again over apps.
+- **Only a Menu button** (TrimUI Brick and the MagicX handhelds):
+  - Their Menu button sends `KEY_BACK` (158), so it is their Back button (`"function": []`, `"fallback": "back"`).
+  - It doubles as the function button exactly as Back does above: Menu + a button runs the hotkeys, holding it opens the Quick Menu or quits, and a tap is Back on release.
+  - Being `BACK`, it is the 10 s recovery key too.
+  - B is not Back on these devices.
+- **A device with a function button but no Back button** (none known): the function button becomes the 10 s recovery key. PhoneWindowManager adds it when a device's entry has no Back.
+- **On every device:** Start + Select still does every hotkey and the 3 s quit, and Power held raises the Quick Menu over a game.
+
+### Adding a device
+
+1. Find the function and Back buttons' codes:
+   - `adb shell getevent -lp` gives the input devices and the codes each sends;
+   - `adb shell getevent -l` shows a press;
+   - the key layout (`/vendor/usr/keylayout/Vendor_XXXX_Product_YYYY.kl`, or `Generic.kl`) gives the Android keycode.
+2. Find a property that identifies the device: `adb shell getprop ro.gammaos.device`, `ro.product.vendor.model`.
+3. Add an entry to `mods/device-keys.json`, before any broader entry that would also match it. Say in `verified` where the codes come from.
+4. To try it without a rebuild, push it to `/system/etc/gammaos/device_keys.json` (root, remounted system) and reboot. `logcat -s NanoDeviceKeys` and `logcat | grep "device keys"` show what Nano and PhoneWindowManager picked.
+
 ## Adding an emulator
 
 1. Find its hotkey settings in the source: which actions exist, where they are stored, the format, and whether key events from the virtual keyboard (device id -1) are accepted.
@@ -269,3 +417,4 @@ On the device, for each emulator:
    - Anbernic + Select turns the shader off and on again, in Nano, in a game and in drastic-nano, and Power on its own sleeps;
    - Anbernic + Start opens Applications over a game, and Start, B or Anbernic + Start returns to the game;
    - rewind released when the Quick Menu opens.
+   - Back acts on release: in an app (Settings, a browser) a tap goes back once when let go, a long press runs the exit, and Back held while Volume changes the brightness never goes back. In Nano's menus Back goes back on release and never repeats while held.

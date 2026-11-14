@@ -1,0 +1,687 @@
+{
+ "table": "../../../mods/device-keys.json",
+ "cases": [
+  {
+   "name": "RG Cube (stock v1.2 vendor props)",
+   "props": {
+    "ro.product.vendor.model": "RGCUBE",
+    "ro.product.vendor.device": "ums9620_2h10",
+    "ro.board.platform": "ums9620",
+    "ro.product.vendor.manufacturer": "Anbernic"
+   },
+   "id": "anbernic-rgcube",
+   "function_linux": [
+    68,
+    316
+   ],
+   "function_android": [
+    "F10",
+    "BUTTON_MODE"
+   ],
+   "gamepad_only": [
+    true,
+    false
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false,
+   "back_android": [
+    "BACK"
+   ]
+  },
+  {
+   "name": "RG Cube by its odm props only",
+   "props": {
+    "ro.product.odm.model": "RGCUBE"
+   },
+   "id": "anbernic-rgcube",
+   "function_linux": [
+    68,
+    316
+   ],
+   "function_android": [
+    "F10",
+    "BUTTON_MODE"
+   ],
+   "gamepad_only": [
+    true,
+    false
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false
+  },
+  {
+   "name": "RG556",
+   "props": {
+    "ro.product.vendor.model": "RG556",
+    "ro.board.platform": "ums9620",
+    "ro.product.vendor.manufacturer": "Anbernic"
+   },
+   "id": "anbernic-t820",
+   "function_linux": [
+    68
+   ],
+   "function_android": [
+    "F10"
+   ],
+   "gamepad_only": [
+    true
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false
+  },
+  {
+   "name": "RG406H and RG406V report 'RG 406H'",
+   "props": {
+    "ro.product.vendor.model": "RG 406H",
+    "ro.board.platform": "ums9620",
+    "ro.product.vendor.manufacturer": "Anbernic"
+   },
+   "id": "anbernic-t820",
+   "function_linux": [
+    68
+   ],
+   "function_android": [
+    "F10"
+   ],
+   "gamepad_only": [
+    true
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false
+  },
+  {
+   "name": "RG476H and RG Slide report 'RG 476H'",
+   "props": {
+    "ro.product.vendor.model": "RG 476H",
+    "ro.board.platform": "ums9620",
+    "ro.product.vendor.manufacturer": "Anbernic"
+   },
+   "id": "anbernic-t820",
+   "function_linux": [
+    68
+   ],
+   "function_android": [
+    "F10"
+   ],
+   "gamepad_only": [
+    true
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false
+  },
+  {
+   "name": "RG477V (odm model, generic vendor model)",
+   "props": {
+    "ro.product.odm.model": "RG 477V",
+    "ro.product.vendor.model": "mgvi_64_armv82",
+    "ro.board.platform": "mt6897"
+   },
+   "id": "anbernic-mtk",
+   "function_linux": [
+    68
+   ],
+   "function_android": [
+    "F10"
+   ],
+   "gamepad_only": [
+    true
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false
+  },
+  {
+   "name": "RG557",
+   "props": {
+    "ro.product.odm.model": "RG557",
+    "ro.board.platform": "mt6897"
+   },
+   "id": "anbernic-mtk",
+   "function_linux": [
+    68
+   ],
+   "function_android": [
+    "F10"
+   ],
+   "gamepad_only": [
+    true
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false
+  },
+  {
+   "name": "RG Rotate",
+   "props": {
+    "ro.gammaos.device": "anbernicrgrotate",
+    "ro.product.vendor.model": "RG Rotate",
+    "ro.board.platform": "ums512",
+    "ro.product.vendor.manufacturer": "Anbernic"
+   },
+   "id": "anbernic-rgrotate",
+   "function_linux": [
+    68,
+    67
+   ],
+   "function_android": [
+    "F10",
+    "F9"
+   ],
+   "gamepad_only": [
+    true,
+    true
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false
+  },
+  {
+   "name": "RG Vita (T618) with the GammaPad remap",
+   "props": {
+    "ro.gammaos.device": "anbernicrgvita",
+    "ro.product.vendor.model": "RG VITA",
+    "ro.board.platform": "ums512",
+    "ro.product.vendor.manufacturer": "Anbernic"
+   },
+   "id": "anbernic-rgvita",
+   "function_linux": [
+    68,
+    204,
+    204
+   ],
+   "function_android": [
+    "F10",
+    "NOTIFICATION",
+    "ALL_APPS"
+   ],
+   "gamepad_only": [
+    true,
+    false,
+    false
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false
+  },
+  {
+   "name": "RG405V: side Function button",
+   "props": {
+    "ro.product.odm.model": "RG405V",
+    "ro.board.platform": "ums512",
+    "ro.product.vendor.manufacturer": "Anbernic"
+   },
+   "id": "anbernic-rg405v",
+   "function_linux": [
+    68
+   ],
+   "function_android": [
+    "F10"
+   ],
+   "gamepad_only": [
+    true
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false
+  },
+  {
+   "name": "RG405M: Back doubles as the function button",
+   "props": {
+    "ro.product.vendor.model": "RG405M",
+    "ro.product.odm.model": "RG405M",
+    "ro.board.platform": "ums512",
+    "ro.product.vendor.manufacturer": "Anbernic"
+   },
+   "id": "anbernic-t618",
+   "function_linux": [
+    68
+   ],
+   "function_android": [
+    "F10"
+   ],
+   "gamepad_only": [
+    true
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": true
+  },
+  {
+   "name": "an unknown ums512 Anbernic falls to the T618 entry",
+   "props": {
+    "ro.product.vendor.model": "RG5XX",
+    "ro.board.platform": "ums512",
+    "ro.product.vendor.manufacturer": "Anbernic"
+   },
+   "id": "anbernic-t618",
+   "function_linux": [
+    68
+   ],
+   "function_android": [
+    "F10"
+   ],
+   "gamepad_only": [
+    true
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": true
+  },
+  {
+   "name": "RG Vita Pro",
+   "props": {
+    "ro.gammaos.device": "anbernicrgvitapro",
+    "ro.product.vendor.model": "RG VITA Pro",
+    "ro.board.platform": "rk3576"
+   },
+   "id": "anbernic-rgvitapro",
+   "function_linux": [
+    68,
+    204,
+    204
+   ],
+   "function_android": [
+    "F10",
+    "NOTIFICATION",
+    "ALL_APPS"
+   ],
+   "gamepad_only": [
+    true,
+    false,
+    false
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false
+  },
+  {
+   "name": "RG DS",
+   "props": {
+    "ro.gammaos.device": "anbernicrgds",
+    "ro.product.vendor.model": "RG DS",
+    "ro.board.platform": "rk356x"
+   },
+   "id": "anbernic-rgds",
+   "function_linux": [
+    316,
+    204,
+    204
+   ],
+   "function_android": [
+    "BUTTON_MODE",
+    "NOTIFICATION",
+    "ALL_APPS"
+   ],
+   "gamepad_only": [
+    false,
+    false,
+    false
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false
+  },
+  {
+   "name": "RG DS Plus",
+   "props": {
+    "ro.gammaos.device": "anbernicrgdsplus",
+    "ro.product.vendor.model": "RG DS Plus"
+   },
+   "id": "anbernic-rgds",
+   "function_linux": [
+    316,
+    204,
+    204
+   ],
+   "function_android": [
+    "BUTTON_MODE",
+    "NOTIFICATION",
+    "ALL_APPS"
+   ],
+   "gamepad_only": [
+    false,
+    false,
+    false
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false
+  },
+  {
+   "name": "TrimUI Brick: Menu (158) is Back and doubles as the function button",
+   "props": {
+    "ro.gammaos.device": "trimuibrick",
+    "ro.board.platform": "ceres",
+    "ro.product.vendor.model": "QUAD-CORE A133 aw4"
+   },
+   "id": "allwinner-a133p",
+   "function_linux": [],
+   "function_android": [],
+   "gamepad_only": [],
+   "back_linux": [
+    158
+   ],
+   "shared_back": true,
+   "back_android": [
+    "BACK"
+   ]
+  },
+  {
+   "name": "MagicX XU20 V32 by its real codename",
+   "props": {
+    "ro.gammaos.device": "magicxxu20v32"
+   },
+   "id": "allwinner-a133p",
+   "function_linux": [],
+   "function_android": [],
+   "gamepad_only": [],
+   "back_linux": [
+    158
+   ],
+   "shared_back": true,
+   "back_android": [
+    "BACK"
+   ]
+  },
+  {
+   "name": "an A133P with no codename, by platform and model",
+   "props": {
+    "ro.board.platform": "ceres",
+    "ro.product.vendor.model": "QUAD-CORE A133 aw4"
+   },
+   "id": "allwinner-a133p",
+   "function_linux": [],
+   "function_android": [],
+   "gamepad_only": [],
+   "back_linux": [
+    158
+   ],
+   "shared_back": true,
+   "back_android": [
+    "BACK"
+   ]
+  },
+  {
+   "name": "GKD 350H Ultra",
+   "props": {
+    "ro.gammaos.device": "gkd350hultra",
+    "ro.product.vendor.model": "rk3576_rock_4d",
+    "ro.board.platform": "rk3576"
+   },
+   "id": "gkd-350h-ultra",
+   "function_linux": [
+    316
+   ],
+   "function_android": [
+    "BUTTON_MODE"
+   ],
+   "gamepad_only": [
+    false
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false
+  },
+  {
+   "name": "AYANEO Pocket Air Mini: raw codes and the GammaPad remaps",
+   "props": {
+    "ro.gammaos.device": "pocketairmini",
+    "ro.product.vendor.model": " GT78-VN",
+    "ro.board.platform": "mt6785"
+   },
+   "id": "ayaneo-pocketairmini",
+   "function_linux": [
+    753,
+    204,
+    204
+   ],
+   "function_android": [
+    "",
+    "NOTIFICATION",
+    "ALL_APPS"
+   ],
+   "gamepad_only": [
+    false,
+    false,
+    false
+   ],
+   "back_linux": [
+    754,
+    158
+   ],
+   "back_android": [
+    "",
+    "BACK"
+   ],
+   "shared_back": false
+  },
+  {
+   "name": "Retroid Pocket 4 Pro",
+   "props": {
+    "ro.board.platform": "mt6893",
+    "ro.product.vendor.manufacturer": "Moorechip",
+    "ro.product.vendor.model": "tb8797p1_64_k419"
+   },
+   "id": "retroid-rp4pro",
+   "function_linux": [
+    316
+   ],
+   "function_android": [
+    "BUTTON_MODE"
+   ],
+   "gamepad_only": [
+    false
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false
+  },
+  {
+   "name": "Retroid Pocket Classic: Home and Back both send 158",
+   "props": {
+    "ro.product.vendor.model": "Retroid Pocket Classic",
+    "ro.board.platform": "parrot"
+   },
+   "id": "retroid-rpclassic",
+   "function_linux": [],
+   "function_android": [],
+   "gamepad_only": [],
+   "back_linux": [
+    158
+   ],
+   "shared_back": true
+  },
+  {
+   "name": "Retroid Pocket Duo Lite",
+   "props": {
+    "ro.gammaos.device": "retroidpocketduolite",
+    "ro.board.platform": "trinket"
+   },
+   "id": "retroid-duo",
+   "function_linux": [
+    316
+   ],
+   "function_android": [
+    "BUTTON_MODE"
+   ],
+   "gamepad_only": [
+    false
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false
+  },
+  {
+   "name": "GameMT E6 Max",
+   "props": {
+    "ro.product.vendor.model": "A527 PRO",
+    "ro.board.platform": "saturn"
+   },
+   "id": "gamemt-e6max",
+   "function_linux": [
+    316
+   ],
+   "function_android": [
+    "BUTTON_MODE"
+   ],
+   "gamepad_only": [
+    false
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false
+  },
+  {
+   "name": "Mangmi Air X MQ66",
+   "props": {
+    "ro.gammaos.device": "mangmiairxmq66",
+    "ro.board.platform": "bengal"
+   },
+   "id": "mangmi-airx",
+   "function_linux": [
+    316
+   ],
+   "function_android": [
+    "BUTTON_MODE"
+   ],
+   "gamepad_only": [
+    false
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false
+  },
+  {
+   "name": "KT Pocket KT-R1: detection only, the default keys",
+   "props": {
+    "ro.product.odm.model": "KTPocket-R1",
+    "ro.board.platform": "mt6789"
+   },
+   "id": "ktpocket-ktr1",
+   "function_linux": [
+    68,
+    316,
+    172
+   ],
+   "function_android": [
+    "F10",
+    "BUTTON_MODE",
+    "HOME"
+   ],
+   "gamepad_only": [
+    true,
+    false,
+    false
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false
+  },
+  {
+   "name": "ZPG A1 Unicorn: detection only",
+   "props": {
+    "ro.product.odm.model": "ZPG A1"
+   },
+   "id": "zpg-a1-unicorn",
+   "function_linux": [
+    68,
+    316,
+    172
+   ],
+   "function_android": [
+    "F10",
+    "BUTTON_MODE",
+    "HOME"
+   ],
+   "gamepad_only": [
+    true,
+    false,
+    false
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false
+  },
+  {
+   "name": "AYANEO Pocket Micro: detection only",
+   "props": {
+    "ro.product.vendor.model": "Pocket Micro",
+    "ro.product.vendor.manufacturer": "AYANEO"
+   },
+   "id": "ayaneo-pocketmicro",
+   "function_linux": [
+    68,
+    316,
+    172
+   ],
+   "function_android": [
+    "F10",
+    "BUTTON_MODE",
+    "HOME"
+   ],
+   "gamepad_only": [
+    true,
+    false,
+    false
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false
+  },
+  {
+   "name": "an unknown device",
+   "props": {
+    "ro.product.vendor.model": "SOMETHING",
+    "ro.board.platform": "mt6789"
+   },
+   "id": "default",
+   "function_linux": [
+    68,
+    316,
+    172
+   ],
+   "function_android": [
+    "F10",
+    "BUTTON_MODE",
+    "HOME"
+   ],
+   "gamepad_only": [
+    true,
+    false,
+    false
+   ],
+   "back_linux": [
+    158
+   ],
+   "shared_back": false
+  }
+ ]
+}

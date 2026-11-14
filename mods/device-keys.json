@@ -1,0 +1,310 @@
+{
+  "version": 1,
+  "note": "The function button (the Anbernic button on the RG Cube) and the Back button of each handheld GammaOS supports. PhoneWindowManager (ThimsyDeviceKeys.java), Nano and drastic-nano (NanoDeviceKeys.cpp) pick the first entry whose match fits the device's properties, else the default. HOTKEYS.md, Devices, explains the fields. linux is the evdev code Nano and drastic-nano read; android is the keycode PhoneWindowManager sees after the key layout.",
+  "default": {
+    "function": [
+      {"label": "Anbernic", "linux": 68, "android": "F10", "gamepad_only": true},
+      {"label": "Mode / Guide", "linux": 316, "android": "BUTTON_MODE"},
+      {"label": "Home", "linux": 172, "android": "HOME"}
+    ],
+    "back": [{"label": "Back", "linux": 158, "android": "BACK"}]
+  },
+  "devices": [
+    {
+      "id": "anbernic-rgcube",
+      "name": "Anbernic RG Cube",
+      "soc": "Unisoc T820 (ums9620)",
+      "match": [
+        {"ro.product.vendor.model": "RGCUBE"},
+        {"ro.product.odm.model": "RGCUBE"},
+        {"ro.product.odm_dlkm.model": "RGCUBE"}
+      ],
+      "function": [
+        {"label": "Anbernic", "linux": 68, "android": "F10", "gamepad_only": true},
+        {"label": "Mode", "linux": 316, "android": "BUTTON_MODE"}
+      ],
+      "back": [{"label": "Back", "linux": 158, "android": "BACK"}],
+      "verified": "verified (level 1): v1.2 dtbo singleadc-joypad retrogame_joypad 0x1101 sw17 KEY_BACK, sw18 KEY_F10 (the device has no BTN_MODE; 316 kept so nothing changes on the Cube); /vendor/usr/keylayout/Vendor_484b_Product_1101.kl; vendor and odm_dlkm build.prop model RGCUBE"
+    },
+    {
+      "id": "anbernic-t820",
+      "name": "Anbernic RG556, RG406H, RG406V, RG476H, RG Slide",
+      "soc": "Unisoc T820 (ums9620)",
+      "match": [
+        {
+          "ro.product.vendor.model": ["RG556", "RG 406H", "RG 476H"]
+        },
+        {"ro.board.platform": "ums9620", "ro.product.vendor.manufacturer": "Anbernic"}
+      ],
+      "function": [
+        {"label": "Anbernic / Home", "linux": 68, "android": "F10", "gamepad_only": true}
+      ],
+      "back": [{"label": "Back", "linux": 158, "android": "BACK"}],
+      "verified": "verified (level 1): v1.2 Lite dtbo of each model, retrogame_joypad 0x1101 sw17 KEY_BACK, sw18 KEY_F10, no BTN_MODE; vendor Vendor_484b_Product_1101.kl. The RG406V reports model 'RG 406H' and the RG Slide 'RG 476H' (shared stock vendor)"
+    },
+    {
+      "id": "anbernic-mtk",
+      "name": "Anbernic RG477M, RG477V, RG557",
+      "soc": "MediaTek Dimensity 8300 (mt6897)",
+      "match": [
+        {
+          "ro.product.odm.model": ["RG477M", "RG 477V", "RG557"]
+        },
+        {
+          "ro.product.vendor.model": ["RG477M", "RG 477V", "RG557"]
+        },
+        {"ro.board.platform": "mt6897", "ro.product.odm.manufacturer": "Anbernic"}
+      ],
+      "function": [
+        {"label": "Home", "linux": 68, "android": "F10", "gamepad_only": true}
+      ],
+      "back": [{"label": "Back", "linux": 158, "android": "BACK"}],
+      "verified": "verified (level 1): stock dtbo from the GammaSqueeze Unbricker dumps, singleadc-joypad retrogame_joypad 0x1101 sw17 KEY_BACK, sw18 KEY_F10 (the gpio-keys HOME KEY fragment is disabled); vendor Vendor_484b_Product_1101.kl; odm build.prop model"
+    },
+    {
+      "id": "anbernic-rgrotate",
+      "name": "Anbernic RG Rotate",
+      "soc": "Unisoc T618 (ums512)",
+      "match": [
+        {"ro.gammaos.device": "anbernicrgrotate"},
+        {"ro.product.vendor.model": "RG Rotate"}
+      ],
+      "function": [
+        {"label": "Function (side)", "linux": 68, "android": "F10", "gamepad_only": true},
+        {"label": "F9 key", "linux": 67, "android": "F9", "gamepad_only": true}
+      ],
+      "back": [{"label": "Back (centre)", "linux": 158, "android": "BACK"}],
+      "verified": "verified codes (level 1): v1.4.1 dtbo retrogame_joypad sw11 KEY_BACK, sw18 KEY_F9, sw19 KEY_F10; side Function button and centre home/return from a review; which of F9/F10 is the side button is unconfirmed (GammaPad binds its act0 to 68); F9 maps to F9 only through the GammaPad virtual pad (Generic.kl)"
+    },
+    {
+      "id": "anbernic-rgvita",
+      "name": "Anbernic RG Vita",
+      "soc": "Unisoc T618 (ums512)",
+      "match": [
+        {"ro.gammaos.device": "anbernicrgvita"},
+        {"ro.product.vendor.model": "RG VITA"}
+      ],
+      "function": [
+        {"label": "Anbernic", "linux": 68, "android": "F10", "gamepad_only": true},
+        {"label": "Anbernic (GammaPad remap)", "linux": 204, "android": "NOTIFICATION"},
+        {"label": "Anbernic (GammaPad remap, 02fd layout)", "linux": 204, "android": "ALL_APPS"}
+      ],
+      "back": [{"label": "Back", "linux": 158, "android": "BACK"}],
+      "verified": "verified (level 1): v1.3.1 dtbo retrogame_joypad key-resetn 'Home' KEY_F10, sw11 KEY_BACK, sw0 'RESET' KEY_F9; vendor persist.gammaos.gamepad.remap_btn=68:204 (virtual pad, Generic.kl 204 NOTIFICATION)"
+    },
+    {
+      "id": "anbernic-rg405v",
+      "name": "Anbernic RG405V",
+      "soc": "Unisoc T618 (ums512)",
+      "match": [
+        {"ro.product.odm.model": "RG405V"},
+        {"ro.product.vendor.model": "RG405V"}
+      ],
+      "function": [
+        {"label": "Function (left side)", "linux": 68, "android": "F10", "gamepad_only": true}
+      ],
+      "back": [{"label": "Home / Back (front)", "linux": 158, "android": "BACK"}],
+      "verified": "likely: v1.1 dtbo retrogame_joypad key-resetn 'Home' KEY_F10 (GPIO 126), sw11 KEY_BACK (GPIO 124); side Function and front Home from the droix KB; model string RG405V assumed, not seen"
+    },
+    {
+      "id": "anbernic-t618",
+      "name": "Anbernic RG405M, RG505",
+      "soc": "Unisoc T618 (ums512)",
+      "match": [
+        {
+          "ro.product.odm.model": ["RG405M", "RG505"]
+        },
+        {
+          "ro.product.vendor.model": ["RG405M", "RG505"]
+        },
+        {"ro.board.platform": "ums512", "ro.product.vendor.manufacturer": "Anbernic"}
+      ],
+      "function": [
+        {"label": "F10 (no button on these models)", "linux": 68, "android": "F10", "gamepad_only": true}
+      ],
+      "back": [{"label": "Home / Back", "linux": 158, "android": "BACK"}],
+      "fallback": "back",
+      "verified": "verified codes (level 1): v1.1 dtbo retrogame_joypad sw11 KEY_BACK, key-resetn KEY_F10 wired to no button on the 405M/505 (one front button each, per reviews); RG405M vendor/odm model verified, RG505 string assumed; no pad keylayout, Generic.kl"
+    },
+    {
+      "id": "anbernic-rgvitapro",
+      "name": "Anbernic RG Vita Pro",
+      "soc": "Rockchip RK3576",
+      "match": [
+        {"ro.gammaos.device": "anbernicrgvitapro"},
+        {"ro.product.vendor.model": "RG VITA Pro"}
+      ],
+      "function": [
+        {"label": "Anbernic", "linux": 68, "android": "F10", "gamepad_only": true},
+        {"label": "Anbernic (GammaPad remap)", "linux": 204, "android": "NOTIFICATION"},
+        {"label": "Anbernic (GammaPad remap, 02fd layout)", "linux": 204, "android": "ALL_APPS"}
+      ],
+      "back": [{"label": "Back", "linux": 158, "android": "BACK"}],
+      "verified": "verified (level 1): v1.3.0 boot dtb, adc-keys code 158 (Back, input device adc-keys), retrogame_joypad sw18 KEY_F10; vendor Vendor_484b_Product_1101.kl, remap_btn=68:204"
+    },
+    {
+      "id": "anbernic-rgds",
+      "name": "Anbernic RG DS, RG DS Plus",
+      "soc": "Rockchip RK3568",
+      "match": [
+        {
+          "ro.gammaos.device": ["anbernicrgds", "anbernicrgdsplus"]
+        },
+        {
+          "ro.product.vendor.model": ["RG DS", "RG DS Plus"]
+        }
+      ],
+      "function": [
+        {"label": "Mode", "linux": 316, "android": "BUTTON_MODE"},
+        {"label": "Mode (GammaPad remap)", "linux": 204, "android": "NOTIFICATION"},
+        {"label": "Mode (GammaPad remap, 02fd layout)", "linux": 204, "android": "ALL_APPS"}
+      ],
+      "back": [{"label": "Back (adc-keys)", "linux": 158, "android": "BACK"}],
+      "verified": "verified codes (level 1): v1.4.4 OTA boot dtb of both, retrogame_joypad sw19 BTN_MODE, adc-keys 'home' KEY_BACK; vendor remap_btn=316:204; physical labels unverified"
+    },
+    {
+      "id": "allwinner-a133p",
+      "name": "TrimUI Brick, MagicX Zero 40, MagicX Mini Zero 28, MagicX XURetro X20 V32",
+      "soc": "Allwinner A133P",
+      "match": [
+        {
+          "ro.gammaos.device": ["trimuibrick", "magicxzero40", "magicxminizero28", "magicxxu20v32"]
+        },
+        {"ro.board.platform": "ceres", "ro.product.vendor.model": "QUAD-CORE A133 aw4"}
+      ],
+      "function": [],
+      "back": [{"label": "Menu", "linux": 158, "android": "BACK"}],
+      "fallback": "back",
+      "verified": "verified (levels 1-2): v1.4.1 dtb simplepad BTN_G linux,code 0x9e (code2 0x100); simplepad.ko 'Xbox Wireless Controller' 045e:02fd; Brick trimui_inputd 'TRIMUI Player1' advertises only KEY_BACK beyond the pad; no Mode/Home key exists"
+    },
+    {
+      "id": "gkd-350h-ultra",
+      "name": "GKD 350H Ultra",
+      "soc": "Rockchip RK3576",
+      "match": [
+        {"ro.gammaos.device": "gkd350hultra"},
+        {"ro.product.vendor.model": "rk3576_rock_4d"}
+      ],
+      "function": [
+        {"label": "F1", "linux": 316, "android": "BUTTON_MODE"}
+      ],
+      "back": [{"label": "F", "linux": 158, "android": "BACK"}],
+      "verified": "verified codes (level 1): v1.4.1 boot dtb gamekiddy-joypad gkd_atom_joypad 0001:2103 sw9 'GPIO F1' BTN_MODE, sw10 'GPIO BTN_F' KEY_BACK; labels from the DT only"
+    },
+    {
+      "id": "ayaneo-pocketairmini",
+      "name": "AYANEO Pocket Air Mini",
+      "soc": "MediaTek Helio G90T (mt6785)",
+      "match": [
+        {"ro.gammaos.device": "pocketairmini"},
+        {"ro.board.platform": "mt6785", "ro.product.vendor.manufacturer": "ARBOR"}
+      ],
+      "function": [
+        {"label": "≡", "linux": 753},
+        {"label": "≡ (GammaPad remap)", "linux": 204, "android": "NOTIFICATION"},
+        {"label": "≡ (GammaPad remap, 02fd layout)", "linux": 204, "android": "ALL_APPS"}
+      ],
+      "back": [
+        {"label": "AYANEO", "linux": 754},
+        {"label": "AYANEO (GammaPad remap)", "linux": 158, "android": "BACK"}
+      ],
+      "verified": "verified codes (level 1): v1.3.2 boot dtb gpio-keys KEY_AYA 754, KEY_= 753, key_lc 316, key_rc 752 ('AYANEO Controller'); raw 752-754 have no Android keycode; vendor remap_btn=754:158,753:204 follows GammaOS's choice of AYANEO as Back"
+    },
+    {
+      "id": "retroid-rp4pro",
+      "name": "Retroid Pocket 4 Pro",
+      "soc": "MediaTek Dimensity 1100 (mt6893)",
+      "match": [
+        {"ro.board.platform": "mt6893", "ro.product.vendor.manufacturer": "Moorechip"}
+      ],
+      "function": [
+        {"label": "Home", "linux": 316, "android": "BUTTON_MODE"}
+      ],
+      "back": [{"label": "Back", "linux": 158, "android": "BACK"}],
+      "verified": "verified (level 2): vendor retroidpad ('Retroid Pocket Controller') maps MCU bit 14 to 0x13c and bit 15 to 0x9e (disassembly); vendor model is the generic tb8797p1_64_k419"
+    },
+    {
+      "id": "retroid-rpclassic",
+      "name": "Retroid Pocket Classic",
+      "soc": "Qualcomm (parrot)",
+      "match": [
+        {"ro.product.vendor.model": "Retroid Pocket Classic"}
+      ],
+      "function": [],
+      "back": [{"label": "Back / Home", "linux": 158, "android": "BACK"}],
+      "fallback": "back",
+      "verified": "verified (level 2): vendor retroidpad (GammaOS v1.0) emits KEY_BACK for both MCU bit 14 (Home) and bit 15 (Back), no BTN_MODE"
+    },
+    {
+      "id": "retroid-duo",
+      "name": "Retroid Pocket Duo Lite, Retroid Pocket Duo",
+      "soc": "Qualcomm (trinket, sun)",
+      "match": [
+        {
+          "ro.gammaos.device": ["retroidpocketduolite", "retroidpocketduo"]
+        },
+        {
+          "ro.product.vendor.model": ["Retroid Pocket Duo Lite", "Retroid Pocket Duo"]
+        }
+      ],
+      "function": [
+        {"label": "Home", "linux": 316, "android": "BUTTON_MODE"}
+      ],
+      "back": [{"label": "Back", "linux": 158, "android": "BACK"}],
+      "verified": "verified (level 2): vendor/src/retroidpad/RetroidPad.c and binary table: bit 14 BTN_MODE, bit 15 KEY_BACK, 'Retroid Pocket Controller' 0001:0001; Duo Lite is a private beta, Duo unreleased"
+    },
+    {
+      "id": "gamemt-e6max",
+      "name": "GameMT E6 Max",
+      "soc": "Allwinner A527 (saturn)",
+      "match": [
+        {"ro.product.vendor.model": "A527 PRO", "ro.board.platform": "saturn"}
+      ],
+      "function": [
+        {"label": "Home", "linux": 316, "android": "BUTTON_MODE"}
+      ],
+      "verified": "partial: stock V2.1P dtb gpio-keys-polled 'btn mode' BTN_MODE, no Back key in the DT; GammaOS also drives a USB 'STMicroelectronics Lenovo GamePad' with unknown codes; Back from the default (unverified)"
+    },
+    {
+      "id": "mangmi-airx",
+      "name": "Mangmi Air X",
+      "soc": "Qualcomm Snapdragon 680 (bengal)",
+      "match": [
+        {
+          "ro.gammaos.device": ["mangmiairxmq65", "mangmiairxmq66"]
+        }
+      ],
+      "function": [
+        {"label": "Home", "linux": 316, "android": "BUTTON_MODE"}
+      ],
+      "verified": "likely function only: vendor persist.gammaos.gamepad.remap_btn=316:316 on 'AIR X Controller'; pad driver not in the release; Back from the default (unverified)"
+    },
+    {
+      "id": "ktpocket-ktr1",
+      "name": "KT Pocket KT-R1",
+      "soc": "MediaTek (mt6789)",
+      "match": [
+        {"ro.product.odm.model": "KTPocket-R1"}
+      ],
+      "verified": "unverified: 'KT Controller' emits KEY_MENU, KEY_HOMEPAGE, BTN_START, BTN_SELECT (from GammaOS's default GammaPad MAPPINGS); button-to-code unknown; default list"
+    },
+    {
+      "id": "zpg-a1-unicorn",
+      "name": "ZPG A1 Unicorn",
+      "soc": "MediaTek (mt6789)",
+      "match": [
+        {"ro.product.odm.model": "ZPG A1"}
+      ],
+      "verified": "unverified: keys from gpio_keys and mtk-kpd, codes unknown; default list"
+    },
+    {
+      "id": "ayaneo-pocketmicro",
+      "name": "AYANEO Pocket Micro",
+      "soc": "MediaTek (mt6789)",
+      "match": [
+        {"ro.product.vendor.model": "Pocket Micro", "ro.product.vendor.manufacturer": "AYANEO"}
+      ],
+      "verified": "unverified: internal 'Microsoft X-Box 360 pad' plus gpio_keys, codes unknown; default list"
+    }
+  ]
+}

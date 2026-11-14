@@ -14,6 +14,7 @@ Files still to be replaced are not listed here; they are not covered by any lice
 |---|---|---|---|
 | The Thimsy logo, an elf in a thimble helmet raising a sword (`nano/bootscreen/thimsy.svg`, `docs/thimsy.png`) | Nano's boot screen (`/system/etc/nano_xmb/boot/logo.svg`), the bootloader's boot picture (`scripts/bootlogo.py`) | the Thimsy OS project | [CC BY-NC 4.0](https://creativecommons.org/licenses/by-nc/4.0/): free to use and redistribute, with credit to the Thimsy OS project; no commercial use |
 | Android boot animation: the Thimsy logo fading in on Midnight blue (`mods/bootanimation/bootanimation.zip`, drawn by `tools/bootanimation/make_bootanimation.py`) | `/system/product/media/bootanimation.zip` (`mods/58-bootanimation.sh`) | the Thimsy OS project | as the logo |
+| Controller drawings for the button map (`ps3xmb/controllers/svg/*.svg`, `controllers.json`, from `work/controller-art`) | Nano's button map (`/system/etc/nano_xmb/controllers/`, with its `LICENSE`) | the Thimsy OS project | CC BY-NC 4.0, credited as "Controller drawings by the Thimsy OS project, CC BY-NC 4.0" |
 | Box art and title marquees of the pack-in games (`mods/pack-in-art`, drawn by `tools/pack-in-art/make_boxes.py` around each game's own pictures), and the screenshots and title screens captured from the games (`tools/pack-in-art/capture.py`) | `/sdcard/ES-DE` after setup | Thimsy OS, from each game's pictures | each game's license (below) |
 
 The box art's lettering is drawn with Archivo Black, Russo One, Exo 2 and other

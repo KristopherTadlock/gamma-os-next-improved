@@ -2,7 +2,8 @@
 # Installs the universal hotkey profiles (hotkeys/*.json) where the framework
 # and Nano read them, /system/etc/gammaos/hotkeys. HOTKEYS.md describes the
 # format. A profile in /data/system/gammaos/hotkeys with the same id replaces a
-# built-in one.
+# built-in one. Also installs device-keys.json, each handheld's function and
+# Back buttons (HOTKEYS.md, Devices), as /system/etc/gammaos/device_keys.json.
 #
 # Usage: 55-hotkeys.sh SYSTEM_DIR CACHE_DIR
 set -euo pipefail
@@ -22,4 +23,5 @@ sudo setfattr -n security.selinux -v u:object_r:system_file:s0 "$dest"
 for f in "$MODS"/hotkeys/*.json; do
   install_system_file "$f" "$dest/$(basename "$f")"
 done
+install_system_file "$MODS/device-keys.json" "$SYSTEM/etc/gammaos/device_keys.json"
 echo "installed $(ls "$MODS"/hotkeys/*.json | wc -l) hotkey profiles"

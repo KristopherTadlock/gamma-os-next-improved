@@ -260,6 +260,8 @@ class OfflineMods(ModCase):
         self.assertEqual(sorted(os.listdir(dest)), want)
         for name in want:
             self.assertEqual(util.slurp(f"{dest}/{name}"), util.slurp(f"{util.MODS}/hotkeys/{name}"))
+        self.assertEqual(util.slurp(f"{self.system}/etc/gammaos/device_keys.json"),
+                         util.slurp(f"{util.MODS}/device-keys.json"))
         self.build(False)
         before = util.manifest(self.system)
         self.assertIn("skipping", self.assertOk(self.run_mod("55")).stdout)
