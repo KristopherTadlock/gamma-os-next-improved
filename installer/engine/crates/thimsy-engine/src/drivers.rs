@@ -156,18 +156,33 @@ pub fn decode_inf(bytes: &[u8]) -> String {
     String::from_utf8_lossy(bytes).into_owned()
 }
 
-/// Whether an .inf installs WinUSB for VID:PID (libwdi's, Zadig's or any
-/// other WinUSB package; not Unisoc's own driver, which libusb can't use).
-pub fn inf_is_winusb_for(text: &str, vid: u16, pid: u16) -> bool {
-    let t = text.to_ascii_uppercase();
-    t.contains(&format!("VID_{vid:04X}&PID_{pid:04X}")) && t.contains("WINUSB")
+/// An .inf's text without whitespace, in capitals.
+fn inf_flat(text: &str) -> String {
+    text.chars()
+        .filter(|c| !c.is_whitespace())
+        .collect::<String>()
+        .to_ascii_uppercase()
 }
 
-/// Whether an .inf installs something other than WinUSB for VID:PID (a
-/// vendor driver such as Unisoc's "SPRD U2S Diag").
+/// Whether an .inf installs WinUSB, and only WinUSB, for VID:PID: it names
+/// the ID, includes `winusb.inf` and adds no service but WinUSB (libwdi's
+/// and Zadig's packages, or any other built the same way). A vendor package
+/// that merely mentions WinUSB somewhere doesn't count.
+/// `driver_watch::WINUSB_INF_RULE` is the same test in PowerShell.
+pub fn inf_is_winusb_for(text: &str, vid: u16, pid: u16) -> bool {
+    let t = inf_flat(text);
+    let services = t.matches("ADDSERVICE=").count();
+    t.contains(&format!("VID_{vid:04X}&PID_{pid:04X}"))
+        && t.contains("INCLUDE=WINUSB.INF")
+        && services > 0
+        && t.matches("ADDSERVICE=WINUSB,").count() == services
+}
+
+/// Whether an .inf names VID:PID but isn't a WinUSB package (a vendor
+/// driver such as Unisoc's "SPRD U2S Diag").
 pub fn inf_is_other_for(text: &str, vid: u16, pid: u16) -> bool {
-    let t = text.to_ascii_uppercase();
-    t.contains(&format!("VID_{vid:04X}&PID_{pid:04X}")) && !t.contains("WINUSB")
+    inf_flat(text).contains(&format!("VID_{vid:04X}&PID_{pid:04X}"))
+        && !inf_is_winusb_for(text, vid, pid)
 }
 
 /// Looks through Windows' driver store for a WinUSB package covering the ID.
@@ -278,6 +293,52 @@ pub fn ps_literal(s: &str) -> String {
     out
 }
 
+/// The start of every elevated script: stop on any error, `$code` 1, the
+/// administrators and SYSTEM SIDs, `New-AdminSecurity` (a protected ACL that
+/// only they can change; with `$true`, signed-in users may read too) and
+/// `Assert-AdminRoot`, which makes `$root` (`<ProgramData>\Thimsy
+/// Installer`) a plain folder owned by Administrators or SYSTEM, or stops
+/// with code 6. Standard users can create folders under ProgramData, so an
+/// existing one is never taken over or re-permissioned (a junction or a
+/// user's folder there would make that change something else); only one
+/// administrators or SYSTEM own, which users can't change, is used.
+pub const ADMIN_PRELUDE: &str = r#"$ErrorActionPreference = 'Stop'
+$code = 1
+$admins = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-544')
+$system = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-18')
+function New-AdminSecurity([bool]$readable) {
+  $sec = New-Object System.Security.AccessControl.DirectorySecurity
+  $sec.SetAccessRuleProtection($true, $false)
+  foreach ($sid in @($admins, $system)) {
+    $sec.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
+  }
+  if ($readable) {
+    $users = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-11')
+    $sec.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($users, 'ReadAndExecute', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
+  }
+  $sec.SetOwner($admins)
+  return $sec
+}
+$root = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'Thimsy Installer'
+function Assert-AdminRoot {
+  if (-not (Test-Path -LiteralPath $root)) {
+    [void][System.IO.Directory]::CreateDirectory($root, (New-AdminSecurity $false))
+  }
+  # Checked after creating it too: someone may have made it first.
+  $item = Get-Item -LiteralPath $root -Force
+  if (-not $item.PSIsContainer -or ($item.Attributes -band [System.IO.FileAttributes]::ReparsePoint)) {
+    $script:code = 6; throw "$root isn't a plain folder"
+  }
+  $owner = (Get-Acl -LiteralPath $root).GetOwner([System.Security.Principal.SecurityIdentifier])
+  if ($owner -ne $admins -and $owner -ne $system) {
+    $script:code = 6; throw "$root isn't owned by administrators"
+  }
+}
+"#;
+
+/// Why an elevated script stopped with code 6.
+pub const UNSAFE_ROOT: &str = "the Thimsy Installer folder in ProgramData isn't one only administrators control; delete it and try again";
+
 /// The script the elevated PowerShell runs: copies `wdi-simple.exe` from
 /// `tool` into a new folder only administrators and SYSTEM can change
 /// (`<ProgramData>\Thimsy Installer\driver-<random GUID>`), checks the copy
@@ -285,30 +346,12 @@ pub fn ps_literal(s: &str) -> String {
 /// USB ID with `--dest` inside that folder, removes the folder and exits
 /// with the first failing exit code (0 when every ID was installed).
 pub fn driver_script(tool: &Path, sha256: &str, usb: &[(u16, u16, String)]) -> String {
-    let mut s = String::from(
-        r#"$ErrorActionPreference = 'Stop'
-$code = 1
-$admins = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-544')
-$system = New-Object System.Security.Principal.SecurityIdentifier('S-1-5-18')
-function New-AdminSecurity {
-  $sec = New-Object System.Security.AccessControl.DirectorySecurity
-  $sec.SetAccessRuleProtection($true, $false)
-  foreach ($sid in @($admins, $system)) {
-    $sec.AddAccessRule((New-Object System.Security.AccessControl.FileSystemAccessRule($sid, 'FullControl', 'ContainerInherit,ObjectInherit', 'None', 'Allow')))
-  }
-  $sec.SetOwner($admins)
-  return $sec
-}
-$root = Join-Path ([Environment]::GetFolderPath('CommonApplicationData')) 'Thimsy Installer'
-$dir = Join-Path $root ('driver-' + [guid]::NewGuid().ToString())
+    let mut s = String::from(ADMIN_PRELUDE);
+    s.push_str(
+        r#"$dir = Join-Path $root ('driver-' + [guid]::NewGuid().ToString())
 try {
-  if (Test-Path -LiteralPath $root) {
-    & (Join-Path ([Environment]::SystemDirectory) 'takeown.exe') /F $root /A | Out-Null
-    Set-Acl -LiteralPath $root -AclObject (New-AdminSecurity)
-  } else {
-    [void][System.IO.Directory]::CreateDirectory($root, (New-AdminSecurity))
-  }
-  [void][System.IO.Directory]::CreateDirectory($dir, (New-AdminSecurity))
+  Assert-AdminRoot
+  [void][System.IO.Directory]::CreateDirectory($dir, (New-AdminSecurity $false))
   $exe = Join-Path $dir 'wdi-simple.exe'
   $dest = Join-Path $dir 'inf'
 "#,
@@ -430,6 +473,7 @@ fn run_install(
     let why = match code {
         Some(DECLINED) => "the Windows permission prompt was declined".to_string(),
         Some(3) => "the driver installer changed before it could run".to_string(),
+        Some(6) => UNSAFE_ROOT.to_string(),
         Some(c) => format!("exit code {c}"),
         None => "stopped".to_string(),
     };
@@ -658,20 +702,55 @@ pub(crate) mod test {
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+
+    /// Sample .inf texts and whether each is a WinUSB package for
+    /// 1782:4d00 (shared with the PowerShell check in `driver_watch`).
+    pub(crate) const INF_SAMPLES: &[(&str, bool)] = &[
+        // libwdi's (and Zadig's) package.
+        (
+            "[Devices.NTamd64]\r\n\"Unisoc download mode\" = USB_Install, USB\\VID_1782&PID_4D00\r\n[USB_Install]\r\nInclude = winusb.inf\r\nNeeds = WINUSB.NT\r\n[USB_Install.Services]\r\nInclude    = winusb.inf\r\nAddService = WinUSB,0x00000002,WinUSB_ServiceInstall\r\n[WinUSB_ServiceInstall]\r\nServiceBinary = %12%\\WinUSB.sys\r\n",
+            true,
+        ),
+        // Unisoc's own driver.
+        (
+            "[SPRD]\r\n%SPRD.DeviceDesc% = SPRD_Install, USB\\VID_1782&PID_4D00\r\n[SPRD_Install.Services]\r\nAddService = sprdvcom,0x00000002,SPRD_Service\r\n[SPRD_Service]\r\nServiceBinary = %12%\\sprdvcom.sys\r\n",
+            false,
+        ),
+        // A vendor package that also uses WinUSB, for another interface.
+        (
+            "USB\\VID_1782&PID_4D00\r\nAddService = sprdvcom,2,S\r\n[Adb]\r\nInclude = winusb.inf\r\nAddService = WinUSB,0x00000002,W\r\n",
+            false,
+        ),
+        // Mentions WinUSB only in a comment.
+        (
+            "; works like WinUSB\r\nUSB\\VID_1782&PID_4D00\r\nAddService = sprdvcom,2,S\r\n",
+            false,
+        ),
+        // A WinUSB package for another device.
+        (
+            "USB\\VID_18D1&PID_4EE0\r\nInclude = winusb.inf\r\nAddService = WinUSB,0x00000002,W\r\n",
+            false,
+        ),
+    ];
 
     #[test]
     fn recognises_winusb_packages_but_not_vendor_drivers() {
-        let libwdi = "[Devices.NTamd64]\r\n\"Unisoc download mode\" = USB_Install, USB\\VID_1782&PID_4D00\r\n[USB_Install]\r\nInclude = winusb.inf\r\nNeeds = WINUSB.NT\r\n";
-        assert!(inf_is_winusb_for(libwdi, 0x1782, 0x4d00));
+        for (text, winusb) in INF_SAMPLES {
+            assert_eq!(inf_is_winusb_for(text, 0x1782, 0x4d00), *winusb, "{text}");
+            // Anything else naming the ID is another driver Windows may
+            // prefer.
+            let names_it = text.contains("VID_1782&PID_4D00");
+            assert_eq!(
+                inf_is_other_for(text, 0x1782, 0x4d00),
+                names_it && !winusb,
+                "{text}"
+            );
+        }
+        let (libwdi, _) = INF_SAMPLES[0];
         assert!(!inf_is_winusb_for(libwdi, 0x1782, 0x4d01));
-        let vendor = "[SPRD]\r\n%SPRD.DeviceDesc% = SPRD_Install, USB\\VID_1782&PID_4D00\r\nServiceBinary = %12%\\sprdvcom.sys\r\n";
-        assert!(!inf_is_winusb_for(vendor, 0x1782, 0x4d00));
-        // Another driver for the ID: Windows may prefer it.
-        assert!(inf_is_other_for(vendor, 0x1782, 0x4d00));
-        assert!(!inf_is_other_for(vendor, 0x1782, 0x4d01));
-        assert!(!inf_is_other_for(libwdi, 0x1782, 0x4d00));
+        assert!(!inf_is_other_for(libwdi, 0x1782, 0x4d01));
         // Windows keeps some packages as UTF-16.
         let mut utf16 = vec![0xFF, 0xFE];
         for u in libwdi.encode_utf16() {
@@ -719,6 +798,15 @@ mod tests {
         assert!(s.contains("[guid]::NewGuid()"));
         assert!(s.contains("GetFolderPath('CommonApplicationData')) 'Thimsy Installer'"));
         assert!(s.contains("SetAccessRuleProtection($true, $false)"));
+        // The shared start: the ProgramData folder is checked, never taken
+        // over (it may be a user's junction), before anything goes in it.
+        assert!(s.starts_with(ADMIN_PRELUDE));
+        assert!(!s.contains("takeown") && !s.contains("Set-Acl"));
+        let checked = s.find("\n  Assert-AdminRoot\n").expect("checks the root");
+        assert!(checked < s.find("CreateDirectory($dir").unwrap());
+        assert!(ADMIN_PRELUDE.contains("ReparsePoint"));
+        assert!(ADMIN_PRELUDE.contains("GetOwner([System.Security.Principal.SecurityIdentifier])"));
+        assert!(ADMIN_PRELUDE.contains("$owner -ne $admins -and $owner -ne $system"));
         assert!(s.contains("'S-1-5-32-544'") && s.contains("'S-1-5-18'"));
         assert!(s.contains(".Hash -ne 'ABC123'"));
         assert!(s.contains("& $exe '--vid' '0x1782' '--pid' '0x4d00' '--type' '0' '--name' 'Unisoc download mode' '--inf' 'thimsy_1782_4d00.inf' '--dest' $dest; $code = $LASTEXITCODE"), "{s}");

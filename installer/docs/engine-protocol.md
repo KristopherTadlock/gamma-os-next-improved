@@ -364,12 +364,18 @@ Errors while flashing:
   `enter_download_mode` prompt comes back and the next connection is
   switched. A declined prompt or a helper that can't start ends with
   `tool_failed` before the device is asked for; a failed switch ends with
-  `tool_failed` too. Without the helper (no other package), another
-  driver ends the run at once with `device_not_found`.
+  `tool_failed` too, as does a helper that stops. Without another package
+  found up front, the helper is started (with its UAC prompt) the first
+  time `spd_dump` reports another driver; the device is switched then or,
+  if it left download mode meanwhile, when it's back. The helper's
+  `ProgramData` folder must be a plain folder owned by Administrators or
+  SYSTEM: an existing one is never taken over (a standard user could have
+  made it, or a junction there); otherwise it stops (exit code 6).
 
-  Errors: when another program holds the device (its COM port, or WinUSB:
-  `LIBUSB_ERROR_ACCESS`/`BUSY`), the run stops at once and the hint says to
-  close Unisoc's tools. When `spd_dump` gave up with the device on another
+  Errors: when another program holds the driver's COM port, the run stops
+  at once and the hint says to close Unisoc's tools; when it holds the
+  WinUSB device (`LIBUSB_ERROR_ACCESS`/`BUSY`), the same error and hint
+  come when `spd_dump` gives up (that can be brief while a driver changes). When `spd_dump` gave up with the device on another
   driver, or libusb couldn't open it for another reason (`download mode is
   connected, but libusb can't open it : …`), the error says so and the
   hint points to Device Manager.
