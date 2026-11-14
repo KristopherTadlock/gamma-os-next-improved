@@ -340,10 +340,13 @@ Errors while flashing:
   download-mode steps; on Linux, when the device is connected but couldn't be
   opened, it says to set up USB access (`drivers --install`). On Windows,
   `spd_dump` opens the device through WinUSB only (logging `connected
-  through libusb (WinUSB)`). When Windows gave the connected device a
-  serial-port driver instead (Unisoc's own: smartphone chipsets need a USB
-  request such drivers can't send), it stops with `download mode uses a
-  serial port driver (COMn, service), not WinUSB`; the engine then installs
+  through libusb (WinUSB)`). While it waits it logs what
+  Windows has for any Unisoc USB device whenever that changes (`Windows
+  has: 1782:4d00 sprdvcom Ports COM9`, with `problem N` when Device
+  Manager reports a problem). When the connected device is in download mode with
+  another driver than WinUSB, or none (Unisoc's own serial driver can't
+  send the USB request smartphone chipsets need), it stops with `download
+  mode uses another driver (service class port), not WinUSB`; the engine then installs
   WinUSB again while the device is connected (one more UAC prompt; libwdi
   replaces the driver on a connected device), logs it and runs `spd_dump`
   again, once. If the device still has that driver, or libusb can't open

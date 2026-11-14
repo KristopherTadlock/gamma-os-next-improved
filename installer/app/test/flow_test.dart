@@ -369,30 +369,26 @@ void main() {
     expect(engine.calls.where((c) => c == 'flash full'), isEmpty);
   });
 
-  testWidgets('Unisoc: connect after installing starts', (tester) async {
+  testWidgets('Unisoc: no Connect step; connect after installing starts', (
+    tester,
+  ) async {
     final engine = FakeEngine(
       step: Duration.zero,
+      host: 'windows',
       detectDevice: 'other',
       connectFirst: false,
     );
-    await start(tester, engine);
+    final s = await start(tester, engine);
     await pickAndBuild(tester, 'anbernic-rg-cube');
     await tap(tester, key('backed-up'));
     await next(tester);
     await tap(tester, key('unlock-confirm'));
     await next(tester);
-    // Nothing detected, and that's expected: the tool will wait for it.
-    // The page sets up USB and shows the steps as what comes after Install,
-    // instead of asking to plug in now.
-    expect(key('connect-later'), findsOneWidget);
-    expect(key('device-connected'), findsNothing);
-    expect(find.text('Get ready to connect'), findsOneWidget);
+    // Straight from Unlock to Review: the flash tool must already be
+    // waiting when the device enters download mode.
+    expect(s.step, WizardStep.review);
+    expect(s.isSkipped(WizardStep.connect), isTrue);
     expect(find.text('Connect your device'), findsNothing);
-    expect(key('connect-steps-later'), findsOneWidget);
-    expect(key('dry-run-continue'), findsNothing);
-    expect(key('mac-accessory'), findsNothing);
-    await next(tester);
-    expect(find.text('Review'), findsWidgets);
     expect(
       find.descendant(
         of: key('row-connected-as'),
@@ -401,35 +397,38 @@ void main() {
       findsOneWidget,
     );
     expect(key('install-then-connect'), findsOneWidget);
+    // Windows: the install sets up the driver itself.
+    expect(key('driver-notice'), findsNothing);
     expect(key('image-ready'), findsOneWidget);
     expect(engine.calls, contains('prepare full'));
     await tap(tester, key('install-button'));
     await tap(tester, key('confirm-install-yes'));
     expect(engine.calls, contains('flash full'));
+    // Back from Review skips Connect too.
+    s.goTo(WizardStep.review);
+    s.back();
+    await tester.pumpAndSettle();
+    expect(s.step, WizardStep.unlock);
   });
 
-  testWidgets('Unisoc on a Mac: says to allow the accessory at once', (
-    tester,
-  ) async {
+  testWidgets('Unisoc on Linux: Review offers the device rule', (tester) async {
     final engine = FakeEngine(
       step: Duration.zero,
-      host: 'macos',
       detectDevice: 'other',
       connectFirst: false,
+      linuxRuleMissing: true,
     );
-    await start(tester, engine);
+    final s = await start(tester, engine);
     await pickAndBuild(tester, 'anbernic-rg-cube');
     await tap(tester, key('backed-up'));
     await next(tester);
     await tap(tester, key('unlock-confirm'));
     await next(tester);
-    expect(find.text('Get ready to connect'), findsOneWidget);
-    expect(key('mac-accessory'), findsOneWidget);
-    expect(
-      find.textContaining('macOS may ask “Allow accessory to connect?”'),
-      findsOneWidget,
-    );
-    expect(find.textContaining('your Anbernic RG Cube connects'), findsOneWidget);
+    expect(s.step, WizardStep.review);
+    expect(key('driver-notice'), findsOneWidget);
+    await tap(tester, key('install-driver'));
+    expect(engine.calls, contains('drivers anbernic-rg-cube install'));
+    expect(key('driver-notice'), findsNothing);
   });
 
   test('automated unlock runs the engine', () async {

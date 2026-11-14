@@ -223,12 +223,12 @@ jobs:
       - name: Build spd_dump
         run: |
           git -c core.autocrlf=false clone "$SPD_DUMP_REPO" spd && cd spd && git checkout "$SPD_DUMP_COMMIT"
-          # Windows only: says when Windows bound the device to a serial-port
-          # driver (Unisoc's own, usbser) instead of WinUSB, so the engine can
-          # switch it to WinUSB.
+          # Windows only: says when Windows bound the device to another driver
+          # than WinUSB (Unisoc's own, usbser, none), so the engine can switch
+          # it to WinUSB, and logs what Windows has for Unisoc USB devices.
           # (The checkout may have turned its line ends into CRLF.)
           tr -d '\r' < ../thimsy/installer/tools/spd_dump-windows-driver.patch | git apply
-          make LIBS="-Wl,-Bstatic -lusb-1.0 -Wl,-Bdynamic -lsetupapi"
+          make LIBS="-Wl,-Bstatic -lusb-1.0 -Wl,-Bdynamic -lsetupapi -lcfgmgr32"
           mkdir -p ../out && cp spd_dump.exe ../out/ && cp LICENSE ../out/spd_dump-LICENSE
       - name: Build wdi-simple (WinUSB driver installer)
         run: |
@@ -245,7 +245,7 @@ jobs:
       - name: Check the tools
         run: |
           test -x out/spd_dump.exe && test -x out/wdi-simple.exe
-          grep -q 'download mode uses a serial port driver' out/spd_dump.exe || { echo "::error::spd_dump.exe was built without the Windows driver patch"; exit 1; }
+          grep -q 'download mode uses another driver' out/spd_dump.exe || { echo "::error::spd_dump.exe was built without the Windows driver patch"; exit 1; }
           # Only DLLs that come with Windows: anything from MSYS2 (libusb,
           # libgcc_s, libwinpthread, ...) isn't on a user's PC.
           allowed='^(kernel32|user32|gdi32|advapi32|shell32|ole32|oleaut32|comctl32|comdlg32|setupapi|cfgmgr32|newdev|version|shlwapi|ws2_32|crypt32|wintrust|bcrypt|ntdll|msvcrt|ucrtbase|rpcrt4|userenv|imagehlp|dbghelp|winmm|secur32|ncrypt|iphlpapi|winhttp|wininet|psapi|hid|winusb|uxtheme|dwmapi|imm32|mpr|netapi32|api-ms-win-[a-z0-9-]+)\.dll$'

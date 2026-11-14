@@ -1166,11 +1166,17 @@ class AppState extends ChangeNotifier {
     WizardStep.firstBoot,
   };
 
+  /// Unisoc devices have no Connect step: their flash tool must already be
+  /// waiting when the device enters download mode (it lasts seconds), so
+  /// they're connected after Install starts, where the Install page says
+  /// how. The flash installs the Windows driver itself; Review offers the
+  /// Linux device rule.
   bool isSkipped(WizardStep s) =>
       (exportOnly && (_flashSteps.contains(s) || s == WizardStep.journey)) ||
       (s == WizardStep.unlock &&
           ((unlockRoute == 'none' && plan != null) ||
-              journey?.unlock == false));
+              journey?.unlock == false)) ||
+      (s == WizardStep.connect && plan?.connectFirst == false);
 
   bool canProceed(WizardStep s) {
     switch (s) {
@@ -1191,9 +1197,7 @@ class AppState extends ChangeNotifier {
           _ => true,
         };
       case WizardStep.connect:
-        // Unisoc: the flash tool waits for the device, so connecting comes
-        // after installing starts (download mode lasts only seconds otherwise).
-        return matchedDevice != null || dryRun || plan?.connectFirst == false;
+        return matchedDevice != null || dryRun;
       case WizardStep.review:
         return false; // Install button instead
       case WizardStep.install:

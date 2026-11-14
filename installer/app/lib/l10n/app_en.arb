@@ -206,8 +206,6 @@
   },
   "waitingDevice": "Waiting for the device…",
   "nothingConnected": "Nothing connected yet.",
-  "connectLaterTitle": "Don't connect it yet",
-  "connectLaterBody": "Go on to Review and start installing. When the installer asks, do the steps above. It waits up to 5 minutes for your device.",
   "seenOther": "Seen: {devices}. That isn't the selected device in the right mode yet.",
   "@seenOther": {
     "placeholders": {
@@ -355,16 +353,6 @@
       }
     }
   },
-  "connectSetupTitle": "Get ready to connect",
-  "connectSetupSubtitle": "Don't plug in your {device} yet. Its download mode only lasts a few seconds, so you connect it after you press Install.",
-  "@connectSetupSubtitle": {
-    "placeholders": {
-      "device": {
-        "type": "String"
-      }
-    }
-  },
-  "connectStepsLater": "After you press Install, when the installer asks:",
   "connectAfterInstall": "After you press Install",
   "installThenConnect": "After you press Install, the installer gets ready, then asks you to plug in your {device}. Nothing is written until it's connected.",
   "@installThenConnect": {

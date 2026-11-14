@@ -634,6 +634,42 @@ class DetectErrorNotice extends StatelessWidget {
   }
 }
 
+/// The missing USB driver (Windows) or device rule (Linux), with its
+/// install button; a failed install keeps it up with the hint. Shown on
+/// Connect, and on Review for Linux devices that skip Connect.
+class DriverNotice extends StatelessWidget {
+  final AppState state;
+  const DriverNotice(this.state, {super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final s = state;
+    final l = AppLocalizations.of(context);
+    final scheme = Theme.of(context).colorScheme;
+    // A failed install's English message, under "Details".
+    final error = s.driverError;
+    final details = error == null ? null : errorDetails(error);
+    return Notice(
+      key: const ValueKey('driver-notice'),
+      icon: Icons.usb,
+      title: s.host == 'linux' ? l.driverNeededLinux : l.driverNeeded,
+      body: [
+        if (s.host == 'linux') l.driverLinuxBody,
+        ?s.driverDetail,
+      ].where((t) => t.isNotEmpty).join('\n'),
+      color: error == null ? scheme.tertiary : scheme.error,
+      footer: details == null || details == s.driverDetail
+          ? null
+          : ErrorDetails(details),
+      action: FilledButton(
+        key: const ValueKey('install-driver'),
+        onPressed: s.driverBusy ? null : () => s.checkDriver(install: true),
+        child: Text(s.host == 'linux' ? l.installButton : l.installDriver),
+      ),
+    );
+  }
+}
+
 /// The space check's answer as a sentence, for a check that said no.
 String spaceProblemText(
   AppLocalizations l, {

@@ -81,7 +81,6 @@ void main() {
     const references = {
       'errEngineCrashedHint': ['copyDetails'],
       'finishOnWindowsBody': ['imageSourceFiles'],
-      'connectLaterBody': ['stepReview'],
       'fullInstallNeededBody': ['stepReview'],
       'downloadModeAgain': ['runAgain'],
     };

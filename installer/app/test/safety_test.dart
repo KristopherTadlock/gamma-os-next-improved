@@ -275,6 +275,7 @@ Future<void> toReview(
   WidgetTester tester, {
   String journey = 'returning',
   void Function()? beforeReview,
+  bool connectStep = true,
 }) async {
   await tap(tester, key('device-$cube'));
   await next(tester);
@@ -292,9 +293,11 @@ Future<void> toReview(
     await tap(tester, key('unlock-confirm'));
     await next(tester);
   }
-  expect(key('device-connected'), findsOneWidget);
-  beforeReview?.call();
-  await next(tester);
+  if (connectStep) {
+    expect(key('device-connected'), findsOneWidget);
+    beforeReview?.call();
+    await next(tester);
+  }
   expect(key('install-button'), findsOneWidget);
 }
 
@@ -1133,6 +1136,36 @@ void main() {
       await pumpFor(tester);
       expect(find.text('Installing'), findsOneWidget);
       expect(find.textContaining("Don't unplug the cable"), findsOne);
+      await run.finish(ResultEvent(true, {'type': 'result', 'ok': true}));
+      await tester.pumpAndSettle();
+    });
+
+    testWidgets('Unisoc on a Mac: says to allow the accessory once it is '
+        'plugged in', (tester) async {
+      final engine = ControlledEngine(host: 'macos', connectFirst: false)
+        ..holdFlash = true;
+      await startApp(tester, engine);
+      await toReview(tester, connectStep: false);
+      expect(key('mac-accessory'), findsNothing);
+      await tap(tester, key('install-button'));
+      await tester.tap(key('confirm-install-yes'));
+      await pumpFor(tester);
+      final run = engine.flashes.single;
+      run.add(const StageEvent('check', 'Checking the build'));
+      await pumpFor(tester);
+      expect(key('mac-accessory'), findsNothing);
+      run.add(
+        const StageEvent('wait_device', 'Connect the device in download mode'),
+      );
+      await pumpFor(tester);
+      expect(key('mac-accessory'), findsOneWidget);
+      expect(
+        find.textContaining('macOS may ask “Allow accessory to connect?”'),
+        findsOneWidget,
+      );
+      run.add(const StageEvent('flash', 'Installing Thimsy'));
+      await pumpFor(tester);
+      expect(key('mac-accessory'), findsNothing);
       await run.finish(ResultEvent(true, {'type': 'result', 'ok': true}));
       await tester.pumpAndSettle();
     });

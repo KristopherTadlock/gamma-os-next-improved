@@ -485,13 +485,13 @@ fn entry_hash(entries: &[job::EntryHash], index: usize) -> Result<&str> {
 }
 
 /// What the Windows `spd_dump` said while it waited for the device: it
-/// opens it through WinUSB only, stops when Windows gave it a serial-port
-/// driver instead (Unisoc's own, which can't send the request smartphone
-/// chipsets need), and says why libusb couldn't open it otherwise.
+/// opens it through WinUSB only, stops when Windows gave it another driver
+/// (Unisoc's own serial driver can't send the request smartphone chipsets
+/// need), and says why libusb couldn't open it otherwise.
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct SpdConnect {
-    /// The serial-port driver the device has (`COM5, sprdvcom`).
-    pub serial_driver: Option<String>,
+    /// The other driver the device has (`sprdvcom Ports COM5`).
+    pub other_driver: Option<String>,
     /// The device was there, but libusb couldn't open it: what spd_dump
     /// said.
     pub unusable: Option<String>,
@@ -504,10 +504,10 @@ impl SpdConnect {
             // Opened after all: whatever failed before doesn't matter.
             *self = SpdConnect::default();
         } else if let Some(found) = l
-            .strip_prefix("download mode uses a serial port driver (")
-            .and_then(|r| r.split_once(')'))
+            .strip_prefix("download mode uses another driver (")
+            .and_then(|r| r.rsplit_once("), not WinUSB"))
         {
-            self.serial_driver = Some(found.0.to_string());
+            self.other_driver = Some(found.0.to_string());
         } else if l.starts_with("download mode is connected, but libusb can't open it") {
             self.unusable = Some(l.to_string());
         }
@@ -518,7 +518,7 @@ impl SpdConnect {
 fn not_connected(d: &Device, host: Host, seen: &SpdConnect, e: anyhow::Error) -> anyhow::Error {
     let detail = format!("{e:#}");
     if host == Host::Windows {
-        let why = match (&seen.serial_driver, &seen.unusable) {
+        let why = match (&seen.other_driver, &seen.unusable) {
             (Some(found), _) => Some(format!(
                 "Windows still gives it another driver ({found}) instead of WinUSB"
             )),
@@ -1238,7 +1238,7 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
         };
         let ran = tools::run_answering(&inv, &flash_dir, rep, on_line, approve);
         if ran.is_err() && !connected && !switched && opts.host == Host::Windows {
-            if let Some(found) = seen.serial_driver.take() {
+            if let Some(found) = seen.other_driver.take() {
                 // spd_dump stopped before writing anything; the device
                 // stays in download mode while its driver is replaced.
                 switched = true;
@@ -1573,14 +1573,16 @@ mod tests {
         // What the Windows spd_dump prints while it waits.
         let mut seen = SpdConnect::default();
         seen.line("Waiting for connection (300s)");
-        seen.line("download mode uses a serial port driver (COM5, sprdvcom), not WinUSB");
-        assert_eq!(seen.serial_driver.as_deref(), Some("COM5, sprdvcom"));
+        seen.line("Windows has: 1782:4d00 sprdvcom Ports COM5");
+        assert_eq!(seen, SpdConnect::default());
+        seen.line("download mode uses another driver (sprdvcom Ports COM5), not WinUSB");
+        assert_eq!(seen.other_driver.as_deref(), Some("sprdvcom Ports COM5"));
         // Still on that driver after the switch to WinUSB.
         let e = not_connected(d, Host::Windows, &seen, failed());
         assert_eq!(crate::error::code_of(&e).0, Code::DeviceNotFound);
         assert!(
             e.to_string().contains(
-                "Windows still gives it another driver (COM5, sprdvcom) instead of WinUSB"
+                "Windows still gives it another driver (sprdvcom Ports COM5) instead of WinUSB"
             ),
             "{e}"
         );
@@ -1594,7 +1596,7 @@ mod tests {
         seen.line(
             "download mode is connected, but libusb can't open it : LIBUSB_ERROR_NOT_SUPPORTED",
         );
-        assert!(seen.serial_driver.is_none());
+        assert!(seen.other_driver.is_none());
         let e = not_connected(d, Host::Windows, &seen, failed());
         assert!(e.to_string().contains("a driver the installer can't use (download mode is connected, but libusb can't open it : LIBUSB_ERROR_NOT_SUPPORTED)"), "{e}");
         assert!(hint(&e).contains("uses the WinUSB driver"), "{}", hint(&e));

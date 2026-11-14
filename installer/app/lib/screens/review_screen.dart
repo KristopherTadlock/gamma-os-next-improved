@@ -76,7 +76,7 @@ class ReviewScreen extends StatelessWidget {
             .map((p) => p.name)
             .firstOrNull ??
         '—';
-    // Unisoc: connected after Install starts (see the connect step).
+    // Unisoc: connected after Install starts (no Connect step).
     final later = plan?.connectFirst == false;
     final prep = s.prepareRun;
     return StepPage(
@@ -103,6 +103,16 @@ class ReviewScreen extends StatelessWidget {
         if (s.detectError != null) ...[
           const SizedBox(height: 12),
           DetectErrorNotice(s),
+        ],
+        // Unisoc devices skip Connect. Linux still needs its device rule
+        // first (the install won't ask for a password midway); on Windows
+        // the install sets up the driver itself.
+        if (later &&
+            !s.dryRun &&
+            s.host == 'linux' &&
+            s.driverStatus == 'missing') ...[
+          const SizedBox(height: 12),
+          DriverNotice(s),
         ],
         const SizedBox(height: 16),
         Text(l.howToInstall, style: Theme.of(context).textTheme.titleMedium),
