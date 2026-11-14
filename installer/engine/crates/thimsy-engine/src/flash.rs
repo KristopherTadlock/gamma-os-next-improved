@@ -4,6 +4,7 @@
 //! written.
 
 use crate::catalog::{Catalog, Device};
+use crate::driver_watch::{DriverWatch, Status};
 use crate::error::{Code, EngineError};
 use crate::events::Reporter;
 use crate::host::Host;
@@ -485,9 +486,10 @@ fn entry_hash(entries: &[job::EntryHash], index: usize) -> Result<&str> {
 }
 
 /// What the Windows `spd_dump` said while it waited for the device: it
-/// opens it through WinUSB only, stops when Windows gave it another driver
-/// (Unisoc's own serial driver can't send the request smartphone chipsets
-/// need), and says why libusb couldn't open it otherwise.
+/// opens it through WinUSB only, and while it waits says when the device
+/// has another driver (Unisoc's own serial driver can't send the request
+/// smartphone chipsets need) or that driver's port is in use, and why
+/// libusb couldn't open it otherwise.
 #[derive(Debug, Default, Clone, PartialEq)]
 pub struct SpdConnect {
     /// The other driver the device has (`sprdvcom Ports COM5`).
@@ -522,34 +524,54 @@ impl SpdConnect {
     }
 }
 
+/// Whether what spd_dump said the device has (`no driver USB`, `WinUSB
+/// USBDevice problem 10`) may still change by itself: Windows can take a
+/// while to set up a device the first time it's connected to a port.
+pub fn driver_may_settle(found: &str) -> bool {
+    found.starts_with("no driver") || found.contains(" problem ")
+}
+
+/// Windows: why the device, though connected in download mode, can't be
+/// used (as far as spd_dump said), or None.
+fn windows_problem(seen: &SpdConnect) -> Option<anyhow::Error> {
+    // Another program holds the device: its COM port, or WinUSB itself.
+    let held = seen.port_busy.clone().or_else(|| {
+        seen.unusable
+            .as_ref()
+            .filter(|u| u.contains("LIBUSB_ERROR_ACCESS") || u.contains("LIBUSB_ERROR_BUSY"))
+            .map(|u| u.to_string())
+    });
+    if let Some(what) = held {
+        return Some(
+            EngineError::new(
+                Code::DeviceNotFound,
+                format!("the device is connected in download mode, but another program is using it ({what}); nothing was written"),
+            )
+            .hint("Close every other program that talks to the device (such as Unisoc's UnlockBootloader or ResearchDownload), then try again.")
+            .into(),
+        );
+    }
+    let why = match (&seen.other_driver, &seen.unusable) {
+        (Some(found), _) => format!("Windows gives it another driver ({found}) instead of WinUSB"),
+        (None, Some(why)) => format!("Windows gave it a driver the installer can't use ({why})"),
+        _ => return None,
+    };
+    Some(
+        EngineError::new(
+            Code::DeviceNotFound,
+            format!("the device is connected in download mode, but {why}; nothing was written"),
+        )
+        .hint("Repeat the download-mode steps, then try again. If it still isn't found, check in Device Manager that Unisoc download mode uses the WinUSB driver.")
+        .into(),
+    )
+}
+
 /// spd_dump exited without the device ever answering.
 fn not_connected(d: &Device, host: Host, seen: &SpdConnect, e: anyhow::Error) -> anyhow::Error {
     let detail = format!("{e:#}");
     if host == Host::Windows {
-        if let Some(port) = &seen.port_busy {
-            return EngineError::new(
-                Code::DeviceNotFound,
-                format!("the device is connected in download mode, but another program is using its serial port ({port}), so Windows can't give it the driver the installer needs; nothing was written"),
-            )
-            .hint("Close every other program that talks to the device (such as Unisoc's UnlockBootloader or ResearchDownload), then try again.")
-            .into();
-        }
-        let why = match (&seen.other_driver, &seen.unusable) {
-            (Some(found), _) => Some(format!(
-                "Windows still gives it another driver ({found}) instead of WinUSB"
-            )),
-            (None, Some(why)) => Some(format!(
-                "Windows gave it a driver the installer can't use ({why})"
-            )),
-            _ => None,
-        };
-        if let Some(why) = why {
-            return EngineError::new(
-                Code::DeviceNotFound,
-                format!("the device is connected in download mode, but {why}; nothing was written"),
-            )
-            .hint("Repeat the download-mode steps, then try again. If it still isn't found, check in Device Manager that Unisoc download mode uses the WinUSB driver.")
-            .into();
+        if let Some(e) = windows_problem(seen) {
+            return e;
         }
     }
     let present = crate::detect::scan_ids()
@@ -1183,6 +1205,22 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
     }
     let reads: u64 = plan.backups.iter().chain(&plan.base).map(|b| b.bytes).sum();
     ready_files(&rec, &p, &plan, &flash_dir, &opts.job, &entries, reads, rep)?;
+    // Windows with another driver for the device (Unisoc's own, which it
+    // would get): the helper that switches it to WinUSB as it's connected,
+    // started (one permission prompt) before the user is asked to connect.
+    let switcher = if opts.host == Host::Windows && crate::driver_watch::needed(d) {
+        rep.stage("driver", "Checking the USB driver");
+        rep.prompt(
+            "allow_driver_switch",
+            "Allow the USB driver switch",
+            "Windows asks for permission next. Click Yes so the installer can give your device the USB driver it needs as soon as you connect it. Don't connect it yet.",
+            None,
+        );
+        Some(DriverWatch::start(d, &opts.job.join("driver-watch"), rep)?)
+    } else {
+        None
+    };
+    let switcher = std::cell::RefCell::new(switcher);
     let run_dir = new_backup_run(&backup_root, "")?;
     let run_arg = format!(
         "../backup/{}",
@@ -1205,86 +1243,154 @@ pub fn flash(cat: &Catalog, opts: &FlashOptions, rep: &Reporter) -> Result<Flash
 
     // The prompt stays up while spd_dump waits for the device; the install
     // stage starts when the device answers (its first BSL_REP_VER line).
-    let mut connected = false;
+    let connected = std::cell::Cell::new(false);
     let mut seen = SpdConnect::default();
     let mut watch = SpdWatch::new(&plan);
     // Set once the first answer is approved: the device's table, the
     // backups and (update mode) its base were checked. Any write before
     // that is fatal.
     let checked = std::cell::Cell::new(false);
-    // Windows: once, when the device turned up on another driver.
-    let mut switched = false;
-    let mut switch_failed = false;
-    let ran = loop {
-        let on_line = |line: &str| -> Result<()> {
-            if !connected {
-                seen.line(line);
-            }
-            if !connected && (line.starts_with("BSL_REP_VER") || line.starts_with("load_partition"))
-            {
-                connected = true;
-                rep.stage("flash", "Installing Thimsy");
-            }
-            if let Some((name, written, total)) = watch.line(line, checked.get())? {
-                rep.progress_for("Wrote {partition}", &name, written, total);
-            }
-            Ok(())
-        };
-        // Nothing is confirmed until the device's partition table matches,
-        // every backup was read in full and (update mode) the device holds the
-        // base the update relies on.
-        let approve = |n: usize| {
-            if n == 0 {
-                let (text, table) = read_device_table(&run_dir)?;
-                if let Err(e) = write_device_info(&run_dir, d, opts.mode, &text) {
-                    rep.warn(format!(
-                        "couldn't record which device the backup is from: {e:#}"
-                    ));
+    // Set when the engine stopped spd_dump with its own error, which is
+    // reported as it is.
+    let ours = std::cell::Cell::new(false);
+    // When the helper switched the device to WinUSB.
+    let switched_at = std::cell::Cell::new(None::<std::time::Instant>);
+    let on_line = |line: &str| -> Result<()> {
+        if !connected.get() {
+            seen.line(line);
+            if opts.host == Host::Windows {
+                let found = line
+                    .trim()
+                    .strip_prefix("download mode uses another driver (")
+                    .and_then(|r| r.rsplit_once("), not WinUSB"))
+                    .map(|f| f.0);
+                if let Some(found) = found {
+                    match switcher.borrow_mut().as_mut() {
+                        Some(sw) => {
+                            rep.info("Switching the device to WinUSB");
+                            sw.trigger()?;
+                        }
+                        // Without the helper, wait only while Windows may
+                        // still be setting the device up.
+                        None if !driver_may_settle(found) => {
+                            ours.set(true);
+                            return Err(windows_problem(&seen).expect("another driver"));
+                        }
+                        None => {}
+                    }
                 }
-                check_device(&plan.checks, &table)?;
-                rep.info("The device's partition table matches this firmware");
-                check_backups(&plan, &run_dir)?;
-                if !plan.base.is_empty() {
-                    check_base(&plan, &run_dir, &entries)?;
-                    rep.info("The device runs the base this update needs");
+                if seen.port_busy.is_some() {
+                    ours.set(true);
+                    return Err(windows_problem(&seen).expect("port in use"));
                 }
-                checked.set(true);
-            }
-            Ok(())
-        };
-        let ran = tools::run_answering(&inv, &flash_dir, rep, on_line, approve);
-        if ran.is_err() && !connected && !switched && opts.host == Host::Windows {
-            if let Some(found) = seen.other_driver.take() {
-                // spd_dump stopped before writing anything; the device
-                // stays in download mode while its driver is replaced.
-                switched = true;
-                if let Err(e) = crate::drivers::switch_to_winusb(d, rep, &found) {
-                    switch_failed = true;
-                    break Err(e);
-                }
-                // Download mode doesn't wait long: it has usually ended
-                // by now, and the device must enter it again (on the same
-                // USB port, which keeps WinUSB).
-                let steps = step
-                    .as_ref()
-                    .map_or(String::new(), |s| format!("\n\n{}\n{}", s.title, s.body));
-                rep.prompt(
-                    "reconnect_download_mode",
-                    "Connect it again",
-                    &format!(
-                        "{}{steps}",
-                        crate::i18n::tr("Windows now gives the device the driver the installer needs. Unplug the cable and turn the device off, then repeat the download-mode steps with the same USB port.")
-                    ),
-                    None,
-                );
-                continue;
             }
         }
-        break ran;
+        if !connected.get()
+            && (line.starts_with("BSL_REP_VER") || line.starts_with("load_partition"))
+        {
+            connected.set(true);
+            rep.stage("flash", "Installing Thimsy");
+        }
+        if let Some((name, written, total)) = watch.line(line, checked.get())? {
+            rep.progress_for("Wrote {partition}", &name, written, total);
+        }
+        Ok(())
     };
+    // Nothing is confirmed until the device's partition table matches,
+    // every backup was read in full and (update mode) the device holds the
+    // base the update relies on.
+    let approve = |n: usize| {
+        if n == 0 {
+            let (text, table) = read_device_table(&run_dir)?;
+            if let Err(e) = write_device_info(&run_dir, d, opts.mode, &text) {
+                rep.warn(format!(
+                    "couldn't record which device the backup is from: {e:#}"
+                ));
+            }
+            check_device(&plan.checks, &table)?;
+            rep.info("The device's partition table matches this firmware");
+            check_backups(&plan, &run_dir)?;
+            if !plan.base.is_empty() {
+                check_base(&plan, &run_dir, &entries)?;
+                rep.info("The device runs the base this update needs");
+            }
+            checked.set(true);
+        }
+        Ok(())
+    };
+    // What the helper did, while the device isn't connected yet.
+    let tick = || -> Result<()> {
+        let mut sw = switcher.borrow_mut();
+        let Some(sw) = sw.as_mut() else {
+            return Ok(());
+        };
+        if connected.get() {
+            return Ok(());
+        }
+        match sw.poll() {
+            Some(Status::Switched { reboot, .. }) => {
+                rep.info("The device now uses WinUSB");
+                if reboot {
+                    rep.warn("Windows says it needs a restart to finish switching the driver; if the device isn't found, restart the computer and try again");
+                }
+                switched_at.set(Some(std::time::Instant::now()));
+            }
+            Some(Status::Failed { code, .. }) if code == crate::driver_watch::NO_DEVICE => {
+                // It left download mode first: the next time it's
+                // connected, it's switched then.
+                rep.info("The device left download mode before its driver could be switched");
+                rep.prompt(
+                    "enter_download_mode",
+                    step.as_ref()
+                        .map_or("Connect the device in download mode", |s| s.title.as_str()),
+                    step.as_ref().map_or("", |s| s.body.as_str()),
+                    None,
+                );
+            }
+            Some(Status::Failed { code, .. }) => {
+                ours.set(true);
+                return Err(EngineError::new(
+                    Code::ToolFailed,
+                    format!(
+                        "Windows couldn't switch the device to WinUSB ({}); nothing was written",
+                        crate::driver_watch::failure_text(code)
+                    ),
+                )
+                .hint("Repeat the download-mode steps, then try again. If it still isn't found, check in Device Manager that Unisoc download mode uses the WinUSB driver.")
+                .into());
+            }
+            _ => {}
+        }
+        // Download mode has usually ended by the time the driver is
+        // switched: when installing hasn't started a few seconds later,
+        // the device must enter it again (the same USB port keeps WinUSB).
+        if switched_at
+            .get()
+            .is_some_and(|t| t.elapsed() >= std::time::Duration::from_secs(4))
+        {
+            switched_at.set(None);
+            let steps = step
+                .as_ref()
+                .map_or(String::new(), |s| format!("\n\n{}\n{}", s.title, s.body));
+            rep.prompt(
+                "reconnect_download_mode",
+                "Connect it again",
+                &format!(
+                    "{}{steps}",
+                    crate::i18n::tr("Windows now gives the device the driver the installer needs. Unplug the cable and turn the device off, then repeat the download-mode steps with the same USB port.")
+                ),
+                None,
+            );
+        }
+        Ok(())
+    };
+    let ran = tools::run_answering_ticking(&inv, &flash_dir, rep, on_line, approve, tick);
+    // The helper is done either way.
+    drop(switcher.into_inner());
+    let connected = connected.get();
     let ran = ran.and_then(|()| watch.finish()).map_err(|e| {
         let code = crate::error::code_of(&e).0;
-        if switch_failed {
+        if ours.get() {
             return e;
         }
         if code == Code::ToolFailed && !connected {
@@ -1608,15 +1714,20 @@ mod tests {
         assert_eq!(seen, SpdConnect::default());
         seen.line("download mode uses another driver (sprdvcom Ports COM5), not WinUSB");
         assert_eq!(seen.other_driver.as_deref(), Some("sprdvcom Ports COM5"));
-        // Still on that driver after the switch to WinUSB.
+        // Still on that driver when spd_dump gave up.
         let e = not_connected(d, Host::Windows, &seen, failed());
         assert_eq!(crate::error::code_of(&e).0, Code::DeviceNotFound);
         assert!(
             e.to_string().contains(
-                "Windows still gives it another driver (sprdvcom Ports COM5) instead of WinUSB"
+                "Windows gives it another driver (sprdvcom Ports COM5) instead of WinUSB"
             ),
             "{e}"
         );
+        // A real driver won't change by itself; none (or a problem) may,
+        // while Windows sets the device up.
+        assert!(!driver_may_settle("sprdvcom Ports COM5"));
+        assert!(driver_may_settle("no driver USB"));
+        assert!(driver_may_settle("WinUSB USBDevice problem 10"));
         assert!(hint(&e).contains("uses the WinUSB driver"), "{}", hint(&e));
         // Opened in the end.
         let mut opened = seen.clone();
@@ -1629,10 +1740,15 @@ mod tests {
         assert_eq!(seen.port_busy.as_deref(), Some("COM9"));
         let e = not_connected(d, Host::Windows, &seen, failed());
         assert!(
-            e.to_string()
-                .contains("another program is using its serial port (COM9)"),
+            e.to_string().contains("another program is using it (COM9)"),
             "{e}"
         );
+        assert!(hint(&e).contains("ResearchDownload"), "{}", hint(&e));
+        // The same when another program holds the device through WinUSB.
+        let mut seen = SpdConnect::default();
+        seen.line("download mode is connected, but libusb can't open it : LIBUSB_ERROR_ACCESS");
+        let e = not_connected(d, Host::Windows, &seen, failed());
+        assert!(e.to_string().contains("another program is using it"), "{e}");
         assert!(hint(&e).contains("ResearchDownload"), "{}", hint(&e));
 
         let mut seen = SpdConnect::default();

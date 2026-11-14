@@ -340,24 +340,39 @@ Errors while flashing:
   download-mode steps; on Linux, when the device is connected but couldn't be
   opened, it says to set up USB access (`drivers --install`). On Windows,
   `spd_dump` opens the device through WinUSB only (logging `connected
-  through libusb (WinUSB)`). While it waits it logs what
-  Windows has for any Unisoc USB device whenever that changes (`Windows
-  has: 1782:4d00 sprdvcom Ports COM9`, with `problem N` when Device
-  Manager reports a problem). When the connected device is in download mode with
-  another driver than WinUSB, or none (Unisoc's own serial driver can't
-  send the USB request smartphone chipsets need), it stops with `download
-  mode uses another driver (service class port), not WinUSB`; the engine then installs
-  WinUSB again while the device is connected (one more UAC prompt; libwdi
-  replaces the driver on a connected device), logs it, shows the
-  `reconnect_download_mode` prompt (download mode has usually ended by
-  then: unplug, turn off, repeat the steps on the same USB port, which
-  keeps WinUSB) and runs `spd_dump` again, once. When that driver's COM
-  port is open in another program (`serial port COMn is in use by another
-  program`), Windows can't change it: the error says so and the hint says
-  to close Unisoc's tools. If the device still has that driver, or libusb can't open
-  it for another reason (`download mode is connected, but libusb can't open
-  it : …`), the error says so and the hint points to Device Manager. A
-  declined or failed switch ends with that `tool_failed` error instead.
+  through libusb (WinUSB)`) and, while it waits, logs what Windows has for
+  any Unisoc USB device whenever that changes (`Windows has: 1782:4d00
+  sprdvcom Ports COM9`, with `problem N` when Device Manager reports one).
+  It says, once per change and without stopping, when the device is in
+  download mode with another driver (`download mode uses another driver
+  (service class port), not WinUSB`; no driver or a problem only after 10
+  s, since Windows may still be setting it up) or that driver's port is in
+  use (`serial port COMn is in use by another program`).
+
+  Unisoc's own serial driver can't send the USB request smartphone
+  chipsets need, and Windows prefers it when its package is installed
+  (unlocking needs it, so it stays). So when the driver store has another
+  package than WinUSB for the ID, `flash` first shows the
+  `allow_driver_switch` prompt (in a second `driver` stage), then starts
+  an elevated helper (one UAC prompt) and waits until it's ready, before
+  `wait_device`. The helper (`driver_watch.rs`) forces the WinUSB package
+  already in the driver store onto the device each time the engine asks:
+  the engine asks when `spd_dump` reports another driver, logs the
+  outcome, and if installing hasn't started 4 s after a switch, shows
+  `reconnect_download_mode` (download mode has usually ended; the same USB
+  port keeps WinUSB). If the device left before the switch, the
+  `enter_download_mode` prompt comes back and the next connection is
+  switched. A declined prompt or a helper that can't start ends with
+  `tool_failed` before the device is asked for; a failed switch ends with
+  `tool_failed` too. Without the helper (no other package), another
+  driver ends the run at once with `device_not_found`.
+
+  Errors: when another program holds the device (its COM port, or WinUSB:
+  `LIBUSB_ERROR_ACCESS`/`BUSY`), the run stops at once and the hint says to
+  close Unisoc's tools. When `spd_dump` gave up with the device on another
+  driver, or libusb couldn't open it for another reason (`download mode is
+  connected, but libusb can't open it : …`), the error says so and the
+  hint points to Device Manager.
 - `tool_failed` (the tool is killed at once) when `spd_dump` reports a
   partial write (`load_partition: …, target: T, written: W` with W ≠ T),
   logs `unexpected response`, or writes anything before the checks above
@@ -391,9 +406,9 @@ on-device confirmation). For `guided` devices it returns
   absolute path) copies the bundled `wdi-simple.exe` into a fresh
   administrators-only folder under ProgramData, checks its sha256, runs it
   there for each ID and removes the folder; afterwards every ID must be in
-  the driver store. `flash` does the same in its `driver` stage when needed
-  (and again, with the device connected, when Windows gave it another
-  driver: see `device_not_found` above).
+  the driver store. `flash` does the same in its `driver` stage when needed,
+  and switches the connected device to WinUSB when another driver package
+  is installed too (see `device_not_found` above).
 - Linux: `ok` when the engine runs as root or a udev rule in
   `/etc/udev/rules.d`, `/usr/lib/udev/rules.d` or `/lib/udev/rules.d`
   matches each ID (vendor and product on one line); `missing` otherwise.

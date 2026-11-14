@@ -293,11 +293,9 @@ Future<void> toReview(
     await tap(tester, key('unlock-confirm'));
     await next(tester);
   }
-  if (connectStep) {
-    expect(key('device-connected'), findsOneWidget);
-    beforeReview?.call();
-    await next(tester);
-  }
+  if (connectStep) expect(key('device-connected'), findsOneWidget);
+  beforeReview?.call();
+  if (connectStep) await next(tester);
   expect(key('install-button'), findsOneWidget);
 }
 

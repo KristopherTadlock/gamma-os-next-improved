@@ -1,8 +1,8 @@
 //! USB access for the flashing tools. Windows needs WinUSB on the device's
 //! flashing-mode IDs, installed with the bundled `wdi-simple` (libwdi)
-//! behind one UAC prompt; when Windows still binds the connected device to
-//! another driver (Unisoc's own serial driver), it's installed again while
-//! the device is connected, which replaces that driver on it. Linux needs a udev rule that lets the logged-in
+//! behind one UAC prompt; when Windows also has another driver for the
+//! device (Unisoc's own), `driver_watch` switches the device to WinUSB as
+//! it's connected. Linux needs a udev rule that lets the logged-in
 //! user open the device, written once through `pkexec`. macOS needs
 //! nothing.
 
@@ -163,11 +163,36 @@ pub fn inf_is_winusb_for(text: &str, vid: u16, pid: u16) -> bool {
     t.contains(&format!("VID_{vid:04X}&PID_{pid:04X}")) && t.contains("WINUSB")
 }
 
+/// Whether an .inf installs something other than WinUSB for VID:PID (a
+/// vendor driver such as Unisoc's "SPRD U2S Diag").
+pub fn inf_is_other_for(text: &str, vid: u16, pid: u16) -> bool {
+    let t = text.to_ascii_uppercase();
+    t.contains(&format!("VID_{vid:04X}&PID_{pid:04X}")) && !t.contains("WINUSB")
+}
+
 /// Looks through Windows' driver store for a WinUSB package covering the ID.
 /// Readable without admin rights; the package's file name doesn't matter, so
 /// earlier installs (any name, or Zadig) count too.
 #[cfg(windows)]
 fn winusb_installed(vid: u16, pid: u16) -> bool {
+    store_has(|t| inf_is_winusb_for(t, vid, pid))
+}
+
+/// Whether the driver store has another package than WinUSB for the ID,
+/// which Windows may give the device instead.
+#[cfg(windows)]
+pub fn other_installed(vid: u16, pid: u16) -> bool {
+    store_has(|t| inf_is_other_for(t, vid, pid))
+}
+
+#[cfg(not(windows))]
+pub fn other_installed(_vid: u16, _pid: u16) -> bool {
+    false
+}
+
+/// Whether any .inf in Windows' driver store matches.
+#[cfg(windows)]
+fn store_has(matches: impl Fn(&str) -> bool) -> bool {
     let root = std::env::var_os("SystemRoot")
         .map(std::path::PathBuf::from)
         .unwrap_or_else(|| "C:\\Windows".into())
@@ -182,7 +207,7 @@ fn winusb_installed(vid: u16, pid: u16) -> bool {
         files.flatten().any(|f| {
             let p = f.path();
             p.extension().is_some_and(|x| x.eq_ignore_ascii_case("inf"))
-                && std::fs::read(&p).is_ok_and(|b| inf_is_winusb_for(&decode_inf(&b), vid, pid))
+                && std::fs::read(&p).is_ok_and(|b| matches(&decode_inf(&b)))
         })
     })
 }
@@ -416,67 +441,6 @@ fn run_install(
     .into())
 }
 
-/// Installs WinUSB again for every flashing-mode ID while the device is
-/// connected (`found`: the driver Windows gave it instead, as the flashing
-/// tool reported it). With the device connected, libwdi replaces whatever
-/// driver it has (`UpdateDriverForPlugAndPlayDevices` with
-/// `INSTALLFLAG_FORCE`); a WinUSB package in the driver store alone doesn't
-/// win over a vendor driver Windows ranks higher.
-#[cfg_attr(not(any(windows, test)), allow(dead_code))]
-fn switch_ids(
-    d: &Device,
-    tool: &Path,
-    sha256: &str,
-    rep: &Reporter,
-    found: &str,
-    run: &mut dyn FnMut(&str) -> Result<Option<i32>>,
-) -> Result<()> {
-    let usb: Vec<(u16, u16, String)> = d
-        .identify
-        .usb
-        .iter()
-        .map(|u| (u.vid, u.pid, u.label.clone()))
-        .collect();
-    let names: Vec<String> = d
-        .identify
-        .usb
-        .iter()
-        .map(|u| format!("{} ({:04x}:{:04x})", u.label, u.vid, u.pid))
-        .collect();
-    rep.info(format!(
-        "Windows gave the device another driver ({found}), which can't flash it; switching {} to WinUSB. Windows asks for permission",
-        names.join(", ")
-    ));
-    run_install(&names.join(", "), &usb, tool, sha256, run)?;
-    rep.info("The device now uses WinUSB");
-    Ok(())
-}
-
-/// Windows: the connected device has another driver than WinUSB (`found`,
-/// as the flashing tool reported it); replaces it with WinUSB (one UAC
-/// prompt). The device stays in download mode.
-pub fn switch_to_winusb(d: &Device, rep: &Reporter, found: &str) -> Result<()> {
-    platform_switch(d, rep, found)
-}
-
-#[cfg(windows)]
-fn platform_switch(d: &Device, rep: &Reporter, found: &str) -> Result<()> {
-    let tool = crate::tools::locate("wdi-simple")?;
-    let sha = crate::util::sha256_file(&tool, |_, _| {})?;
-    switch_ids(d, &tool, &sha, rep, found, &mut |script| {
-        run_elevated(script)
-    })
-}
-
-#[cfg(not(windows))]
-fn platform_switch(_d: &Device, _rep: &Reporter, _found: &str) -> Result<()> {
-    Err(EngineError::new(
-        Code::UnsupportedHost,
-        "WinUSB can only be installed on Windows",
-    )
-    .into())
-}
-
 /// Installs WinUSB for every flashing-mode ID of the device.
 fn install(d: &Device, rep: &Reporter) -> Result<()> {
     if let Some(r) = test_install(d, rep) {
@@ -505,7 +469,7 @@ fn platform_install(_d: &Device, _rep: &Reporter) -> Result<()> {
 
 /// Windows PowerShell, by absolute path in the system folder.
 #[cfg(windows)]
-fn powershell_path() -> Result<PathBuf> {
+pub(crate) fn powershell_path() -> Result<PathBuf> {
     use std::os::windows::ffi::OsStringExt;
     use windows_sys::Win32::System::SystemInformation::GetSystemDirectoryW;
     let mut buf = [0u16; 512];
@@ -704,6 +668,10 @@ mod tests {
         assert!(!inf_is_winusb_for(libwdi, 0x1782, 0x4d01));
         let vendor = "[SPRD]\r\n%SPRD.DeviceDesc% = SPRD_Install, USB\\VID_1782&PID_4D00\r\nServiceBinary = %12%\\sprdvcom.sys\r\n";
         assert!(!inf_is_winusb_for(vendor, 0x1782, 0x4d00));
+        // Another driver for the ID: Windows may prefer it.
+        assert!(inf_is_other_for(vendor, 0x1782, 0x4d00));
+        assert!(!inf_is_other_for(vendor, 0x1782, 0x4d01));
+        assert!(!inf_is_other_for(libwdi, 0x1782, 0x4d00));
         // Windows keeps some packages as UTF-16.
         let mut utf16 = vec![0xFF, 0xFE];
         for u in libwdi.encode_utf16() {
@@ -809,56 +777,6 @@ mod tests {
             panic!("nothing to install")
         })
         .unwrap();
-    }
-
-    #[test]
-    fn a_connected_device_on_another_driver_is_switched_to_winusb() {
-        let cat = crate::catalog::Catalog::bundled().unwrap();
-        let d = cat.device("anbernic-rg-cube").unwrap();
-        let sink = std::sync::Arc::new(crate::events::MemorySink::default());
-        let rep = Reporter::new(sink.clone());
-        let tool = Path::new(r"C:\Thimsy\tools\wdi-simple.exe");
-        let sha = "0".repeat(64);
-        // Runs even though WinUSB is in the driver store: only an install
-        // with the device connected replaces the driver it has.
-        let mut ran = Vec::new();
-        switch_ids(d, tool, &sha, &rep, "COM5, sprdvcom", &mut |ps| {
-            ran.push(ps.to_string());
-            Ok(Some(0))
-        })
-        .unwrap();
-        assert_eq!(ran.len(), 1);
-        assert!(
-            ran[0].contains("'--vid' '0x1782' '--pid' '0x4d00'"),
-            "{}",
-            ran[0]
-        );
-        let logs: Vec<String> = sink
-            .0
-            .lock()
-            .unwrap()
-            .iter()
-            .filter_map(|e| match e {
-                crate::events::Event::Log { message, .. } => Some(message.clone()),
-                _ => None,
-            })
-            .collect();
-        assert!(
-            logs.iter()
-                .any(|m| m.contains("(COM5, sprdvcom)") && m.contains("switching")),
-            "{logs:?}"
-        );
-        assert!(
-            logs.iter().any(|m| m == "The device now uses WinUSB"),
-            "{logs:?}"
-        );
-        // Declined: the flash can't go on, and says so.
-        let err = switch_ids(d, tool, &sha, &rep, "COM5, sprdvcom", &mut |_| {
-            Ok(Some(DECLINED))
-        })
-        .unwrap_err();
-        assert_eq!(crate::error::code_of(&err).0, Code::ToolFailed);
-        assert!(err.to_string().contains("declined"), "{err}");
     }
 
     #[test]

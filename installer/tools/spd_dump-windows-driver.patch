@@ -1,5 +1,5 @@
 diff --git a/spd_dump.c b/spd_dump.c
-index f8ba370..65bf88b 100644
+index f8ba370..8e4bf2e 100644
 --- a/spd_dump.c
 +++ b/spd_dump.c
 @@ -37,6 +37,25 @@
@@ -7,12 +7,12 @@ index f8ba370..65bf88b 100644
  #include <unistd.h>
  
 +#if USE_LIBUSB && defined(_WIN32)
-+/* Windows: says when the device is in download mode but bound to another
-+   driver than WinUSB (Unisoc's "SPRD U2S Diag", usbser, none), and logs
-+   what Windows has for any Unisoc USB device while it waits.
-+   Smartphone chipsets need a control request (see "fdl" below) that only
-+   libusb can send, so such a driver can't be used; the caller switches the
-+   device to WinUSB and runs this again. */
++/* Windows: while it waits, logs what Windows has for any Unisoc USB
++   device and says when the device is in download mode with another driver
++   than WinUSB (Unisoc's "SPRD U2S Diag", usbser, none), or that driver's
++   port is in use, and keeps waiting. Smartphone chipsets need a control
++   request (see "fdl" below) that only libusb can send, so such a driver
++   can't be used; the caller switches the device to WinUSB meanwhile. */
 +#define SPD_WIN 1
 +#ifndef WIN32_LEAN_AND_MEAN
 +#define WIN32_LEAN_AND_MEAN
@@ -28,18 +28,21 @@ index f8ba370..65bf88b 100644
  #include "spd_cmd.h"
  
  static void print_mem(FILE *f, uint8_t *buf, size_t len) {
-@@ -190,6 +209,108 @@ static void init_serial(int serial) {
+@@ -190,6 +209,118 @@ static void init_serial(int serial) {
  }
  #endif
  
 +#if SPD_WIN
 +/* What Windows has for the connected Unisoc USB devices (any product
 +   ID): seen gets "1782:4d00 sprdvcom Ports COM9; ..." (empty when there's
-+   none). Returns 1 when one is in download mode (1782:4d00) with a driver
-+   other than WinUSB, or none, or a problem: other gets what it has; 2 when
-+   that driver's serial port is open in another program (Unisoc's tools):
-+   other gets the port. */
++   none). For one in download mode (1782:4d00) that WinUSB doesn't run,
++   other gets what it has and the result says why: 1 another driver, 2
++   that driver's serial port is open in another program (Unisoc's tools;
++   other gets the port), 3 no driver or a problem (also how a device
++   looks for a moment while Windows sets it up). 0 otherwise. */
 +static int win_scan(char *seen, size_t seen_len, char *other, size_t other_len) {
++	static char busy_for[200];
++	static int busy_age, busy;
 +	SP_DEVINFO_DATA info;
 +	DWORD idx;
 +	int found = 0;
@@ -94,18 +97,25 @@ index f8ba370..65bf88b 100644
 +			char path[80];
 +			HANDLE h;
 +			snprintf(other, other_len, "%s", one + 10);
-+			found = 1;
-+			/* Windows can't change the driver of a port in use. */
-+			if (port[0]) {
++			found = svc[0] && !prob[0] ? 1 : 3;
++			/* Windows can't change the driver of a port in use. Opening
++			   it can also get in the way of a driver change, so only
++			   when what Windows has changes, and every 4 s. */
++			if (port[0] && (strcmp(one, busy_for) || ++busy_age >= 8)) {
++				snprintf(busy_for, sizeof(busy_for), "%s", one);
++				busy_age = 0;
++				busy = 0;
 +				snprintf(path, sizeof(path), "\\\\.\\%s", port);
 +				h = CreateFileA(path, GENERIC_READ | GENERIC_WRITE, 0, NULL,
 +						OPEN_EXISTING, 0, NULL);
 +				if (h != INVALID_HANDLE_VALUE) CloseHandle(h);
 +				else if (GetLastError() == ERROR_ACCESS_DENIED ||
-+						GetLastError() == ERROR_SHARING_VIOLATION) {
-+					snprintf(other, other_len, "%s", port);
-+					found = 2;
-+				}
++						GetLastError() == ERROR_SHARING_VIOLATION)
++					busy = 1;
++			}
++			if (port[0] && busy) {
++				snprintf(other, other_len, "%s", port);
++				found = 2;
 +			}
 +		}
 +	}
@@ -137,18 +147,18 @@ index f8ba370..65bf88b 100644
  #if USE_LIBUSB
  static spdio_t* spdio_init(libusb_device_handle *dev_handle, int flags) {
  #else
-@@ -1187,6 +1308,10 @@ int main(int argc, char **argv) {
+@@ -1187,6 +1318,10 @@ int main(int argc, char **argv) {
  	libusb_device_handle *device;
  #else
  	int serial;
 +#endif
 +#if SPD_WIN
-+	char win_seen[600], win_last[600] = "", win_other[200];
-+	int usb_err = 0, usb_last_err = 0;
++	char win_seen[600], win_last[600] = "", win_other[200], win_said[220] = "";
++	int usb_err = 0, usb_last_err = 0, win_unset = 0;
  #endif
  	spdio_t *io; int ret, i;
  	int wait = 300 * REOPEN_FREQ;
-@@ -1223,7 +1348,36 @@ int main(int argc, char **argv) {
+@@ -1223,7 +1358,50 @@ int main(int argc, char **argv) {
  	}
  
  	for (i = 0; ; i++) {
@@ -168,12 +178,26 @@ index f8ba370..65bf88b 100644
 +						win_seen[0] ? win_seen : "no Unisoc USB device");
 +				strcpy(win_last, win_seen);
 +			}
-+			if (other == 2)
-+				ERR_EXIT("serial port %s is in use by another program\n",
-+						win_other);
-+			if (other)
-+				ERR_EXIT("download mode uses another driver (%s), not WinUSB\n",
-+						win_other);
++			/* No driver or a problem: only once it lasts (10 s); Windows
++			   may still be setting the device up. */
++			win_unset = other == 3 ? win_unset + 1 : 0;
++			if (other == 3 && win_unset < 10 * REOPEN_FREQ) other = 0;
++			/* Said once per change; the caller decides what to do (it
++			   may switch the driver while this keeps waiting). */
++			if (!other) win_said[0] = 0;
++			else {
++				char said[220];
++				if (other == 2)
++					snprintf(said, sizeof(said),
++							"serial port %s is in use by another program", win_other);
++				else
++					snprintf(said, sizeof(said),
++							"download mode uses another driver (%s), not WinUSB", win_other);
++				if (strcmp(said, win_said)) {
++					DBG_LOG("%s\n", said);
++					strcpy(win_said, said);
++				}
++			}
 +		}
 +		/* Connected, but libusb can't open it: say why (once). */
 +		if (usb_err < 0 && usb_err != usb_last_err)

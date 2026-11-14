@@ -22,10 +22,10 @@ USB. Design: [`../universal_installer.md`](../universal_installer.md).
 - **RG Cube, Heavy profile**: builds on every desktop and matches the Thimsy
   1.0a reference PAC byte for byte; flashes with the bundled `spd_dump` on
   Windows and Linux; macOS untested. On Windows the app installs WinUSB; when
-  Windows still gives the connected device Unisoc's own driver (which can't
-  flash it), the app installs WinUSB again while the device is in download
-  mode, which replaces that driver on it
-  (`tools/spd_dump-windows-driver.patch` reports it).
+  Unisoc's own driver is installed too (unlocking needs it, but it can't
+  flash), the app asks for permission before the device is connected and
+  a helper switches the device to WinUSB the moment it shows up
+  (`tools/spd_dump-windows-driver.patch` reports what Windows gave it).
 - Light and Medium are defined but their system images aren't published yet.
 - Other devices are listed as candidates. Devices that need Windows-only
   vendor tools say so on other computers.

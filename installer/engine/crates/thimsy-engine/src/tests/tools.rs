@@ -454,3 +454,33 @@ fn the_app_going_away_after_the_first_answer_lets_the_tool_finish() {
     r.unwrap();
     assert!(lines.contains(&"got2:yes".to_string()), "{lines:?}");
 }
+
+#[cfg(unix)]
+#[test]
+fn a_failing_tick_stops_a_quiet_tool() {
+    let dir = tempfile::tempdir().unwrap();
+    let exe = script(dir.path(), "quiet", "#!/usr/bin/env bash\nsleep 30\n");
+    let (rep, _) = quiet();
+    let i = inv("quiet", &[], &[], None);
+    let mut ticks = 0;
+    let started = std::time::Instant::now();
+    let err = tools::run_exe_ticking(
+        &exe,
+        &i,
+        dir.path(),
+        &rep,
+        |_| Ok(()),
+        |_| Ok(()),
+        || {
+            ticks += 1;
+            if ticks == 3 {
+                anyhow::bail!("stop now")
+            }
+            Ok(())
+        },
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("stop now"), "{err}");
+    assert_eq!(ticks, 3);
+    assert!(started.elapsed() < std::time::Duration::from_secs(10));
+}

@@ -132,6 +132,21 @@ pub fn run_answering(
     run_exe(&exe, inv, cwd, rep, on_line, approve)
 }
 
+/// Like [`run_answering`], with `tick` also called about every 200 ms while
+/// the tool runs (whether or not it prints anything). If it fails, the tool
+/// is killed as when `on_line` fails, and its error is returned.
+pub fn run_answering_ticking(
+    inv: &Invocation,
+    cwd: &Path,
+    rep: &Reporter,
+    on_line: impl FnMut(&str) -> Result<()>,
+    approve: impl FnMut(usize) -> Result<()>,
+    tick: impl FnMut() -> Result<()>,
+) -> Result<()> {
+    let exe = locate(&inv.tool)?;
+    run_exe_ticking(&exe, inv, cwd, rep, on_line, approve, tick)
+}
+
 /// What the output readers report, in arrival order.
 enum Out {
     Line {
@@ -432,8 +447,20 @@ pub(crate) fn run_exe(
     inv: &Invocation,
     cwd: &Path,
     rep: &Reporter,
+    on_line: impl FnMut(&str) -> Result<()>,
+    approve: impl FnMut(usize) -> Result<()>,
+) -> Result<()> {
+    run_exe_ticking(exe, inv, cwd, rep, on_line, approve, || Ok(()))
+}
+
+pub(crate) fn run_exe_ticking(
+    exe: &Path,
+    inv: &Invocation,
+    cwd: &Path,
+    rep: &Reporter,
     mut on_line: impl FnMut(&str) -> Result<()>,
     mut approve: impl FnMut(usize) -> Result<()>,
+    mut tick: impl FnMut() -> Result<()>,
 ) -> Result<()> {
     if parent_is_gone() {
         return Err(app_gone());
@@ -495,6 +522,7 @@ pub(crate) fn run_exe(
     let mut killed = false;
     // Events taken early (see the prompt below) and not handled yet.
     let mut queue = std::collections::VecDeque::new();
+    let mut last_tick = std::time::Instant::now();
     loop {
         let ev = match queue.pop_front() {
             Some(ev) => Some(ev),
@@ -508,6 +536,14 @@ pub(crate) fn run_exe(
             stopped = Some(app_gone());
             stdin = None;
             killed = child.kill().is_ok();
+        }
+        if stopped.is_none() && last_tick.elapsed() >= std::time::Duration::from_millis(200) {
+            last_tick = std::time::Instant::now();
+            if let Err(e) = tick() {
+                stopped = Some(e);
+                stdin = None;
+                killed = child.kill().is_ok();
+            }
         }
         if killed {
             // Already sent SIGKILL: never signal its ID again once reaped.

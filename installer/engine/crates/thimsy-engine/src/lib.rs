@@ -12,6 +12,7 @@ pub mod cli;
 pub mod delta;
 pub mod detect;
 pub mod disk;
+pub mod driver_watch;
 pub mod drivers;
 pub mod error;
 pub mod events;
