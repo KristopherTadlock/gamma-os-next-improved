@@ -537,7 +537,12 @@ pub(crate) fn run_exe_ticking(
             stdin = None;
             killed = child.kill().is_ok();
         }
-        if stopped.is_none() && last_tick.elapsed() >= std::time::Duration::from_millis(200) {
+        // Only when the tool has been quiet (nothing came for 200 ms), so
+        // every line it printed is handled before the tick looks.
+        if stopped.is_none()
+            && ev.is_none()
+            && last_tick.elapsed() >= std::time::Duration::from_millis(200)
+        {
             last_tick = std::time::Instant::now();
             if let Err(e) = tick() {
                 stopped = Some(e);

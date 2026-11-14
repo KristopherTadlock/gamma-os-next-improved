@@ -372,11 +372,19 @@ Errors while flashing:
   `tool_failed` before the device is asked for; a failed switch ends with
   `tool_failed` too, as does a helper that stops. A switch Windows says
   needs a restart ends the run (`device_not_found`, hint: restart the
-  computer), as does a fourth switch in one run. The helper stops as soon
-  as `spd_dump` has opened the device. Without the helper (no
-  other driver known up front), another driver ends the run at once with
-  `device_not_found`; Windows then has a record of that driver for the
-  port, so the next try starts the helper up front. One switch runs at a
+  computer), as does another driver after three switches that worked in
+  one run (a device that left download mode before its switch doesn't
+  count). WinUSB with a problem (`WinUSB USBDevice problem 10`) ends the
+  run at once (`device_not_found`, hint: another USB port): switching
+  again won't help. The engine asks the helper to stop as soon as
+  `spd_dump` has opened the device, and waits for it after the run.
+  Without the helper (no other driver known up front), another driver
+  ends the run at once with `device_not_found`; Windows then has a record
+  of that driver for the port, so the next try starts the helper up
+  front. A lasting problem ends it too (`Windows hasn't given it a
+  working driver`), while no driver without a problem keeps it waiting,
+  since Windows may still be installing one. Only a declined or
+  unanswered permission prompt has the hint to accept it. One switch runs at a
   time; a report that comes during one is looked at again once it's
   answered, and the reconnect prompt isn't shown once `spd_dump` has
   opened the device. What `spd_dump` said about the driver and its port

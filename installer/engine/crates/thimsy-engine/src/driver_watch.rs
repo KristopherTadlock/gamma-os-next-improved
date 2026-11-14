@@ -74,6 +74,8 @@ pub fn failure_text(code: u32) -> String {
     match code {
         NO_DEVICE => "the device was no longer connected".to_string(),
         5 => "access denied".to_string(),
+        // The helper's -1: it failed, but Windows gave no reason.
+        0xFFFF_FFFF => "Windows gave no reason".to_string(),
         c => format!("Windows error 0x{c:08x}"),
     }
 }
@@ -126,10 +128,12 @@ public static class ThimsyNewDev {
     static extern bool UpdateDriverForPlugAndPlayDevicesW(IntPtr parent, string hardwareId, string infPath, uint flags, out bool reboot);
     // FORCE | NONINTERACTIVE: replace the device's driver, and fail rather
     // than wait on a dialog nobody sees. 0, or the Windows error read right
-    // after the call (PowerShell may change it between statements).
+    // after the call (PowerShell may change it between statements); -1 for
+    // a failure Windows gave no error for.
     public static int Switch(string hardwareId, string infPath, out bool reboot) {
         if (UpdateDriverForPlugAndPlayDevicesW(IntPtr.Zero, hardwareId, infPath, 5, out reboot)) return 0;
-        return Marshal.GetLastWin32Error();
+        int e = Marshal.GetLastWin32Error();
+        return e != 0 ? e : -1;
     }
 }"#;
 
@@ -259,6 +263,8 @@ pub struct DriverWatch {
     answered: u32,
     last: String,
     process: Option<Process>,
+    /// `stop` was written.
+    stopping: bool,
 }
 
 impl DriverWatch {
@@ -298,6 +304,7 @@ impl DriverWatch {
             answered: 0,
             last: String::new(),
             process,
+            stopping: false,
         }
     }
 
@@ -311,6 +318,14 @@ impl DriverWatch {
         self.requested += 1;
         self.write_trigger();
         true
+    }
+
+    /// Asks the helper to stop (once spd_dump has the device), without
+    /// waiting for it; dropping the watch waits.
+    pub fn stop(&mut self) {
+        if !self.stopping {
+            self.stopping = std::fs::write(self.ipc.join("stop"), "").is_ok();
+        }
     }
 
     /// Whether a switch was asked for that the helper hasn't answered.
@@ -372,7 +387,7 @@ impl DriverWatch {
             }
             std::thread::sleep(std::time::Duration::from_millis(100));
         }
-        Err(stopped_error(
+        Err(unanswered_error(
             "the driver switch couldn't start (it didn't get ready within 2 minutes)",
         ))
     }
@@ -380,7 +395,7 @@ impl DriverWatch {
 
 impl Drop for DriverWatch {
     fn drop(&mut self) {
-        let _ = std::fs::write(self.ipc.join("stop"), "");
+        self.stop();
         // A switch in progress may take a while; the helper stops after it
         // (`stop` stays until then).
         let ended = self.process.as_ref().is_none_or(|p| p.wait(5000));
@@ -538,6 +553,12 @@ impl SwitchFollow {
 }
 
 fn stopped_error(message: &str) -> anyhow::Error {
+    EngineError::new(Code::ToolFailed, format!("{message}; nothing was written")).into()
+}
+
+/// [`stopped_error`] for a permission prompt that was declined or left
+/// unanswered.
+fn unanswered_error(message: &str) -> anyhow::Error {
     EngineError::new(Code::ToolFailed, format!("{message}; nothing was written"))
         .hint("Accept the Windows permission prompt, then try again.")
         .into()
@@ -552,7 +573,7 @@ impl Process {
     /// The helper: like [`Process::launch`], declining is an error.
     fn start(script: &str) -> Result<Process> {
         Process::launch(script)?.ok_or_else(|| {
-            stopped_error(
+            unanswered_error(
                 "the driver switch couldn't start (the Windows permission prompt was declined)",
             )
         })
@@ -704,6 +725,8 @@ mod tests {
             failure_text(NO_DEVICE),
             "the device was no longer connected"
         );
+        assert_eq!(failure_text(0xFFFF_FFFF), "Windows gave no reason");
+        assert_eq!(failure_text(0x0000_0103), "Windows error 0x00000103");
         assert_eq!(failure_text(0x103), "Windows error 0x00000103");
         assert_eq!(exit_text(6), UNSAFE_ROOT);
         assert_eq!(exit_text(9), "exit code 9");
@@ -731,7 +754,7 @@ mod tests {
         // found under the system's Windows folder, and the error read in
         // the same call.
         assert!(s.contains(
-            "if (UpdateDriverForPlugAndPlayDevicesW(IntPtr.Zero, hardwareId, infPath, 5, out reboot)) return 0;\n        return Marshal.GetLastWin32Error();"
+            "if (UpdateDriverForPlugAndPlayDevicesW(IntPtr.Zero, hardwareId, infPath, 5, out reboot)) return 0;\n        int e = Marshal.GetLastWin32Error();\n        return e != 0 ? e : -1;"
         ));
         assert!(s.contains("$e = [ThimsyNewDev]::Switch($id, $infs[$id], [ref]$r)"));
         assert!(

@@ -1,5 +1,5 @@
 diff --git a/spd_dump.c b/spd_dump.c
-index f8ba370..faece3e 100644
+index f8ba370..9d69b63 100644
 --- a/spd_dump.c
 +++ b/spd_dump.c
 @@ -37,6 +37,25 @@
@@ -165,7 +165,7 @@ index f8ba370..faece3e 100644
  #endif
  	spdio_t *io; int ret, i;
  	int wait = 300 * REOPEN_FREQ;
-@@ -1223,7 +1365,53 @@ int main(int argc, char **argv) {
+@@ -1223,7 +1365,54 @@ int main(int argc, char **argv) {
  	}
  
  	for (i = 0; ; i++) {
@@ -187,6 +187,7 @@ index f8ba370..faece3e 100644
 +				/* The caller forgets what was said with each new state:
 +				   say it again if it still holds. */
 +				win_said[0] = 0;
++				usb_last_err = 0;
 +			}
 +			/* No driver or a problem: only once it lasts (10 s); Windows
 +			   may still be setting the device up. */

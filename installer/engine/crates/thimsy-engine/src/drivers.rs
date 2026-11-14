@@ -44,10 +44,13 @@ pub fn status(d: &Device, host: Host) -> DriverStatus {
 
 fn windows_status(d: &Device) -> DriverStatus {
     if !d.identify.usb.is_empty()
-        && d.identify
-            .usb
-            .iter()
-            .all(|u| winusb_installed(u.vid, u.pid))
+        && winusb_for_all(
+            &d.identify
+                .usb
+                .iter()
+                .map(|u| (u.vid, u.pid))
+                .collect::<Vec<_>>(),
+        )
     {
         return DriverStatus {
             status: "ok",
@@ -192,14 +195,6 @@ fn inf_flat_is_other_for(flat: &str, vid: u16, pid: u16) -> bool {
         && !inf_flat_is_winusb_for(flat, vid, pid)
 }
 
-/// Looks through Windows' published driver packages for a WinUSB package
-/// covering the ID. Readable without admin rights; the package's original
-/// name doesn't matter, so earlier installs (any name, or Zadig) count too.
-#[cfg(windows)]
-fn winusb_installed(vid: u16, pid: u16) -> bool {
-    store_has(|t| inf_is_winusb_for(t, vid, pid))
-}
-
 /// Whether Windows keeps another driver than WinUSB for one of `ids` on a
 /// USB port the device was connected to before.
 #[cfg(windows)]
@@ -295,15 +290,6 @@ fn devnode_services(vid: u16, pid: u16) -> Vec<String> {
     out
 }
 
-/// Whether any third-party driver package Windows has published (its
-/// `INF\oem*.inf`, the packages Windows installs from) matches.
-#[cfg(windows)]
-fn store_has(matches: impl Fn(&str) -> bool) -> bool {
-    let mut found = false;
-    for_each_published(|t| found = found || matches(t));
-    found
-}
-
 /// Calls `f` with the text of each published third-party package
 /// (`<Windows>\INF\oem*.inf`).
 #[cfg(windows)]
@@ -338,6 +324,20 @@ pub(crate) fn windows_dir() -> PathBuf {
 #[cfg(not(windows))]
 fn winusb_installed(vid: u16, pid: u16) -> bool {
     test_winusb(vid, pid)
+}
+
+/// Whether every one of `ids` has a WinUSB package among Windows'
+/// published driver packages (one pass). Readable without admin rights;
+/// the package's original name doesn't matter, so earlier installs (any
+/// name, or Zadig) count too.
+#[cfg(windows)]
+fn winusb_for_all(ids: &[(u16, u16)]) -> bool {
+    store_classes(ids).0.iter().all(|&w| w)
+}
+
+#[cfg(not(windows))]
+fn winusb_for_all(ids: &[(u16, u16)]) -> bool {
+    ids.iter().all(|&(v, p)| winusb_installed(v, p))
 }
 
 fn ids(d: &Device) -> String {
@@ -807,7 +807,7 @@ fn test_install(d: &Device, rep: &Reporter) -> Option<Result<()>> {
         tool,
         &"0".repeat(64),
         rep,
-        &winusb_installed,
+        &|v, p| winusb_for_all(&[(v, p)]),
         &mut |_| {
             if code == 0 {
                 test::WINUSB.with(|w| w.set(true));

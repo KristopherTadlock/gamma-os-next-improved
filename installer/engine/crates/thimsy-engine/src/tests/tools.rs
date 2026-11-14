@@ -484,3 +484,44 @@ fn a_failing_tick_stops_a_quiet_tool() {
     assert_eq!(ticks, 3);
     assert!(started.elapsed() < std::time::Duration::from_secs(10));
 }
+
+#[cfg(unix)]
+#[test]
+fn ticks_wait_until_the_tools_lines_are_handled() {
+    let dir = tempfile::tempdir().unwrap();
+    let exe = script(
+        dir.path(),
+        "two",
+        "#!/usr/bin/env bash\necho a\necho b\nsleep 30\n",
+    );
+    let (rep, _) = quiet();
+    let i = inv("two", &[], &[], None);
+    let lines = std::cell::Cell::new(0);
+    let mut seen = Vec::new();
+    let err = tools::run_exe_ticking(
+        &exe,
+        &i,
+        dir.path(),
+        &rep,
+        |_| {
+            // Slow to handle the first line: the second is queued by then.
+            if lines.get() == 0 {
+                std::thread::sleep(std::time::Duration::from_millis(400));
+            }
+            lines.set(lines.get() + 1);
+            Ok(())
+        },
+        |_| Ok(()),
+        || {
+            seen.push(lines.get());
+            if lines.get() == 2 {
+                anyhow::bail!("stop now")
+            }
+            Ok(())
+        },
+    )
+    .unwrap_err();
+    assert!(err.to_string().contains("stop now"), "{err}");
+    // Never between the two lines: a tick waits for the tool to go quiet.
+    assert!(!seen.contains(&1), "{seen:?}");
+}
